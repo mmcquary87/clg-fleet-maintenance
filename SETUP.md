@@ -10,6 +10,19 @@ Both values above are safe to keep in this repo/config — access is governed
 by the RLS policies in the migration, not by keeping this key secret. Next up
 is Phase 1 step 2 (real frontend).
 
+## Phase 1, step 2 — real frontend (DONE)
+
+React + Vite app in `web/`, Company/By-Unit dashboard wired to live Supabase
+data, deployed and auto-deploying from `master`:
+
+- GitHub: https://github.com/mmcquary87/clg-fleet-maintenance
+- Live site: https://clg-fleet-maintenance.vercel.app
+- Vercel project root directory: `web`
+- Vercel env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (same values
+  as above, set for Production and Preview)
+
+Any commit pushed to `master` auto-redeploys the live site.
+
 ---
 
 ## Original step 1 walkthrough (for reference)
