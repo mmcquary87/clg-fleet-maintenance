@@ -199,8 +199,22 @@ export default function UnitDetailModal({ unitId, onClose }) {
                 )}
               </div>
 
-              <div style={{ width: 320, flexShrink: 0 }}>
+              <div style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
                 <UnitInfoCard unit={unit} />
+                {unit.current_location ? (
+                  <div style={{ borderRadius: "var(--clg-radius-md)", overflow: "hidden", border: "1px solid var(--clg-border-subtle)" }}>
+                    <iframe
+                      title={`Map — ${unit.current_location}`}
+                      width="100%" height="200" style={{ border: 0, display: "block" }}
+                      loading="lazy"
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(unit.current_location)}&output=embed`}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ padding: 16, textAlign: "center", fontSize: 12, color: "var(--clg-text-muted)", border: "1px solid var(--clg-border-subtle)", borderRadius: "var(--clg-radius-md)" }}>
+                    No location on file for this unit yet.
+                  </div>
+                )}
               </div>
             </div>
           </>
