@@ -74,8 +74,14 @@ Deno.serve(async (req) => {
     ]);
 
     const alvysUnits = [
-      ...trucks.map((t) => ({ number: t.TruckNum, type: "Truck", vin: t.VinNumber ?? null, alvys_asset_id: t.Id })),
-      ...trailers.map((t) => ({ number: t.TrailerNum, type: "Trailer", vin: t.VinNum ?? null, alvys_asset_id: t.Id })),
+      ...trucks.map((t) => ({
+        number: t.TruckNum, type: "Truck", vin: t.VinNumber ?? null, alvys_asset_id: t.Id,
+        year: t.Year ?? null, make: t.Make ?? null, model: t.Model ?? null, fuel_type: t.FuelType ?? null,
+      })),
+      ...trailers.map((t) => ({
+        number: t.TrailerNum, type: "Trailer", vin: t.VinNum ?? null, alvys_asset_id: t.Id,
+        year: t.Year ?? null, make: t.Make ?? null, model: t.EquipmentType ?? null, fuel_type: null,
+      })),
     ].filter((u) => u.number);
 
     const { data: existing, error: fetchErr } = await supabase.from("units").select("id, number");
