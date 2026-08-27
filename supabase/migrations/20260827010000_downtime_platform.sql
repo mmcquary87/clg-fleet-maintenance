@@ -53,6 +53,8 @@ alter table work_orders add column intake_source wo_intake_source not null defau
 
 alter table work_orders add column assigned_bay text; -- in-house assignment
 alter table work_orders add column assigned_tech text; -- in-house assignment
+alter table work_orders add column waiting_on_parts boolean not null default false; -- drives the board's "Waiting on parts" lane
+alter table work_orders add column parts_eta date;
 
 alter table work_orders add column approval_status wo_approval_status not null default 'not_required';
 alter table work_orders add column approved_by text;

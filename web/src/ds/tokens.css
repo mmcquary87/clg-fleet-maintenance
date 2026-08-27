@@ -1,0 +1,161 @@
+/* CLG Design System — ported from design_handoff/.../_ds/.../tokens/*.css
+   Source of truth: design_handoff/design_handoff_maintenance_platform/README.md */
+
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,700&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,700&display=swap");
+
+:root {
+  /* Primary */
+  --clg-royal: #1155A1;
+  --clg-navy: #223B62;
+  --clg-scarlet: #EB2127;
+  --clg-ruby: #BE202E;
+
+  /* Neutrals, dark to light */
+  --clg-granite: #485767;
+  --clg-pewter: #5A6D80;
+  --clg-cool: #7A8B99;
+  --clg-mercury: #A3BACB;
+  --clg-moon: #BFD3E1;
+  --clg-reflection: #DAE7F1;
+  --clg-smoke: #E7EDF1;
+  --clg-white: #FFFFFF;
+
+  --clg-royal-rgb: 17 85 161;
+  --clg-navy-rgb: 34 59 98;
+  --clg-scarlet-rgb: 235 33 39;
+  --clg-ruby-rgb: 190 32 46;
+  --clg-granite-rgb: 72 87 103;
+  --clg-white-rgb: 255 255 255;
+
+  --clg-gradient-brand: linear-gradient(48deg, #0B1B32 0%, #223B62 52%, #29459B 100%);
+  --clg-gradient-brand-soft: linear-gradient(48deg, #223B62 0%, #1155A1 100%);
+  --clg-scrim-navy: linear-gradient(90deg, rgb(var(--clg-navy-rgb) / .92) 0%, rgb(var(--clg-navy-rgb) / .72) 45%, rgb(var(--clg-navy-rgb) / 0) 100%);
+  --clg-scrim-bottom: linear-gradient(180deg, rgb(11 27 50 / 0) 0%, rgb(11 27 50 / .75) 100%);
+
+  /* Typography */
+  --clg-font-heading: "Montserrat", system-ui, sans-serif;
+  --clg-font-body: "Poppins", system-ui, sans-serif;
+
+  --clg-weight-regular: 400;
+  --clg-weight-medium: 500;
+  --clg-weight-semibold: 600;
+  --clg-weight-bold: 700;
+
+  --clg-size-h1: 40px;
+  --clg-size-h2: 36px;
+  --clg-size-h3: 30px;
+  --clg-size-h4: 24px;
+  --clg-size-h5: 18px;
+  --clg-size-eyebrow: 14px;
+
+  --clg-size-lead: 20px;
+  --clg-size-body: 16px;
+  --clg-size-small: 14px;
+  --clg-size-caption: 12px;
+
+  --clg-leading-display: 1.05;
+  --clg-leading-heading: 1.18;
+  --clg-leading-body: 1.6;
+  --clg-leading-tight: 1.35;
+
+  --clg-tracking-display: -0.01em;
+  --clg-tracking-heading: 0em;
+  --clg-tracking-eyebrow: 0.18em;
+  --clg-tracking-body: 0em;
+
+  /* Spacing */
+  --clg-space-0: 0;
+  --clg-space-1: 4px;
+  --clg-space-2: 8px;
+  --clg-space-3: 12px;
+  --clg-space-4: 16px;
+  --clg-space-5: 24px;
+  --clg-space-6: 32px;
+  --clg-space-7: 48px;
+  --clg-space-8: 64px;
+  --clg-space-9: 96px;
+  --clg-space-10: 128px;
+
+  --clg-gutter: 24px;
+  --clg-page-margin: 64px;
+  --clg-container: 1200px;
+
+  /* Surface (borders, radii, elevation) */
+  --clg-radius-none: 0px;
+  --clg-radius-sm: 2px;
+  --clg-radius-md: 4px;
+  --clg-radius-pill: 999px;
+
+  --clg-border-hair: 1px;
+  --clg-border-thick: 2px;
+  --clg-rule-accent: 4px;
+
+  --clg-shadow-sm: 0 1px 2px rgb(var(--clg-navy-rgb) / .10);
+  --clg-shadow-md: 0 2px 8px rgb(var(--clg-navy-rgb) / .12);
+  --clg-shadow-lg: 0 12px 32px rgb(var(--clg-navy-rgb) / .16);
+  --clg-shadow-inset: inset 0 -2px 0 rgb(var(--clg-navy-rgb) / .10);
+  --clg-focus-ring: 0 0 0 3px rgb(var(--clg-royal-rgb) / .35);
+
+  /* Motion */
+  --clg-dur-fast: 120ms;
+  --clg-dur-base: 180ms;
+  --clg-dur-slow: 280ms;
+  --clg-ease-out: cubic-bezier(.2, .7, .3, 1);
+  --clg-ease-in-out: cubic-bezier(.4, 0, .2, 1);
+  --clg-transition: all var(--clg-dur-base) var(--clg-ease-out);
+
+  /* Semantic aliases — use these in components, not raw palette names */
+  --clg-text-heading: var(--clg-navy);
+  --clg-text-body: var(--clg-granite);
+  --clg-text-muted: var(--clg-cool);
+  --clg-text-inverse: var(--clg-white);
+  --clg-text-brand: var(--clg-royal);
+  --clg-text-accent: var(--clg-scarlet);
+
+  --clg-link: var(--clg-ruby);
+  --clg-link-hover: var(--clg-scarlet);
+
+  --clg-surface-page: var(--clg-white);
+  --clg-surface-subtle: var(--clg-smoke);
+  --clg-surface-sunken: var(--clg-reflection);
+  --clg-surface-card: var(--clg-white);
+  --clg-surface-brand: var(--clg-royal);
+  --clg-surface-brand-deep: var(--clg-navy);
+  --clg-surface-accent: var(--clg-scarlet);
+  --clg-surface-inverse-subtle: rgb(var(--clg-white-rgb) / .08);
+
+  --clg-border-subtle: var(--clg-moon);
+  --clg-border-default: var(--clg-mercury);
+  --clg-border-strong: var(--clg-cool);
+  --clg-border-inverse: rgb(var(--clg-white-rgb) / .24);
+
+  --clg-action-primary-bg: var(--clg-scarlet);
+  --clg-action-primary-bg-hover: var(--clg-ruby);
+  --clg-action-primary-fg: var(--clg-white);
+  --clg-action-secondary-bg: var(--clg-royal);
+  --clg-action-secondary-bg-hover: var(--clg-navy);
+  --clg-action-secondary-fg: var(--clg-white);
+  --clg-action-quiet-fg: var(--clg-royal);
+  --clg-action-disabled-bg: var(--clg-moon);
+  --clg-action-disabled-fg: var(--clg-cool);
+
+  --clg-status-info: var(--clg-royal);
+  --clg-status-critical: var(--clg-ruby);
+}
+
+body {
+  margin: 0;
+  font-family: var(--clg-font-body);
+  font-size: var(--clg-size-body);
+  line-height: var(--clg-leading-body);
+  color: var(--clg-text-body);
+  background: var(--clg-surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--clg-font-heading);
+  color: var(--clg-text-heading);
+  margin: 0;
+  line-height: var(--clg-leading-heading);
+}
+:focus-visible { outline: none; box-shadow: var(--clg-focus-ring); }
