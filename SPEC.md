@@ -135,7 +135,9 @@ a missed proactive maintenance flag, not just a slow dashboard.
 
 ```
 units
-  id, number, type (Truck/Trailer/Van), vin, samsara\_vehicle\_id
+  id, number, type (Truck/Trailer/Van), vin, samsara\_vehicle\_id,
+  last\_odometer, last\_engine\_hours, last\_location, last\_synced\_at,
+  last\_fuel\_efficiency, last\_idling\_duration\_ms
 
 vendors
   id, name, specialty\_category, contact
@@ -191,6 +193,77 @@ resolved once our work order closes, keeping Samsara's compliance record in sync
 DTC code pattern -> likely part -> our category. This is what turns "P0087" into
 "probably a fuel pressure sensor, tag as Engine."
 
+## ELD (Samsara) API key — getting a complete truck data + DVIR feed
+
+"ELD" here is Samsara — they're both the ELD provider and the telematics/
+maintenance platform, so it's one integration, not two.
+
+**What "complete feed" requires, scope-wise:**
+A single Samsara API token can be scoped to multiple read permissions at once.
+For full truck data + DVIR visibility, request read access to:
+
+* Vehicles (roster: unit list, VINs, make/model)
+* Vehicle Stats (location, odometer, engine hours, fuel level, fault codes)
+* DVIRs / Defects
+Start read-only. Don't request write scopes (like defect-resolution PATCH
+calls) until Phase 2 actually needs them — narrower scope = smaller blast
+radius if a key ever leaks.
+
+**Where the key gets generated:** Samsara Dashboard → Settings → API Tokens →
+Create new token, select the scopes above. This is a few clicks for whoever
+has Samsara admin access — doesn't require a developer.
+
+**Where the key goes once generated:** straight into Supabase's secrets
+manager (Edge Function secrets) or Azure Function's Application Settings —
+never into this chat, never into a code file, never committed to git. Whoever
+generates it in Samsara can paste it directly into Supabase/Azure themselves,
+so it never has to pass through a third party at all.
+
+**Two different uses for this one feed — different phases, different risk:**
+
+* **Phase 1 (safe, no ops burden)**: periodic *pull* of vehicle roster +
+stats (location, odometer, engine hours) and DVIR history to enrich unit
+records in the dashboard — e.g. auto-fill current mileage instead of manual
+entry, show last-known location per unit. If this sync is late by an hour,
+nothing breaks, the dashboard is just slightly stale. Safe to build now.
+* **Phase 2 (real-time, ops responsibility)**: *webhook* push for fault codes
+and DVIR submissions that auto-drafts work orders. This is the part that
+needs monitoring/alerting before it goes live, per the phasing above.
+
+## Truck performance data (fuel efficiency, idling, engine stats)
+
+Same Samsara token, additional scopes. This is read-only reporting data —
+purely Phase 1, no automation risk at all, just richer dashboard content.
+
+* `GET /fleet/reports/vehicles/fuel-energy` — per-vehicle fuel \& energy
+efficiency report for a date range (MPG-equivalent). Scope: **Read Fuel \&
+Energy** (Fuel \& Energy category).
+* `GET /idling/events` — individual idling occurrences (vehicle, start time,
+duration) — flags fuel wasted sitting still. Same **Read Fuel \& Energy**
+scope. Note: only covers 2024 onward; older data needs a summarized report
+endpoint instead.
+* `GET /fleet/vehicles/stats` / `/stats/history` / `/stats/feed` — the same
+vehicle-stats endpoints already listed above also carry
+`fuelConsumedMilliliters` and `idlingDurationMilliseconds` alongside
+odometer/engine-hours/fault codes, so a single stats pull can cover
+location + fuel + idling + faults together. Scope: **Read Vehicle
+Statistics** (Vehicles category).
+* `GET /driver-efficiency/drivers` — driver-level eco-driving/efficiency
+scoring, grouped by vehicle if useful later for a driver-behavior view.
+Scope: **Read Driver Efficiency** (Fuel \& Energy category).
+
+**Token scope checklist for the "complete feed"** (all read-only): Vehicles,
+Read Vehicle Statistics, Read Fuel \& Energy, Read Driver Efficiency, DVIRs/
+Defects. One token, one generation step in the Samsara dashboard, all scopes
+selected at once.
+
+**Where this shows up in the dashboard**: a natural fit is a third view
+alongside Company and By-Unit — a **Performance** view per unit (fuel
+efficiency trend, idle time, current fault codes) sitting next to the spend
+view, so a fleet manager can eventually see "this unit costs more to
+maintain AND runs less efficiently" in one place. Not built yet — worth
+scoping as its own step once Phase 1's spend dashboard is stable.
+
 ## Build order (see Phase 1 / Phase 2 split above for the ops-risk rationale)
 
 **Phase 1 — no 24/7 responsibility required:**
@@ -200,15 +273,20 @@ DTC code pattern -> likely part -> our category. This is what turns "P0087" into
 fleet-dashboard-full.jsx, backed by real data instead of hardcoded records
 3. Add the Claude-API invoice scanner (upload receipt -> auto-fill vendor/
 unit/category/cost) — validate it against the 6 real invoices above
-4. Add the pattern-detection and warranty-recovery flags as real rules, not
+4. Generate a read-only Samsara API token (Vehicles, Read Vehicle Statistics,
+Read Fuel \& Energy, Read Driver Efficiency, DVIRs/Defects scopes) and
+build a periodic pull to enrich unit records with live odometer/
+engine-hours/location, fuel efficiency, idling time, and DVIR history —
+read-only, no automation
+5. Add the pattern-detection and warranty-recovery flags as real rules, not
 just one-off observations
 
 **Phase 2 — turn on only once someone/something is watching for failures:**
-5. Add the Samsara fault-code webhook listener -> proposed work order
-6. Add the Samsara DVIR webhook listener -> open work order
-7. Payroll export — needs the target payroll system identified first (ADP,
+6. Add the Samsara fault-code webhook listener -> proposed work order
+7. Add the Samsara DVIR-submitted webhook listener -> open work order
+8. Payroll export — needs the target payroll system identified first (ADP,
 Paycom, etc.) before this can be scoped
-8. Optional: pull Alvys Trucks/Fuel/Maintenance entities in too, to reconcile
+9. Optional: pull Alvys Trucks/Fuel/Maintenance entities in too, to reconcile
 the fuel-card-commingled maintenance spend against real work orders
 
 ## Security notes

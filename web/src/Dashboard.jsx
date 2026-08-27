@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Building2, LayoutGrid, Loader2, Wrench, RefreshCw, LogOut } from "lucide-react";
+import { Building2, LayoutGrid, Loader2, Wrench, RefreshCw, LogOut, Plus } from "lucide-react";
 import { useWorkOrders } from "./hooks/useWorkOrders";
 import { supabase } from "./lib/supabaseClient";
 import CompanyView from "./components/CompanyView";
 import UnitView from "./components/UnitView";
+import NewWorkOrderForm from "./components/NewWorkOrderForm";
 
 export default function Dashboard({ session }) {
   const [view, setView] = useState("company");
+  const [showForm, setShowForm] = useState(false);
   const { records, loading, error, reload } = useWorkOrders();
 
   return (
@@ -31,14 +33,26 @@ export default function Dashboard({ session }) {
       </div>
 
       <div className="content">
-        <div className="toggle-row">
-          <button className={"toggle-btn" + (view === "company" ? " active" : "")} onClick={() => setView("company")}>
-            <Building2 size={14} /> Company
-          </button>
-          <button className={"toggle-btn" + (view === "unit" ? " active" : "")} onClick={() => setView("unit")}>
-            <LayoutGrid size={14} /> By unit
+        <div className="toolbar">
+          <div className="toggle-row" style={{ marginBottom: 0 }}>
+            <button className={"toggle-btn" + (view === "company" ? " active" : "")} onClick={() => setView("company")}>
+              <Building2 size={14} /> Company
+            </button>
+            <button className={"toggle-btn" + (view === "unit" ? " active" : "")} onClick={() => setView("unit")}>
+              <LayoutGrid size={14} /> By unit
+            </button>
+          </div>
+          <button className="btn-primary" onClick={() => setShowForm(true)}>
+            <Plus size={15} /> New work order
           </button>
         </div>
+
+        {showForm && (
+          <NewWorkOrderForm
+            onCancel={() => setShowForm(false)}
+            onSaved={() => { setShowForm(false); reload(); }}
+          />
+        )}
 
         {error && (
           <div className="banner warn">
