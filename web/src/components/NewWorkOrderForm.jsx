@@ -57,7 +57,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
   const [f, setF] = useState({
     unitNumber: "", vendorName: "",
     status: "Closed", dateOpened: new Date().toISOString().slice(0, 10),
-    dateClosed: new Date().toISOString().slice(0, 10), invoiceRef: "",
+    dateClosed: new Date().toISOString().slice(0, 10), invoiceRef: "", poNumber: "",
   });
   const [lineItems, setLineItems] = useState([emptyLineItem()]);
   const [file, setFile] = useState(null);
@@ -126,6 +126,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
         date_opened: f.dateOpened,
         date_closed: f.dateClosed || null,
         invoice_ref: f.invoiceRef || null,
+        po_number: f.poNumber || null,
         description: li.description || null,
         source: "manual",
         receipt_path: receiptPath,
@@ -170,8 +171,11 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
           <Field label="Status">
             <Select value={f.status} onChange={set("status")} options={STATUSES} />
           </Field>
-          <Field label="Invoice / ref #">
-            <Input value={f.invoiceRef} onChange={set("invoiceRef")} placeholder="Invoice #, PO #, or note" />
+          <Field label="Vendor invoice #">
+            <Input value={f.invoiceRef} onChange={set("invoiceRef")} placeholder="e.g. INV-48213" />
+          </Field>
+          <Field label="PO number">
+            <Input value={f.poNumber} onChange={set("poNumber")} placeholder="e.g. PO-10245" />
           </Field>
           <Field label="Date opened">
             <Input type="date" value={f.dateOpened} onChange={set("dateOpened")} />
