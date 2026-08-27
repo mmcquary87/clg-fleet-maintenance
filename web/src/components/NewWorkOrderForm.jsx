@@ -12,7 +12,7 @@ function uid() {
 }
 
 function emptyLineItem() {
-  return { id: uid(), category: CATEGORIES[0], description: "", cost: "", isChargeback: false, chargebackDriver: "" };
+  return { id: uid(), category: CATEGORIES[0], description: "", cost: "", isChargeback: false, chargebackDriver: "", inspectionType: "" };
 }
 
 async function findOrCreateUnit(number) {
@@ -141,6 +141,23 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
       const { error: insertErr } = await supabase.from("work_orders").insert(rows);
       if (insertErr) throw insertErr;
 
+      if (f.status === "Closed") {
+        const doneDate = f.dateClosed || f.dateOpened;
+        const unitUpdates = {};
+        for (const li of lineItems) {
+          if (li.category === "PM / Oil") {
+            if (!unitUpdates.last_pm_date || doneDate > unitUpdates.last_pm_date) unitUpdates.last_pm_date = doneDate;
+          } else if (li.category === "DOT Inspection" && li.inspectionType) {
+            const field = li.inspectionType === "Annual" ? "last_annual_inspection_date" : "last_midtrip_date";
+            if (!unitUpdates[field] || doneDate > unitUpdates[field]) unitUpdates[field] = doneDate;
+          }
+        }
+        if (Object.keys(unitUpdates).length > 0) {
+          const { error: unitErr } = await supabase.from("units").update(unitUpdates).eq("id", unitId);
+          if (unitErr) throw unitErr;
+        }
+      }
+
       onSaved();
     } catch (err) {
       setError(err.message);
@@ -252,6 +269,13 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
                     <Input
                       required value={li.chargebackDriver} onChange={setLineItem(li.id, "chargebackDriver")}
                       placeholder="Driver name" style={{ maxWidth: 220 }}
+                    />
+                  )}
+                  {li.category === "DOT Inspection" && (
+                    <Select
+                      required value={li.inspectionType} onChange={setLineItem(li.id, "inspectionType")}
+                      options={["Annual", "Midtrip"]} placeholder="Inspection type"
+                      style={{ maxWidth: 200 }}
                     />
                   )}
                 </div>
