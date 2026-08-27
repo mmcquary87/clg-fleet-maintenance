@@ -105,20 +105,40 @@ Deno.serve(async (req) => {
       if (!unitId) continue;
       for (const reading of v.faultCodes ?? []) {
         const time = reading.time;
+
+        // OBD-II: confirmed DTCs are the real "light is on" signal;
+        // pending DTCs are a softer, not-yet-confirmed warning.
         for (const dtc of reading.obdii?.diagnosticTroubleCodes ?? []) {
+          const celOn = !!dtc.checkEngineLightIsOn;
           for (const code of dtc.confirmedDtcs ?? []) {
             faultRows.push({
               unit_id: unitId, dtc_code: code.dtcShortCode, dtc_description: code.dtcDescription,
               source: "obdii", samsara_reading_time: time, status: "new",
+              light_severity: celOn ? "red" : "amber",
               samsara_fault_key: `${v.id}-${code.dtcShortCode}-${time}`,
             });
           }
+          for (const code of dtc.pendingDtcs ?? []) {
+            faultRows.push({
+              unit_id: unitId, dtc_code: code.dtcShortCode, dtc_description: code.dtcDescription,
+              source: "obdii", samsara_reading_time: time, status: "new", light_severity: "yellow",
+              samsara_fault_key: `${v.id}-${code.dtcShortCode}-pending-${time}`,
+            });
+          }
         }
+
+        // J1939: severity comes from which lamp is lit, not the DTC itself —
+        // stop (red) > protect/emissions (amber) > warning-only (yellow).
+        const lights = reading.j1939?.checkEngineLights ?? {};
+        const j1939Severity = lights.stopIsOn ? "red"
+          : (lights.protectIsOn || lights.emissionsIsOn) ? "amber"
+          : lights.warningIsOn ? "yellow"
+          : null;
         for (const dtc of reading.j1939?.diagnosticTroubleCodes ?? []) {
           const code = `SPN${dtc.spnId}/FMI${dtc.fmiId}`;
           faultRows.push({
             unit_id: unitId, dtc_code: code, dtc_description: `${dtc.spnDescription} — ${dtc.fmiDescription}`,
-            source: "j1939", samsara_reading_time: time, status: "new",
+            source: "j1939", samsara_reading_time: time, status: "new", light_severity: j1939Severity,
             samsara_fault_key: `${v.id}-${code}-${time}`,
           });
         }
