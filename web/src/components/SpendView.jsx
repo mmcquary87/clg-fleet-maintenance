@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Building2, LayoutGrid, Loader2, Plus } from "lucide-react";
+import { Button } from "../ds";
 import { useWorkOrders } from "../hooks/useWorkOrders";
 import CompanyView from "./CompanyView";
 import UnitView from "./UnitView";
@@ -23,9 +24,9 @@ export default function SpendView() {
             <LayoutGrid size={14} /> By unit
           </button>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(true)}>
-          <Plus size={15} /> New work order
-        </button>
+        <Button size="sm" iconLeft={<Plus size={15} />} onClick={() => setShowForm(true)}>
+          Log Invoice
+        </Button>
       </div>
 
       <div style={{ marginBottom: 16 }}>
