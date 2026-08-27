@@ -1,8 +1,25 @@
 import { useMemo, useState } from "react";
-import { Loader2, Search } from "lucide-react";
-import { Card, Badge, Eyebrow, Alert, Input } from "../../ds";
+import { Loader2, Search, Download } from "lucide-react";
+import { Card, Badge, Eyebrow, Alert, Input, Button } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
+import { downloadCsv } from "../../lib/exportCsv";
 import WorkOrderDetailModal from "./WorkOrderDetailModal";
+
+const EXPORT_COLUMNS = [
+  { label: "Unit", value: (o) => o.unit?.number },
+  { label: "Category", value: (o) => o.category },
+  { label: "Severity", value: (o) => o.severity },
+  { label: "Issue", value: (o) => o.complaint || o.description },
+  { label: "Vendor", value: (o) => o.vendor?.name },
+  { label: "Status", value: (o) => o.status },
+  { label: "Date opened", value: (o) => o.date_opened },
+  { label: "Date closed", value: (o) => o.date_closed },
+  { label: "Cost", value: (o) => Number(o.cost) || 0 },
+  { label: "Invoice / ref #", value: (o) => o.invoice_ref },
+  { label: "PO number", value: (o) => o.po_number },
+  { label: "Chargeback", value: (o) => (o.is_chargeback ? "Yes" : "No") },
+  { label: "Chargeback driver", value: (o) => o.chargeback_driver_name },
+];
 
 const STATUS_TABS = ["All", "Needs approval", "Open", "In Progress", "Closed"];
 
@@ -48,9 +65,18 @@ export default function WorkOrdersView() {
             {filtered.length} order{filtered.length === 1 ? "" : "s"}
           </h2>
         </div>
-        <div style={{ position: "relative", width: 260 }}>
-          <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search unit, vendor, category…" style={{ paddingLeft: 30 }} />
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ position: "relative", width: 260 }}>
+            <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search unit, vendor, category…" style={{ paddingLeft: 30 }} />
+          </div>
+          <Button
+            variant="outline" size="sm" iconLeft={<Download size={14} />}
+            onClick={() => downloadCsv(`work-orders-${new Date().toISOString().slice(0, 10)}.csv`, filtered, EXPORT_COLUMNS)}
+            disabled={filtered.length === 0}
+          >
+            Export CSV
+          </Button>
         </div>
       </div>
 
@@ -106,7 +132,10 @@ export default function WorkOrdersView() {
                     <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
                       {o.unit?.number || "—"}
                     </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{o.category}</td>
+                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                      {o.category}
+                      {o.is_chargeback && <Badge tone="critical" style={{ marginLeft: 6 }}>Chargeback</Badge>}
+                    </td>
                     <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", maxWidth: 260, color: "var(--clg-text-muted)" }}>
                       {o.complaint || o.description || "—"}
                     </td>

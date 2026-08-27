@@ -13,7 +13,7 @@ export function useAllWorkOrders() {
       .from("work_orders")
       .select(
         "id, category, severity, description, complaint, cost, status, approval_status, " +
-        "date_opened, date_closed, invoice_ref, po_number, " +
+        "date_opened, date_closed, invoice_ref, po_number, is_chargeback, chargeback_driver_name, " +
         "unit:units(id, number), vendor:vendors(id, name)"
       )
       .order("date_opened", { ascending: false })

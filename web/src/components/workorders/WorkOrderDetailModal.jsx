@@ -123,6 +123,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 <Field label="Promised back" value={order.promised_back} />
                 <Field label="Invoice / ref #" value={order.invoice_ref} />
                 <Field label="PO number" value={order.po_number} />
+                <Field label="Chargeback" value={order.is_chargeback ? `Yes — ${order.chargeback_driver_name || "driver not named"}` : null} />
                 <Field label="Source" value={order.source} />
                 <Field label="Assigned bay" value={order.assigned_bay} />
                 <Field label="Assigned tech" value={order.assigned_tech} />

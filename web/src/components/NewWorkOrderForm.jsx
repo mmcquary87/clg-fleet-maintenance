@@ -12,7 +12,7 @@ function uid() {
 }
 
 function emptyLineItem() {
-  return { id: uid(), category: CATEGORIES[0], description: "", cost: "" };
+  return { id: uid(), category: CATEGORIES[0], description: "", cost: "", isChargeback: false, chargebackDriver: "" };
 }
 
 async function findOrCreateUnit(number) {
@@ -103,6 +103,10 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
   const setLineItem = (id, k) => (e) => {
     setLineItems(lineItems.map((li) => (li.id === id ? { ...li, [k]: e.target.value } : li)));
   };
+  const toggleChargeback = (id) => (e) => {
+    const isChargeback = e.target.checked;
+    setLineItems(lineItems.map((li) => (li.id === id ? { ...li, isChargeback } : li)));
+  };
   const addLineItem = () => setLineItems([...lineItems, emptyLineItem()]);
   const removeLineItem = (id) => setLineItems(lineItems.filter((li) => li.id !== id));
 
@@ -130,6 +134,8 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
         description: li.description || null,
         source: "manual",
         receipt_path: receiptPath,
+        is_chargeback: li.isChargeback,
+        chargeback_driver_name: li.isChargeback ? (li.chargebackDriver.trim() || null) : null,
       }));
 
       const { error: insertErr } = await supabase.from("work_orders").insert(rows);
@@ -215,26 +221,40 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
             </span>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {lineItems.map((li) => (
-              <div key={li.id} style={{ display: "grid", gridTemplateColumns: "150px 1fr 110px auto", gap: 8, alignItems: "center" }}>
-                <Select value={li.category} onChange={setLineItem(li.id, "category")} options={CATEGORIES} />
-                <Input value={li.description} onChange={setLineItem(li.id, "description")} placeholder="What was done — e.g. Turbo replacement" />
-                <Input
-                  required type="number" min="0" step="0.01"
-                  value={li.cost} onChange={setLineItem(li.id, "cost")} placeholder="0.00"
-                  style={{ fontFamily: "var(--clg-font-mono, monospace)" }}
-                />
-                <button
-                  type="button" onClick={() => removeLineItem(li.id)} disabled={lineItems.length === 1}
-                  title="Remove this service"
-                  style={{
-                    background: "none", border: "none", cursor: lineItems.length === 1 ? "not-allowed" : "pointer",
-                    color: "var(--clg-text-muted)", opacity: lineItems.length === 1 ? 0.35 : 1, padding: 6, display: "inline-flex",
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
+              <div key={li.id} style={{ border: "1px solid var(--clg-border-subtle)", borderRadius: "var(--clg-radius-sm)", padding: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "150px 1fr 110px auto", gap: 8, alignItems: "center" }}>
+                  <Select value={li.category} onChange={setLineItem(li.id, "category")} options={CATEGORIES} />
+                  <Input value={li.description} onChange={setLineItem(li.id, "description")} placeholder="What was done — e.g. Turbo replacement" />
+                  <Input
+                    required type="number" min="0" step="0.01"
+                    value={li.cost} onChange={setLineItem(li.id, "cost")} placeholder="0.00"
+                    style={{ fontFamily: "var(--clg-font-mono, monospace)" }}
+                  />
+                  <button
+                    type="button" onClick={() => removeLineItem(li.id)} disabled={lineItems.length === 1}
+                    title="Remove this service"
+                    style={{
+                      background: "none", border: "none", cursor: lineItems.length === 1 ? "not-allowed" : "pointer",
+                      color: "var(--clg-text-muted)", opacity: lineItems.length === 1 ? 0.35 : 1, padding: 6, display: "inline-flex",
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-body)", cursor: "pointer" }}>
+                    <input type="checkbox" checked={li.isChargeback} onChange={toggleChargeback(li.id)} />
+                    Charge back to driver
+                  </label>
+                  {li.isChargeback && (
+                    <Input
+                      required value={li.chargebackDriver} onChange={setLineItem(li.id, "chargebackDriver")}
+                      placeholder="Driver name" style={{ maxWidth: 220 }}
+                    />
+                  )}
+                </div>
               </div>
             ))}
           </div>

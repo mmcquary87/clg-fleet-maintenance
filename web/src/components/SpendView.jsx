@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Building2, LayoutGrid, Loader2, Plus } from "lucide-react";
+import { Building2, LayoutGrid, Loader2, Plus, UserMinus } from "lucide-react";
 import { Button } from "../ds";
 import { useWorkOrders } from "../hooks/useWorkOrders";
 import CompanyView from "./CompanyView";
 import UnitView from "./UnitView";
+import DeductionsView from "./DeductionsView";
 import NewWorkOrderForm from "./NewWorkOrderForm";
 import DateRangeFilter from "./DateRangeFilter";
 
@@ -23,6 +24,9 @@ export default function SpendView() {
           <button className={"toggle-btn" + (view === "unit" ? " active" : "")} onClick={() => setView("unit")}>
             <LayoutGrid size={14} /> By unit
           </button>
+          <button className={"toggle-btn" + (view === "deductions" ? " active" : "")} onClick={() => setView("deductions")}>
+            <UserMinus size={14} /> Deductions
+          </button>
         </div>
         <Button size="sm" iconLeft={<Plus size={15} />} onClick={() => setShowForm(true)}>
           Log Invoice
@@ -40,19 +44,25 @@ export default function SpendView() {
         />
       )}
 
-      {error && (
-        <div className="banner warn">
-          <div>
-            <div className="banner-title">Couldn't load data from Supabase</div>
-            <div className="banner-body">{error}</div>
-          </div>
-        </div>
-      )}
+      {view === "deductions" ? (
+        <DeductionsView range={range} />
+      ) : (
+        <>
+          {error && (
+            <div className="banner warn">
+              <div>
+                <div className="banner-title">Couldn't load data from Supabase</div>
+                <div className="banner-body">{error}</div>
+              </div>
+            </div>
+          )}
 
-      {loading ? (
-        <div className="loading"><Loader2 size={16} className="spin" /> Loading fleet data…</div>
-      ) : !error && (
-        view === "company" ? <CompanyView records={records} range={range} /> : <UnitView records={records} />
+          {loading ? (
+            <div className="loading"><Loader2 size={16} className="spin" /> Loading fleet data…</div>
+          ) : !error && (
+            view === "company" ? <CompanyView records={records} range={range} /> : <UnitView records={records} />
+          )}
+        </>
       )}
     </div>
   );
