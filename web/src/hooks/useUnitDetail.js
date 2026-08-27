@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 
 const UNIT_SELECT =
   "id, number, type, vin, is_active, current_location, driver_name, odometer, " +
+  "year, make, model, fuel_type, last_fuel_percent, samsara_synced_at, load_trip_id, domicile, warranty_status, " +
   "last_pm_date, pm_interval_days, last_annual_inspection_date, last_midtrip_date, midtrip_interval_days";
 
 const ORDER_SELECT =
