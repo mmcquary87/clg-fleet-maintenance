@@ -5,11 +5,13 @@ import Board from "./components/board/Board";
 import SpendView from "./components/SpendView";
 import VendorsView from "./components/vendors/VendorsView";
 import UnitsView from "./components/units/UnitsView";
+import WorkOrdersView from "./components/workorders/WorkOrdersView";
 import IntakeWizard from "./components/intake/IntakeWizard";
 import "./ds/tokens.css";
 
 const NAV = [
   { id: "board", label: "Board" },
+  { id: "workorders", label: "Work Orders" },
   { id: "intake", label: "New Work Order" },
   { id: "spend", label: "Spend" },
   { id: "units", label: "Units" },
@@ -66,6 +68,7 @@ export default function Dashboard({ session }) {
       </div>
 
       {tab === "board" && <Board />}
+      {tab === "workorders" && <WorkOrdersView />}
       {tab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
       {tab === "spend" && <SpendView />}
       {tab === "units" && <UnitsView />}

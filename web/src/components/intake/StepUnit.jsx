@@ -21,10 +21,10 @@ export default function StepUnit({ data, setData }) {
       setData((d) => ({ ...d, unitId: existing.id, unitInfo: existing, isNewUnit: false }));
       const { data: pastWO } = await supabase
         .from("work_orders")
-        .select("id, category, status, description, complaint")
+        .select("id, category, status, description, complaint, date_opened, date_closed")
         .eq("unit_id", existing.id)
         .order("date_opened", { ascending: false })
-        .limit(3);
+        .limit(5);
       setHistory(pastWO ?? []);
     } else {
       setData((d) => ({ ...d, unitId: null, unitInfo: null, isNewUnit: true }));
@@ -91,15 +91,21 @@ export default function StepUnit({ data, setData }) {
         )}
 
         {data.unitInfo && history.length > 0 && (
-          <div style={{ border: "1px solid var(--clg-reflection)", padding: "14px 16px", maxWidth: 420 }}>
+          <div style={{ border: "1px solid var(--clg-reflection)", padding: "14px 16px", maxWidth: 460 }}>
             <div style={{ fontSize: 12, color: "var(--clg-navy)", fontWeight: 600, marginBottom: 8 }}>
-              Open history on {data.unitInfo.number}
+              Recent history on {data.unitInfo.number}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 9, fontSize: 12, color: "var(--clg-pewter)" }}>
               {history.map((h) => (
-                <div key={h.id} style={{ display: "flex", justifyContent: "space-between" }}>
+                <div key={h.id} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                   <span>{h.category} · {h.complaint || h.description || "—"}</span>
-                  <span style={{ color: h.status === "Closed" ? "var(--clg-cool)" : "var(--clg-ruby)" }}>{h.status}</span>
+                  <span style={{ flexShrink: 0, textAlign: "right" }}>
+                    <span style={{ color: "var(--clg-cool)", fontFamily: "var(--clg-font-mono)", fontSize: 11 }}>
+                      {h.date_opened}{h.date_closed ? ` → ${h.date_closed}` : ""}
+                    </span>
+                    {" "}
+                    <span style={{ color: h.status === "Closed" ? "var(--clg-cool)" : "var(--clg-ruby)" }}>{h.status}</span>
+                  </span>
                 </div>
               ))}
             </div>
