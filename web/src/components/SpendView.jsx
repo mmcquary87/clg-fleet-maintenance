@@ -51,7 +51,7 @@ export default function SpendView() {
       {loading ? (
         <div className="loading"><Loader2 size={16} className="spin" /> Loading fleet data…</div>
       ) : !error && (
-        view === "company" ? <CompanyView records={records} /> : <UnitView records={records} />
+        view === "company" ? <CompanyView records={records} range={range} /> : <UnitView records={records} />
       )}
     </div>
   );

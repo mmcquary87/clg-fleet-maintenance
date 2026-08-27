@@ -6,12 +6,14 @@ import { TrendingUp } from "lucide-react";
 import { CAT_COLORS } from "../lib/categories";
 import { groupSum } from "../lib/groupSum";
 import EmptyState from "./EmptyState";
+import { useMilesDriven } from "../hooks/useMilesDriven";
 
-export default function CompanyView({ records }) {
+export default function CompanyView({ records, range }) {
   const grandTotal = records.reduce((s, r) => s + r.cost, 0);
   const units = useMemo(() => new Set(records.map((r) => r.unit)), [records]);
   const byCategory = useMemo(() => groupSum(records, "category"), [records]);
   const byVendor = useMemo(() => groupSum(records, "vendor"), [records]);
+  const { miles, loading: milesLoading, error: milesError } = useMilesDriven(range);
 
   if (records.length === 0) {
     return (
@@ -44,6 +46,18 @@ export default function CompanyView({ records }) {
           <span className="stat-label">Avg / unit</span>
           <span className="stat-value">${(grandTotal / units.size).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
         </div>
+        {range?.start && range?.end && (
+          <div className="stat" style={{ borderLeftColor: "var(--amber)" }}>
+            <span className="stat-label">Cost / mile</span>
+            <span className="stat-value">
+              {milesLoading ? "…" : milesError || !miles ? "—" : `$${(grandTotal / miles).toFixed(2)}`}
+            </span>
+            {!milesLoading && !milesError && miles > 0 && (
+              <span style={{ fontSize: 10.5, color: "var(--ink-soft)" }}>{miles.toLocaleString()} mi driven</span>
+            )}
+            {milesError && <span style={{ fontSize: 10.5, color: "var(--red)" }}>{milesError}</span>}
+          </div>
+        )}
       </div>
 
       <div className="charts">
