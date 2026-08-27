@@ -60,6 +60,27 @@ flow, not the CLI.
 Validated against a real invoice from the SPEC.md proof-of-concept set —
 correctly extracted vendor, category, and cost.
 
+## Alvys integration — historical import (DONE), periodic sync (NOT YET BUILT)
+
+Credentials: `ALVYS_CLIENT_ID` / `ALVYS_CLIENT_SECRET` (Edge Function secrets),
+OAuth 2.0 client-credentials flow against `auth.alvys.com`. Full API
+reference: https://docs.alvys.com/en/api (127 endpoints; Maintenance is
+read-only — no way to write work orders back into Alvys).
+
+- `alvys-sync-equipment`: pulls all trucks/trailers, upserts into `units`
+  matched by number. Confirmed: 131 trucks + 110 trailers.
+- `alvys-import-maintenance`: pulls all maintenance records, classifies
+  Alvys's free-text category into our 9-category enum via keyword
+  heuristic, imports as Closed work orders. Confirmed: 1,670 records
+  imported, 0 skipped.
+- Both are idempotent (upsert by `alvys_asset_id` / `alvys_maintenance_id`)
+  — safe to re-run by hand any time via each function's Test button.
+- **Not built yet**: an automatic recurring sync (cron/schedule) to pick up
+  new Alvys records going forward — right now this is a manual one-time
+  historical backfill, re-run by hand.
+- Found and fixed during setup: Alvys's `Page` search parameter is
+  **0-indexed**, not 1-indexed — easy to get wrong against their docs.
+
 ---
 
 ## Original step 1 walkthrough (for reference)
