@@ -72,20 +72,25 @@ Deno.serve(async (req) => {
     const unitByVin = new Map(units.filter((u: any) => u.vin).map((u: any) => [u.vin.toLowerCase(), u.id]));
 
     const vehicleIdToUnitId = new Map<string, string>();
-    const vehicleMatches: { id: string; samsara_vehicle_id: string }[] = [];
+    const vehicleMatchTasks: Promise<{ error: unknown }>[] = [];
     for (const v of vehicles) {
       if (!v.vin) continue;
       const unitId = unitByVin.get(v.vin.toLowerCase());
       if (unitId) {
         vehicleIdToUnitId.set(v.id, unitId);
-        vehicleMatches.push({ id: unitId, samsara_vehicle_id: v.id });
+        // .update(), not .upsert() — an upsert's attempted INSERT still has
+        // to satisfy NOT NULL constraints (like units.number) on the full
+        // row even when the row already exists and it'll resolve to an
+        // UPDATE, since Postgres forms the insert tuple before checking
+        // for a conflict. A plain update only touches the given columns.
+        vehicleMatchTasks.push(supabase.from("units").update({ samsara_vehicle_id: v.id }).eq("id", unitId));
       }
     }
-    if (vehicleMatches.length > 0) {
-      const { error } = await supabase.from("units").upsert(vehicleMatches, { onConflict: "id" });
-      if (error) throw error;
+    const vehicleMatchResults = await Promise.all(vehicleMatchTasks);
+    for (const result of vehicleMatchResults) {
+      if (result && result.error) throw result.error;
     }
-    const vehiclesMatched = vehicleMatches.length;
+    const vehiclesMatched = vehicleMatchTasks.length;
 
     // ---- 2. Fault codes, last 7 days ----
     const faultVehicles = await fetchAllPaginated("/fleet/vehicles/stats/history", {
