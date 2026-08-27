@@ -77,7 +77,15 @@
 @media (max-width: 640px) {
   .line-item { grid-template-columns: 1fr; }
 }
-.file-input input { border: none; padding: 0; font-size: 12px; }
+.file-input input { border: none; padding: 0; font-size: 12px; flex: 1; }
+.scan-btn {
+  display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-body);
+  font-weight: 600; font-size: 12px; color: #fff; background: var(--blue);
+  border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; flex-shrink: 0;
+}
+.scan-btn:hover:not(:disabled) { opacity: 0.9; }
+.scan-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.scan-hint { font-size: 11.5px; color: var(--blue); margin-top: 4px; font-weight: 500; text-transform: none; letter-spacing: normal; }
 
 .toggle-row { display: flex; gap: 6px; margin-bottom: 16px; }
 .toggle-btn {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Loader2, Paperclip, Plus, Trash2 } from "lucide-react";
+import { X, Loader2, Paperclip, Plus, Trash2, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { CATEGORIES } from "../lib/categories";
 
@@ -42,6 +42,15 @@ async function uploadReceipt(file) {
   return path;
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]); // strip the data: URL prefix
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function NewWorkOrderForm({ onSaved, onCancel }) {
   const [f, setF] = useState({
     unitNumber: "", vendorName: "",
@@ -52,8 +61,42 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanApplied, setScanApplied] = useState(false);
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
+  const onScan = async () => {
+    if (!file) return;
+    setScanning(true);
+    setError(null);
+    try {
+      const fileBase64 = await fileToBase64(file);
+      const { data, error: fnError } = await supabase.functions.invoke("scan-invoice", {
+        body: { fileBase64, mediaType: file.type },
+      });
+      if (fnError) throw fnError;
+      if (data?.error) throw new Error(data.error);
+
+      setF((prev) => ({
+        ...prev,
+        vendorName: data.vendor || prev.vendorName,
+        unitNumber: data.unitNumberGuess || prev.unitNumber,
+        invoiceRef: data.invoiceRef || prev.invoiceRef,
+        dateOpened: data.date || prev.dateOpened,
+        dateClosed: data.date || prev.dateClosed,
+      }));
+      setLineItems((prev) => {
+        const [first, ...rest] = prev;
+        return [{ ...first, category: data.category, description: data.description, cost: data.cost }, ...rest];
+      });
+      setScanApplied(true);
+    } catch (err) {
+      setError(`AI scan failed: ${err.message}. You can still fill this out manually.`);
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const setLineItem = (id, k) => (e) => {
     setLineItems(lineItems.map((li) => (li.id === id ? { ...li, [k]: e.target.value } : li)));
@@ -139,8 +182,20 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
             <span>Receipt / invoice file (optional, shared across all services below)</span>
             <div className="file-input">
               <Paperclip size={14} />
-              <input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files[0] ?? null)} />
+              <input
+                type="file" accept="image/*,application/pdf"
+                onChange={(e) => { setFile(e.target.files[0] ?? null); setScanApplied(false); }}
+              />
+              {file && (
+                <button type="button" className="scan-btn" onClick={onScan} disabled={scanning}>
+                  {scanning ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+                  {scanning ? "Scanning…" : "Scan with AI"}
+                </button>
+              )}
             </div>
+            {scanApplied && (
+              <div className="scan-hint">AI filled in the fields below from this file — review and correct anything before saving.</div>
+            )}
           </label>
         </div>
 
