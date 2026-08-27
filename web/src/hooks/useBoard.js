@@ -41,7 +41,7 @@ export function useBoard() {
         "id, category, severity, system_component, complaint, description, cost, status, " +
         "date_opened, promised_back, approval_status, assigned_bay, assigned_tech, " +
         "waiting_on_parts, parts_eta, " +
-        "unit:units(id, number, hourly_revenue_rate, idle_since, can_move_load, current_location, driver_name), " +
+        "unit:units(id, number, hourly_revenue_rate, idle_since, can_move_load, current_location, driver_name, is_active), " +
         "vendor:vendors(id, name)"
       )
       .neq("status", "Closed")
@@ -58,7 +58,7 @@ export function useBoard() {
     // oldest (first, since we sorted ascending) is the lead issue shown.
     const byUnit = new Map();
     (data ?? []).forEach((wo) => {
-      if (!wo.unit) return;
+      if (!wo.unit || wo.unit.is_active === false) return;
       if (!byUnit.has(wo.unit.id)) {
         byUnit.set(wo.unit.id, { unit: wo.unit, lead: wo, openCount: 1 });
       } else {
