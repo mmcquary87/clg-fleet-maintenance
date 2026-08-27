@@ -39,13 +39,26 @@ export function useAlvysLoadsKpis(range) {
         .gte("scheduled_pickup_at", startIso).lte("scheduled_pickup_at", endIso)
         .in("status", ["Delivered", "Completed"]),
       supabase.from("alvys_loads")
-        .select("delivery_arrived_at, delivery_window_end, delivery_appointment_at, loaded_miles")
+        .select("delivery_arrived_at, delivery_window_end, delivery_appointment_at")
         .gte("scheduled_delivery_at", startIso).lte("scheduled_delivery_at", endIso)
         .in("status", ["Delivered", "Completed"]),
-    ]).then(([pickupRes, deliveryRes]) => {
+      // Loaded miles for Empty Mile % needs to match the SAME basis as
+      // Samsara's total-miles figure — actual miles driven during the
+      // window — not "loads whose delivery happened to land in this
+      // window" (that undercounts badly: a load driven mostly *this*
+      // month but not yet marked Completed until early next month would
+      // contribute all its driven miles to Samsara's total but none of
+      // its loaded miles here). So: any Delivered/Completed load that
+      // was actually picked up or delivered inside the window counts.
+      supabase.from("alvys_loads")
+        .select("loaded_miles")
+        .in("status", ["Delivered", "Completed"])
+        .or(`and(picked_up_at.gte.${startIso},picked_up_at.lte.${endIso}),and(delivered_at.gte.${startIso},delivered_at.lte.${endIso})`),
+    ]).then(([pickupRes, deliveryRes, milesRes]) => {
       if (cancelled) return;
       if (pickupRes.error) { setError(pickupRes.error.message); setData(null); setLoading(false); return; }
       if (deliveryRes.error) { setError(deliveryRes.error.message); setData(null); setLoading(false); return; }
+      if (milesRes.error) { setError(milesRes.error.message); setData(null); setLoading(false); return; }
 
       const pickupRows = pickupRes.data ?? [];
       const pickupOnTime = pickupRows
@@ -57,7 +70,7 @@ export function useAlvysLoadsKpis(range) {
         .map((r) => isOnTime(r.delivery_arrived_at, r.delivery_window_end, r.delivery_appointment_at))
         .filter((v) => v !== null);
 
-      const loadedMiles = deliveryRows.reduce((s, r) => s + (r.loaded_miles ? Number(r.loaded_miles) : 0), 0);
+      const loadedMiles = (milesRes.data ?? []).reduce((s, r) => s + (r.loaded_miles ? Number(r.loaded_miles) : 0), 0);
 
       setData({
         eligiblePickups: pickupOnTime.length,
