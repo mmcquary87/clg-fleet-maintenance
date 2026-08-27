@@ -151,8 +151,9 @@ Deno.serve(async (req) => {
       unitUpdateTasks.push(supabase.from("units").update(fields).eq("id", unitId));
     }
     const unitUpdateResults = await Promise.all(unitUpdateTasks);
-    const firstUnitUpdateError = unitUpdateResults.find((r) => r.error)?.error;
-    if (firstUnitUpdateError) throw firstUnitUpdateError;
+    for (const result of unitUpdateResults) {
+      if (result && result.error) throw result.error;
+    }
     const unitsRefreshed = unitUpdateTasks.length;
 
     // ---- 4. DVIR defects, last 30 days ----
