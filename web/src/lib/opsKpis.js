@@ -63,19 +63,19 @@ export const KPIS = [
     no: 7, module: "fleet", name: "Empty Mile Percentage", classification: "Primary Weekly KPI — Exact Inherited Executive KPI", type: "Lagging",
     formula: "Empty miles ÷ total miles × 100",
     threshold: { status: "active", green: "<10.0%", yellow: "10.0–14.9%", red: "≥15.0%" },
-    dataStatus: "blocked", blockedReason: "We have total miles from Samsara, but not the loaded-vs-empty split — needs Alvys load-leg data.",
+    dataStatus: "live", unit: "%",
   },
   {
     no: 8, module: "fleet", name: "Fleet Miles per Gallon", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Total governed fleet miles ÷ total governed gallons",
     threshold: { status: "pending", green: "At/above approved MPG target", yellow: "Up to 5.0% below target", red: ">5.0% below target" },
-    dataStatus: "live",
+    dataStatus: "live", unit: "MPG",
   },
   {
     no: 9, module: "fleet", name: "On-Time Pickup", classification: "Primary Weekly KPI — Exact Inherited Executive KPI", type: "Lagging",
     formula: "On-time pickups ÷ total eligible pickups × 100",
     threshold: { status: "pending", green: "≥90.0% (target 95.0%)", yellow: "80.0–89.9% (target 90.0–94.9%)", red: "<80.0% (target <90.0%)" },
-    dataStatus: "blocked", blockedReason: "Needs Alvys appointment windows plus validated arrival timestamps — not pulled yet.",
+    dataStatus: "live", unit: "%",
   },
   {
     no: 10, module: "fleet", name: "Operating Plan Adherence", classification: "Primary Weekly KPI", type: "Lagging",
@@ -117,7 +117,7 @@ export const KPIS = [
     no: 15, module: "driver", name: "On-Time Delivery", classification: "Primary Weekly KPI — Exact Inherited Executive KPI", type: "Lagging",
     formula: "On-time deliveries ÷ total eligible deliveries × 100",
     threshold: { status: "pending", green: "≥90.0% (target 95.0%)", yellow: "80.0–89.9%", red: "<80.0%" },
-    dataStatus: "blocked", blockedReason: "Needs Alvys appointment windows plus validated arrival timestamps — not pulled yet.",
+    dataStatus: "live", unit: "%",
   },
   {
     no: 16, module: "driver", name: "Driver Waiting and Detention Hours", classification: "Primary Weekly KPI", type: "Lagging",

@@ -3,6 +3,7 @@ import { ChevronDown, Gauge } from "lucide-react";
 import { Card, Badge, Eyebrow } from "../ds";
 import { MODULES, KPIS } from "../lib/opsKpis";
 import { useFleetMpg } from "../hooks/useFleetMpg";
+import { useAlvysLoadsKpis } from "../hooks/useAlvysLoadsKpis";
 import DateRangeFilter from "./DateRangeFilter";
 
 const STATUS_COLOR = {
@@ -24,7 +25,7 @@ function statusFor(kpi, value) {
   return "pending";
 }
 
-function KpiCard({ kpi, liveValue, liveLoading, liveError }) {
+function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange }) {
   const [open, setOpen] = useState(false);
   const hasLive = kpi.dataStatus === "live";
   const status = hasLive ? statusFor(kpi, liveValue) : "pending";
@@ -52,10 +53,12 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError }) {
             <span style={{ fontSize: 12, color: "var(--clg-scarlet)" }}>{liveError}</span>
           ) : liveValue != null ? (
             <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontSize: 22, fontWeight: 700, color: "var(--clg-navy)" }}>
-              {liveValue.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 400, color: "var(--clg-text-muted)" }}>MPG</span>
+              {liveValue.toFixed(kpi.unit === "%" ? 1 : 2)} <span style={{ fontSize: 12, fontWeight: 400, color: "var(--clg-text-muted)" }}>{kpi.unit}</span>
             </span>
           ) : (
-            <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>Select a date range</span>
+            <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>
+              {hasRange ? "No data for this range" : "Select a date range"}
+            </span>
           )
         ) : (
           <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>{kpi.blockedReason}</span>
@@ -89,6 +92,21 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError }) {
 export default function OperationsView() {
   const [range, setRange] = useState(null);
   const { data: mpgData, loading: mpgLoading, error: mpgError } = useFleetMpg(range);
+  const { data: loadsData, loading: loadsLoading, error: loadsError } = useAlvysLoadsKpis(range);
+
+  const emptyMilePct = (() => {
+    if (mpgData?.totalMiles > 0 && loadsData?.loadedMiles != null) {
+      return Math.max(0, Math.min(100, ((mpgData.totalMiles - loadsData.loadedMiles) / mpgData.totalMiles) * 100));
+    }
+    return null;
+  })();
+
+  const LIVE = {
+    7: { value: emptyMilePct, loading: mpgLoading || loadsLoading, error: mpgError || loadsError },
+    8: { value: mpgData?.fleetMpg ?? null, loading: mpgLoading, error: mpgError },
+    9: { value: loadsData?.onTimePickupPct ?? null, loading: loadsLoading, error: loadsError },
+    15: { value: loadsData?.onTimeDeliveryPct ?? null, loading: loadsLoading, error: loadsError },
+  };
 
   return (
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1200, margin: "0 auto" }}>
@@ -119,9 +137,10 @@ export default function OperationsView() {
               <KpiCard
                 key={kpi.no}
                 kpi={kpi}
-                liveValue={kpi.no === 8 ? mpgData?.fleetMpg : null}
-                liveLoading={kpi.no === 8 ? mpgLoading : false}
-                liveError={kpi.no === 8 ? mpgError : null}
+                liveValue={LIVE[kpi.no]?.value ?? null}
+                liveLoading={LIVE[kpi.no]?.loading ?? false}
+                liveError={LIVE[kpi.no]?.error ?? null}
+                hasRange={!!(range?.start && range?.end)}
               />
             ))}
           </div>
