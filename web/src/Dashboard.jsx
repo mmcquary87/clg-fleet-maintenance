@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LogOut } from "lucide-react";
+import { LogOut, Plus } from "lucide-react";
 import { supabase } from "./lib/supabaseClient";
 import Board from "./components/board/Board";
 import SpendView from "./components/SpendView";
@@ -10,15 +10,17 @@ import IntakeWizard from "./components/intake/IntakeWizard";
 import OperationsView from "./components/OperationsView";
 import "./ds/tokens.css";
 
-const NAV = [
-  { id: "board", label: "Board" },
-  { id: "workorders", label: "Work Orders" },
-  { id: "intake", label: "New Work Order" },
-  { id: "spend", label: "Spend" },
-  { id: "operations", label: "Operations" },
-  { id: "units", label: "Units" },
-  { id: "vendors", label: "Vendors" },
+// Grouped so related views sit together instead of one flat row — each
+// group renders with a visible divider between it and the next.
+const NAV_GROUPS = [
+  { id: "overview", items: [{ id: "board", label: "Board" }, { id: "operations", label: "Operations" }] },
+  { id: "work", items: [{ id: "workorders", label: "Work Orders" }] },
+  { id: "fleet", items: [{ id: "spend", label: "Spend" }, { id: "units", label: "Units" }, { id: "vendors", label: "Vendors" }] },
 ];
+
+function NavDivider() {
+  return <div style={{ width: 1, height: 20, background: "rgba(255,255,255,.14)" }} />;
+}
 
 export default function Dashboard({ session }) {
   const [tab, setTab] = useState("board");
@@ -26,36 +28,65 @@ export default function Dashboard({ session }) {
   return (
     <div className="app" style={{ minHeight: "100vh", background: "var(--clg-surface-subtle)" }}>
       <div style={{
-        background: "var(--clg-navy)", height: 56, display: "flex", alignItems: "center",
-        padding: "0 24px", gap: 28,
+        background: "var(--clg-navy)", height: 60, display: "flex", alignItems: "center",
+        padding: "0 24px", gap: 24,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src="/brand/mark-star-white.svg" alt="" style={{ width: 22, height: 22 }} />
-          <span style={{
-            fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 13,
-            letterSpacing: "0.14em", color: "#fff", textTransform: "uppercase",
-          }}>
-            CLG Maintenance
-          </span>
+          <img src="/brand/mark-star-white.svg" alt="" style={{ width: 24, height: 24 }} />
+          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+            <span style={{
+              fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 14,
+              letterSpacing: "0.1em", color: "#fff", textTransform: "uppercase",
+            }}>
+              CLG OS
+            </span>
+            <span style={{
+              fontFamily: "var(--clg-font-heading)", fontWeight: 600, fontSize: 9,
+              letterSpacing: "0.12em", color: "var(--clg-mercury)", textTransform: "uppercase",
+            }}>
+              Fleet &amp; Operations
+            </span>
+          </div>
         </div>
 
-        <nav style={{ display: "flex", gap: 4 }}>
-          {NAV.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => setTab(n.id)}
-              style={{
-                background: "transparent", border: "none", cursor: "pointer",
-                fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12.5,
-                color: tab === n.id ? "#fff" : "var(--clg-mercury)",
-                padding: "18px 4px", borderBottom: tab === n.id ? "2px solid var(--clg-scarlet)" : "2px solid transparent",
-                textTransform: "uppercase", letterSpacing: "0.04em",
-              }}
-            >
-              {n.label}
-            </button>
+        <nav style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          {NAV_GROUPS.map((group, i) => (
+            <div key={group.id} style={{ display: "flex", alignItems: "center", gap: 20 }}>
+              {i > 0 && <NavDivider />}
+              <div style={{ display: "flex", gap: 4 }}>
+                {group.items.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => setTab(n.id)}
+                    style={{
+                      background: "transparent", border: "none", cursor: "pointer",
+                      fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12.5,
+                      color: tab === n.id ? "#fff" : "var(--clg-mercury)",
+                      padding: "19px 4px", borderBottom: tab === n.id ? "2px solid var(--clg-scarlet)" : "2px solid transparent",
+                      textTransform: "uppercase", letterSpacing: "0.04em",
+                    }}
+                  >
+                    {n.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
+
+        <button
+          onClick={() => setTab("intake")}
+          style={{
+            marginLeft: 4, display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+            background: tab === "intake" ? "var(--clg-scarlet)" : "rgba(255,255,255,.08)",
+            border: "1px solid " + (tab === "intake" ? "var(--clg-scarlet)" : "rgba(255,255,255,.16)"),
+            borderRadius: "var(--clg-radius-pill)", padding: "7px 14px",
+            fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11.5,
+            color: "#fff", textTransform: "uppercase", letterSpacing: "0.04em",
+          }}
+        >
+          <Plus size={13} /> New Work Order
+        </button>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 12.5, color: "var(--clg-mercury)" }}>{session.user.email}</span>
