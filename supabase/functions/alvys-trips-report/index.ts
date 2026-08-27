@@ -39,9 +39,10 @@ const corsHeaders = {
 const RELEVANT_STATUSES = ["Delivered", "Completed", "Invoiced", "Paid"];
 
 // Hours a driver can spend at a stop before it counts as detention —
-// a placeholder (2h is a common industry norm) pending CLG's own
-// approved free-time policy. Documented, not hidden: this is exactly
-// why KPI 16 stays "Pending" on the dashboard even with a real number.
+// confirmed by CLG (2026-08-27) as their standard free-time policy.
+// KPI 16 still shows "Pending" on the dashboard, not because this
+// number is in question, but because the framework's Green/Yellow/Red
+// target values (not just the free-time definition) haven't been set.
 const FREE_TIME_HOURS = 2;
 
 async function getAlvysToken(): Promise<string> {
@@ -251,10 +252,11 @@ Deno.serve(async (req) => {
       activeDrivers: driverCount,
       revenueMilesByFleet,
       // KPI 16 — waiting + detention hours per active driver per week.
-      // FREE_TIME_HOURS (2h) is a placeholder, not a CLG-approved policy
-      // — that's why this stays "Pending" on the dashboard regardless of
-      // the number. detentionHours is the drill-down split: the portion
-      // of stop dwell time beyond the free-time threshold.
+      // FREE_TIME_HOURS (2h) is CLG's confirmed policy, not a guess —
+      // this KPI still shows "Pending" because the framework's
+      // Green/Yellow/Red target values haven't been set, not because
+      // the free-time number is in doubt. detentionHours is the
+      // drill-down split: the portion of stop dwell time beyond it.
       waitingDetentionHoursPerActiveDriverPerWeek: driverCount > 0 ? Math.round((totalStopHours / driverCount / weeks) * 10) / 10 : null,
       detentionHoursPerActiveDriverPerWeek: driverCount > 0 ? Math.round((totalDetentionHours / driverCount / weeks) * 10) / 10 : null,
       stopsWithDwellTime,
