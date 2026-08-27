@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-export function useAllWorkOrders() {
+// range: { start: "YYYY-MM-DD", end: "YYYY-MM-DD" } | null (null = all time)
+export function useAllWorkOrders(range) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -9,7 +10,7 @@ export function useAllWorkOrders() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
+    let query = supabase
       .from("work_orders")
       .select(
         "id, category, severity, description, complaint, cost, status, approval_status, " +
@@ -18,6 +19,11 @@ export function useAllWorkOrders() {
       )
       .order("date_opened", { ascending: false })
       .limit(500);
+
+    if (range?.start) query = query.gte("date_opened", range.start);
+    if (range?.end) query = query.lte("date_opened", range.end);
+
+    const { data, error: err } = await query;
     if (err) {
       setError(err.message);
       setOrders([]);
@@ -25,7 +31,7 @@ export function useAllWorkOrders() {
       setOrders(data ?? []);
     }
     setLoading(false);
-  }, []);
+  }, [range?.start, range?.end]);
 
   useEffect(() => {
     load();

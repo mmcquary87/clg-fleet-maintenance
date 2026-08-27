@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Loader2, Search, Download } from "lucide-react";
-import { Card, Badge, Eyebrow, Alert, Input, Button } from "../../ds";
+import { Card, Badge, Eyebrow, Alert, Input, Button, Select } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
 import { downloadCsv } from "../../lib/exportCsv";
+import { CATEGORIES } from "../../lib/categories";
+import DateRangeFilter from "../DateRangeFilter";
 import WorkOrderDetailModal from "./WorkOrderDetailModal";
 
 const EXPORT_COLUMNS = [
@@ -34,8 +36,10 @@ function severityTone(s) {
 }
 
 export default function WorkOrdersView() {
-  const { orders, loading, error, reload } = useAllWorkOrders();
+  const [range, setRange] = useState(null);
+  const { orders, loading, error, reload } = useAllWorkOrders(range);
   const [tab, setTab] = useState("All");
+  const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
 
@@ -46,13 +50,14 @@ export default function WorkOrdersView() {
         if (tab === "Needs approval") return o.approval_status === "needs_approval";
         return o.status === tab;
       })
+      .filter((o) => category === "All" || o.category === category)
       .filter((o) => {
         if (!query.trim()) return true;
         const q = query.toLowerCase();
         return [o.unit?.number, o.vendor?.name, o.category, o.description, o.complaint, o.invoice_ref]
           .filter(Boolean).some((v) => v.toLowerCase().includes(q));
       });
-  }, [orders, tab, query]);
+  }, [orders, tab, category, query]);
 
   const totalCost = filtered.reduce((s, o) => s + (Number(o.cost) || 0), 0);
 
@@ -70,6 +75,9 @@ export default function WorkOrdersView() {
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search unit, vendor, category…" style={{ paddingLeft: 30 }} />
           </div>
+          <div style={{ width: 170 }}>
+            <Select value={category} onChange={(e) => setCategory(e.target.value)} options={["All", ...CATEGORIES]} />
+          </div>
           <Button
             variant="outline" size="sm" iconLeft={<Download size={14} />}
             onClick={() => downloadCsv(`work-orders-${new Date().toISOString().slice(0, 10)}.csv`, filtered, EXPORT_COLUMNS)}
@@ -78,6 +86,10 @@ export default function WorkOrdersView() {
             Export CSV
           </Button>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <DateRangeFilter onChange={setRange} />
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
