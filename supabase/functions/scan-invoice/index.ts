@@ -10,25 +10,38 @@
 // Requires the ANTHROPIC_API_KEY secret (Edge Functions -> Secrets).
 // Requires a valid Supabase auth JWT on every request (default verify_jwt
 // behavior) — only logged-in CLG users can trigger a scan.
+//
+// Uses strict tool use (not the SDK's zodOutputFormat helper) — the
+// `@anthropic-ai/sdk/helpers/zod` subpath import fails to resolve in
+// Supabase's Deno edge runtime ("worker boot error: Unable to load
+// .../helpers/zod.mjs"); the main package import works fine.
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.69.0";
-import { zodOutputFormat } from "npm:@anthropic-ai/sdk@0.69.0/helpers/zod";
-import { z } from "npm:zod@3.24.1";
 
 const CATEGORIES = [
   "PM / Oil", "Tires", "Brakes", "Engine", "Electrical",
   "Transmission", "Trailer / Body", "DOT Inspection", "Other",
-] as const;
+];
 
-const InvoiceExtraction = z.object({
-  vendor: z.string().describe("Vendor/shop name as printed on the invoice, including location if shown"),
-  category: z.enum(CATEGORIES).describe("Best-fit maintenance category for the primary work described"),
-  cost: z.number().describe("Total amount due/charged on the invoice, in dollars"),
-  date: z.string().nullable().describe("Service or invoice date in YYYY-MM-DD format, or null if not legible"),
-  invoiceRef: z.string().nullable().describe("Invoice number, PO number, or work order number printed on the document"),
-  description: z.string().describe("One or two sentence summary of the work performed"),
-  unitNumberGuess: z.string().nullable().describe("Truck/trailer unit number if visible on the document, else null"),
-});
+const EXTRACT_TOOL = {
+  name: "extract_invoice",
+  description: "Record the structured maintenance invoice data extracted from the document.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    properties: {
+      vendor: { type: "string", description: "Vendor/shop name as printed on the invoice, including location if shown" },
+      category: { type: "string", enum: CATEGORIES, description: "Best-fit maintenance category for the primary work described" },
+      cost: { type: "number", description: "Total amount due/charged on the invoice, in dollars" },
+      date: { type: ["string", "null"], description: "Service or invoice date in YYYY-MM-DD format, or null if not legible" },
+      invoiceRef: { type: ["string", "null"], description: "Invoice number, PO number, or work order number printed on the document" },
+      description: { type: "string", description: "One or two sentence summary of the work performed" },
+      unitNumberGuess: { type: ["string", "null"], description: "Truck/trailer unit number if visible on the document, else null" },
+    },
+    required: ["vendor", "category", "cost", "date", "invoiceRef", "description", "unitNumberGuess"],
+    additionalProperties: false,
+  },
+} as const;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,13 +69,12 @@ Deno.serve(async (req) => {
       ? { type: "document" as const, source: { type: "base64" as const, media_type: mediaType, data: fileBase64 } }
       : { type: "image" as const, source: { type: "base64" as const, media_type: mediaType, data: fileBase64 } };
 
-    const response = await client.messages.parse({
+    const response = await client.messages.create({
       model: "claude-opus-5",
       max_tokens: 4096,
-      output_config: {
-        format: zodOutputFormat(InvoiceExtraction),
-        effort: "low",
-      },
+      output_config: { effort: "low" },
+      tools: [EXTRACT_TOOL],
+      tool_choice: { type: "tool", name: "extract_invoice" },
       messages: [
         {
           role: "user",
@@ -72,7 +84,7 @@ Deno.serve(async (req) => {
               type: "text",
               text: [
                 "This is a truck/trailer maintenance invoice or receipt for a fleet company (CLG Transportation).",
-                "Extract the structured fields. Fixed category list you must choose from:",
+                "Extract the structured fields via the extract_invoice tool. Fixed category list you must choose from:",
                 CATEGORIES.join(", ") + ".",
                 "If the invoice covers multiple line items across different categories, pick the category of the",
                 "single largest line item as the primary category, and mention the others in the description.",
@@ -85,14 +97,18 @@ Deno.serve(async (req) => {
       ],
     });
 
-    if (!response.parsed_output) {
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "extract_invoice",
+    );
+
+    if (!toolUse) {
       return new Response(JSON.stringify({ error: "Could not extract structured data from this file." }), {
         status: 422,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify(response.parsed_output), {
+    return new Response(JSON.stringify(toolUse.input), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
