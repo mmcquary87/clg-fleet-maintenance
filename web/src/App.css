@@ -1,17 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,700&family=Poppins:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 .app {
-  --bg: #EDEEEA;
-  --surface: #FFFFFF;
-  --ink: #1C2126;
-  --ink-soft: #656B63;
-  --line: #D7D9D4;
-  --amber: #E8A33D;
-  --red: #C1432B;
-  --green: #4C7A54;
-  --blue: #3D6B8C;
-  --font-display: 'Barlow Condensed', sans-serif;
-  --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+  /* Mapped onto the CLG brand system (web/src/ds/tokens.css) — kept as
+     these local aliases so the existing .stat/.card/.chart-* rules below
+     don't need touching one by one. */
+  --bg: var(--clg-smoke);
+  --surface: var(--clg-white);
+  --ink: var(--clg-navy);
+  --ink-soft: var(--clg-pewter);
+  --line: var(--clg-moon);
+  --amber: var(--clg-royal);
+  --red: var(--clg-scarlet);
+  --green: var(--clg-royal);
+  --blue: var(--clg-royal);
+  --font-display: var(--clg-font-heading);
+  --font-body: var(--clg-font-body);
   --font-mono: 'IBM Plex Mono', monospace;
   font-family: var(--font-body);
   background: var(--bg);
