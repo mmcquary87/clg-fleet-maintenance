@@ -8,3 +8,4 @@ export { default as Select } from "./Select";
 export { default as Alert } from "./Alert";
 export { default as Divider } from "./Divider";
 export { default as Eyebrow } from "./Eyebrow";
+export { default as Table } from "./Table";

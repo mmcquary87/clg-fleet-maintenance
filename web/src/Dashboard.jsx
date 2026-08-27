@@ -3,11 +3,13 @@ import { LogOut } from "lucide-react";
 import { supabase } from "./lib/supabaseClient";
 import Board from "./components/board/Board";
 import SpendView from "./components/SpendView";
+import VendorsView from "./components/vendors/VendorsView";
 import "./ds/tokens.css";
 
 const NAV = [
   { id: "board", label: "Board" },
   { id: "spend", label: "Spend" },
+  { id: "vendors", label: "Vendors" },
 ];
 
 export default function Dashboard({ session }) {
@@ -59,7 +61,9 @@ export default function Dashboard({ session }) {
         </div>
       </div>
 
-      {tab === "board" ? <Board /> : <SpendView />}
+      {tab === "board" && <Board />}
+      {tab === "spend" && <SpendView />}
+      {tab === "vendors" && <VendorsView />}
     </div>
   );
 }
