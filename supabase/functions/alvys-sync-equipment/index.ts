@@ -14,7 +14,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ALVYS_TOKEN_URL = "https://auth.alvys.com/oauth/token";
 const ALVYS_API_BASE = "https://integrations.alvys.com/api/p/v1.0";
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 100;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,10 +44,15 @@ async function fetchAllPages(token: string, path: string, extraBody: Record<stri
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ Page: page, PageSize: PAGE_SIZE, ...extraBody }),
     });
-    if (!res.ok) throw new Error(`${path} page ${page} failed (${res.status}): ${await res.text()}`);
-    const json = await res.json();
-    items.push(...(json.Items ?? []));
-    if (items.length >= (json.Total ?? 0) || (json.Items ?? []).length === 0) break;
+    const text = await res.text();
+    if (!res.ok) throw new Error(`${path} page ${page} failed (${res.status}): ${text}`);
+    let json: any;
+    try { json = JSON.parse(text); } catch { throw new Error(`${path} page ${page} returned non-JSON: ${text.slice(0, 500)}`); }
+    if (typeof json.Total !== "number" || !Array.isArray(json.Items)) {
+      throw new Error(`${path} page ${page} unexpected shape: ${text.slice(0, 500)}`);
+    }
+    items.push(...json.Items);
+    if (items.length >= json.Total || json.Items.length === 0) break;
     page += 1;
   }
   return items;

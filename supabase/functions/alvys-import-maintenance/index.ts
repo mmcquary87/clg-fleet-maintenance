@@ -67,10 +67,15 @@ async function fetchAllMaintenance(token: string) {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ Page: page, PageSize: PAGE_SIZE, DateRange: dateRange }),
     });
-    if (!res.ok) throw new Error(`maintenance/search page ${page} failed (${res.status}): ${await res.text()}`);
-    const json = await res.json();
-    items.push(...(json.Items ?? []));
-    if (items.length >= (json.Total ?? 0) || (json.Items ?? []).length === 0) break;
+    const text = await res.text();
+    if (!res.ok) throw new Error(`maintenance/search page ${page} failed (${res.status}): ${text}`);
+    let json: any;
+    try { json = JSON.parse(text); } catch { throw new Error(`maintenance/search page ${page} returned non-JSON: ${text.slice(0, 500)}`); }
+    if (typeof json.Total !== "number" || !Array.isArray(json.Items)) {
+      throw new Error(`maintenance/search page ${page} unexpected shape: ${text.slice(0, 500)}`);
+    }
+    items.push(...json.Items);
+    if (items.length >= json.Total || json.Items.length === 0) break;
     page += 1;
   }
   return items;
