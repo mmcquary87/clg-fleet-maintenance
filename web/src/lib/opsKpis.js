@@ -57,7 +57,7 @@ export const KPIS = [
     no: 6, module: "fleet", name: "Revenue per Active Tractor per Week", classification: "Primary Weekly KPI — Departmental Variant", type: "Lagging",
     formula: "Total weekly operating revenue ÷ average active tractors",
     threshold: { status: "pending", green: "At/above approved budget", yellow: "Up to 10.0% below budget", red: ">10.0% below budget" },
-    dataStatus: "blocked", blockedReason: "Needs weekly revenue from CLG's financial system — no integration exists.",
+    dataStatus: "live", unit: "$",
   },
   {
     no: 7, module: "fleet", name: "Empty Mile Percentage", classification: "Primary Weekly KPI — Exact Inherited Executive KPI", type: "Lagging",
@@ -99,7 +99,7 @@ export const KPIS = [
     no: 12, module: "driver", name: "Revenue Miles per Active Driver per Week", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Total revenue-producing miles ÷ average active drivers",
     threshold: { status: "pending", green: "At/above approved target", yellow: "Up to 10.0% below target", red: ">10.0% below target" },
-    dataStatus: "blocked", blockedReason: "Needs Alvys revenue-mile records per load — not pulled yet.",
+    dataStatus: "live", unit: "mi",
   },
   {
     no: 13, module: "driver", name: "Average Daily Drive-Hour Utilization Percentage", classification: "Primary Weekly KPI", type: "Leading",

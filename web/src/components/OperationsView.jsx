@@ -3,8 +3,14 @@ import { ChevronDown, Gauge } from "lucide-react";
 import { Card, Badge, Eyebrow } from "../ds";
 import { MODULES, KPIS } from "../lib/opsKpis";
 import { useFleetMpg } from "../hooks/useFleetMpg";
-import { useAlvysLoadsKpis } from "../hooks/useAlvysLoadsKpis";
+import { useAlvysTripsReport } from "../hooks/useAlvysTripsReport";
 import DateRangeFilter from "./DateRangeFilter";
+
+function formatLiveValue(kpi, value) {
+  if (kpi.unit === "$") return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  if (kpi.unit === "mi") return `${Math.round(value).toLocaleString()} mi`;
+  return `${value.toFixed(kpi.unit === "%" ? 1 : 2)} ${kpi.unit}`;
+}
 
 const STATUS_COLOR = {
   green: "#2E9E5B",
@@ -53,7 +59,7 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange }) {
             <span style={{ fontSize: 12, color: "var(--clg-scarlet)" }}>{liveError}</span>
           ) : liveValue != null ? (
             <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontSize: 22, fontWeight: 700, color: "var(--clg-navy)" }}>
-              {liveValue.toFixed(kpi.unit === "%" ? 1 : 2)} <span style={{ fontSize: 12, fontWeight: 400, color: "var(--clg-text-muted)" }}>{kpi.unit}</span>
+              {formatLiveValue(kpi, liveValue)}
             </span>
           ) : (
             <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>
@@ -92,20 +98,15 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange }) {
 export default function OperationsView() {
   const [range, setRange] = useState(null);
   const { data: mpgData, loading: mpgLoading, error: mpgError } = useFleetMpg(range);
-  const { data: loadsData, loading: loadsLoading, error: loadsError } = useAlvysLoadsKpis(range);
-
-  const emptyMilePct = (() => {
-    if (mpgData?.totalMiles > 0 && loadsData?.loadedMiles != null) {
-      return Math.max(0, Math.min(100, ((mpgData.totalMiles - loadsData.loadedMiles) / mpgData.totalMiles) * 100));
-    }
-    return null;
-  })();
+  const { data: tripsData, loading: tripsLoading, error: tripsError } = useAlvysTripsReport(range);
 
   const LIVE = {
-    7: { value: emptyMilePct, loading: mpgLoading || loadsLoading, error: mpgError || loadsError },
+    6: { value: tripsData?.revenuePerActiveTractorPerWeek ?? null, loading: tripsLoading, error: tripsError },
+    7: { value: tripsData?.emptyMilePct ?? null, loading: tripsLoading, error: tripsError },
     8: { value: mpgData?.fleetMpg ?? null, loading: mpgLoading, error: mpgError },
-    9: { value: loadsData?.onTimePickupPct ?? null, loading: loadsLoading, error: loadsError },
-    15: { value: loadsData?.onTimeDeliveryPct ?? null, loading: loadsLoading, error: loadsError },
+    9: { value: tripsData?.onTimePickupPct ?? null, loading: tripsLoading, error: tripsError },
+    12: { value: tripsData?.revenueMilesPerActiveDriverPerWeek ?? null, loading: tripsLoading, error: tripsError },
+    15: { value: tripsData?.onTimeDeliveryPct ?? null, loading: tripsLoading, error: tripsError },
   };
 
   return (
