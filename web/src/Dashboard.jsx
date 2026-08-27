@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { LogOut, Plus } from "lucide-react";
+import { LogOut, Plus, Settings } from "lucide-react";
 import { supabase } from "./lib/supabaseClient";
+import { useProfile } from "./hooks/useProfile";
 import Board from "./components/board/Board";
 import SpendView from "./components/SpendView";
 import VendorsView from "./components/vendors/VendorsView";
@@ -8,6 +9,7 @@ import UnitsView from "./components/units/UnitsView";
 import WorkOrdersView from "./components/workorders/WorkOrdersView";
 import IntakeWizard from "./components/intake/IntakeWizard";
 import OperationsView from "./components/OperationsView";
+import SettingsView from "./components/settings/SettingsView";
 import "./ds/tokens.css";
 
 // Grouped so related views sit together instead of one flat row — each
@@ -24,6 +26,7 @@ function NavDivider() {
 
 export default function Dashboard({ session }) {
   const [tab, setTab] = useState("board");
+  const { isAdmin } = useProfile(session.user.id);
 
   return (
     <div className="app" style={{ minHeight: "100vh", background: "var(--clg-surface-subtle)" }}>
@@ -91,6 +94,15 @@ export default function Dashboard({ session }) {
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 12.5, color: "var(--clg-mercury)" }}>{session.user.email}</span>
+          {isAdmin && (
+            <button
+              onClick={() => setTab("settings")}
+              title="Settings"
+              style={{ background: "transparent", border: "none", color: tab === "settings" ? "#fff" : "var(--clg-mercury)", cursor: "pointer", display: "flex" }}
+            >
+              <Settings size={16} />
+            </button>
+          )}
           <button
             onClick={() => supabase.auth.signOut()}
             title="Sign out"
@@ -108,6 +120,7 @@ export default function Dashboard({ session }) {
       {tab === "operations" && <OperationsView />}
       {tab === "units" && <UnitsView />}
       {tab === "vendors" && <VendorsView />}
+      {tab === "settings" && isAdmin && <SettingsView />}
     </div>
   );
 }
