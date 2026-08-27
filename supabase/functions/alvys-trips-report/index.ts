@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
     const deliveryOnTime: boolean[] = [];
 
     const perTruck = new Map<string, { revenue: number; loadedMiles: number; trips: number }>();
-    const perDriver = new Map<string, { revenue: number; loadedMiles: number; trips: number }>();
+    const perDriver = new Map<string, { revenue: number; loadedMiles: number; trips: number; fleetName: string }>();
 
     for (const t of trips) {
       totalEmptyMiles += t.EmptyMileage?.Distance?.Value ?? 0;
@@ -152,7 +152,13 @@ Deno.serve(async (req) => {
       }
       const driverId = t.Driver1?.Id;
       if (driverId) {
-        const cur = perDriver.get(driverId) ?? { revenue: 0, loadedMiles: 0, trips: 0 };
+        // Alvys tags each trip with the driver's operating Fleet (e.g.
+        // "long haul") — that's the segment CLG actually uses for
+        // local/regional/OTR-style breakdowns, so group by whatever
+        // fleet names are really configured rather than assuming a
+        // fixed Local/Regional/Super Regional/OTR set.
+        const fleetName = t.Driver1?.Fleet?.Name?.trim() || "Unassigned";
+        const cur = perDriver.get(driverId) ?? { revenue: 0, loadedMiles: 0, trips: 0, fleetName };
         cur.revenue += revenue; cur.loadedMiles += loadedMiles; cur.trips += 1;
         perDriver.set(driverId, cur);
       }
@@ -170,6 +176,24 @@ Deno.serve(async (req) => {
     // under a "per week" label.
     const days = Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
     const weeks = days / 7;
+
+    // Revenue Miles per Active Driver, broken out by driver Fleet segment
+    // (whatever CLG actually named their fleets in Alvys — e.g. "long
+    // haul" — not a hardcoded Local/Regional/Super Regional/OTR set).
+    const byFleet = new Map<string, { loadedMiles: number; drivers: Set<string> }>();
+    for (const [driverId, d] of perDriver) {
+      const cur = byFleet.get(d.fleetName) ?? { loadedMiles: 0, drivers: new Set<string>() };
+      cur.loadedMiles += d.loadedMiles;
+      cur.drivers.add(driverId);
+      byFleet.set(d.fleetName, cur);
+    }
+    const revenueMilesByFleet = [...byFleet.entries()]
+      .map(([fleetName, v]) => ({
+        fleetName,
+        activeDrivers: v.drivers.size,
+        revenueMilesPerActiveDriverPerWeek: Math.round(v.loadedMiles / v.drivers.size / weeks),
+      }))
+      .sort((a, b) => b.activeDrivers - a.activeDrivers);
 
     return new Response(JSON.stringify({
       tripsConsidered: trips.length,
@@ -193,6 +217,7 @@ Deno.serve(async (req) => {
       activeTractors: truckCount,
       revenueMilesPerActiveDriverPerWeek: driverCount > 0 ? Math.round(totalDriverLoadedMiles / driverCount / weeks) : null,
       activeDrivers: driverCount,
+      revenueMilesByFleet,
       periodWeeks: Math.round(weeks * 100) / 100,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {

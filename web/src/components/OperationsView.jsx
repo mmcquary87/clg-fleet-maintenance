@@ -31,7 +31,7 @@ function statusFor(kpi, value) {
   return "pending";
 }
 
-function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange }) {
+function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown }) {
   const [open, setOpen] = useState(false);
   const hasLive = kpi.dataStatus === "live";
   const status = hasLive ? statusFor(kpi, liveValue) : "pending";
@@ -70,6 +70,25 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange }) {
           <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>{kpi.blockedReason}</span>
         )}
       </div>
+
+      {breakdown && breakdown.length > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--clg-border-subtle)" }}>
+          <div style={{ fontSize: 9.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 6 }}>
+            BY FLEET
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {breakdown.map((b) => (
+              <div key={b.fleetName} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                <span style={{ color: "var(--clg-text-body)" }}>{b.fleetName}</span>
+                <span style={{ fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-navy)" }}>
+                  {b.revenueMilesPerActiveDriverPerWeek.toLocaleString()} mi
+                  <span style={{ color: "var(--clg-text-muted)", fontFamily: "var(--clg-font-body)" }}> ({b.activeDrivers} drivers)</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <button
         onClick={() => setOpen((o) => !o)}
@@ -142,6 +161,7 @@ export default function OperationsView() {
                 liveLoading={LIVE[kpi.no]?.loading ?? false}
                 liveError={LIVE[kpi.no]?.error ?? null}
                 hasRange={!!(range?.start && range?.end)}
+                breakdown={kpi.no === 12 ? tripsData?.revenueMilesByFleet : null}
               />
             ))}
           </div>
