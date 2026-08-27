@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { X, Loader2, Paperclip, Plus, Trash2, Sparkles } from "lucide-react";
+import { X, Loader2, Plus, Trash2, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { CATEGORIES } from "../lib/categories";
+import FileDropzone from "./shared/FileDropzone";
 
 const STATUSES = ["Open", "In Progress", "Closed"];
 
@@ -180,19 +181,17 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
           </label>
           <label className="field" style={{ gridColumn: "1 / -1" }}>
             <span>Receipt / invoice file (optional, shared across all services below)</span>
-            <div className="file-input">
-              <Paperclip size={14} />
-              <input
-                type="file" accept="image/*,application/pdf"
-                onChange={(e) => { setFile(e.target.files[0] ?? null); setScanApplied(false); }}
-              />
-              {file && (
-                <button type="button" className="scan-btn" onClick={onScan} disabled={scanning}>
-                  {scanning ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
-                  {scanning ? "Scanning…" : "Scan with AI"}
-                </button>
-              )}
-            </div>
+            <FileDropzone
+              file={file}
+              onFileChange={(f) => { setFile(f); setScanApplied(false); }}
+              label="Drag & drop the invoice here, or click to browse"
+            />
+            {file && (
+              <button type="button" className="scan-btn" onClick={onScan} disabled={scanning} style={{ marginTop: 8 }}>
+                {scanning ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+                {scanning ? "Scanning…" : "Scan with AI"}
+              </button>
+            )}
             {scanApplied && (
               <div className="scan-hint">AI filled in the fields below from this file — review and correct anything before saving.</div>
             )}

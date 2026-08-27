@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { Card, Badge, Eyebrow, Alert, Input } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
+import WorkOrderDetailModal from "./WorkOrderDetailModal";
 
 const STATUS_TABS = ["All", "Needs approval", "Open", "In Progress", "Closed"];
 
@@ -16,9 +17,10 @@ function severityTone(s) {
 }
 
 export default function WorkOrdersView() {
-  const { orders, loading, error } = useAllWorkOrders();
+  const { orders, loading, error, reload } = useAllWorkOrders();
   const [tab, setTab] = useState("All");
   const [query, setQuery] = useState("");
+  const [openId, setOpenId] = useState(null);
 
   const filtered = useMemo(() => {
     return orders
@@ -96,7 +98,11 @@ export default function WorkOrdersView() {
               </thead>
               <tbody>
                 {filtered.map((o, i) => (
-                  <tr key={o.id} style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent" }}>
+                  <tr
+                    key={o.id}
+                    onClick={() => setOpenId(o.id)}
+                    style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer" }}
+                  >
                     <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
                       {o.unit?.number || "—"}
                     </td>
@@ -137,6 +143,14 @@ export default function WorkOrdersView() {
           </div>
         )}
       </Card>
+
+      {openId && (
+        <WorkOrderDetailModal
+          workOrderId={openId}
+          onClose={() => setOpenId(null)}
+          onChanged={reload}
+        />
+      )}
     </div>
   );
 }
