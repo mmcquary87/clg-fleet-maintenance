@@ -8,7 +8,7 @@ const FULL_SELECT = `
   promised_back, warranty_recovery_amount, receipt_path, source, samsara_reference_id,
   alvys_maintenance_id, created_at, updated_at, is_chargeback, chargeback_driver_name,
   unit:units(id, number, type, vin, driver_name, current_location),
-  vendor:vendors(id, name)
+  vendor:vendors(id, name, contact_name, contact_email)
 `;
 
 // Fetches one work order with every column (the list views only pull a

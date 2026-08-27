@@ -11,6 +11,8 @@ export default function VendorsView() {
   const rows = vendors.map((v) => ({
     name: v.name,
     specialty_category: v.specialty_category || "—",
+    contact_name: v.contact_name || "—",
+    contact_email: v.contact_email || "—",
     contact: v.contact || "—",
     created_at: new Date(v.created_at).toLocaleDateString(),
   }));
@@ -50,7 +52,9 @@ export default function VendorsView() {
             columns={[
               { key: "name", label: "Vendor" },
               { key: "specialty_category", label: "Specialty" },
-              { key: "contact", label: "Contact" },
+              { key: "contact_name", label: "Contact" },
+              { key: "contact_email", label: "Email" },
+              { key: "contact", label: "Phone / other" },
               { key: "created_at", label: "Added" },
             ]}
             rows={rows}

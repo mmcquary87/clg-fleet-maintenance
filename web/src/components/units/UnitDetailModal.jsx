@@ -1,9 +1,59 @@
 import { useEffect, useState } from "react";
-import { X, Loader2, Save } from "lucide-react";
-import { Badge, Input } from "../../ds";
+import { X, Loader2, Save, Mail } from "lucide-react";
+import { Badge, Input, Select, Button } from "../../ds";
 import { useUnitDetail } from "../../hooks/useUnitDetail";
+import { useVendors } from "../../hooks/useVendors";
 import { MILESTONES, nextDueDate, dueStatus } from "../../lib/maintenanceSchedule";
+import { buildMailto } from "../../lib/mailto";
 import UnitInfoCard from "../intake/UnitInfoCard";
+
+function FaultCodeNotifyPanel({ unit, openDefects, recentFaults }) {
+  const { vendors } = useVendors();
+  const [vendorId, setVendorId] = useState("");
+  const hasFindings = openDefects.length > 0 || recentFaults.length > 0;
+  const vendor = vendors.find((v) => v.id === vendorId);
+
+  if (!hasFindings) return null;
+
+  const mailtoUrl = vendor?.contact_email
+    ? buildMailto({
+        to: vendor.contact_email,
+        subject: `Fault codes / defects — Unit ${unit.number}`,
+        body: [
+          vendor.contact_name ? `Hi ${vendor.contact_name},` : "Hi,",
+          "",
+          `Sharing what's on file for Unit ${unit.number} ahead of drop-off:`,
+          "",
+          ...openDefects.map((d) => `DVIR: ${d.defect_type} (reported ${new Date(d.created_at).toLocaleDateString()})`),
+          ...recentFaults.map((f) =>
+            `Fault ${f.dtc_code}${f.dtc_description ? " — " + f.dtc_description : ""} (${f.light_severity ? f.light_severity.toUpperCase() : "info"}, ${f.samsara_reading_time ? new Date(f.samsara_reading_time).toLocaleString() : "—"})`
+          ),
+          "",
+          "Thanks!",
+        ].join("\n"),
+      })
+    : null;
+
+  return (
+    <div style={{ border: "1px solid var(--clg-border-subtle)", borderRadius: "var(--clg-radius-md)", padding: 14 }}>
+      <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>
+        Send fault codes to a vendor
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <Select
+          value={vendorId} onChange={(e) => setVendorId(e.target.value)} placeholder="Choose a vendor"
+          options={vendors.map((v) => ({ value: v.id, label: v.name }))}
+        />
+        {vendorId && !vendor?.contact_email && (
+          <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>No contact email on file for this vendor yet.</div>
+        )}
+        <Button size="sm" iconLeft={<Mail size={13} />} href={mailtoUrl} disabled={!mailtoUrl}>
+          Email fault codes
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -90,7 +140,7 @@ function MilestoneRow({ milestone, unit, onSave, saving }) {
 }
 
 export default function UnitDetailModal({ unitId, onClose }) {
-  const { unit, orders, loading, error, updateSchedule } = useUnitDetail(unitId);
+  const { unit, orders, openDefects, recentFaults, loading, error, updateSchedule } = useUnitDetail(unitId);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async (fields) => {
@@ -215,6 +265,7 @@ export default function UnitDetailModal({ unitId, onClose }) {
                     No location on file for this unit yet.
                   </div>
                 )}
+                <FaultCodeNotifyPanel unit={unit} openDefects={openDefects} recentFaults={recentFaults} />
               </div>
             </div>
           </>

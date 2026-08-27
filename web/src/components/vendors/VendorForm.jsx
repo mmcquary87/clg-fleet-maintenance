@@ -8,6 +8,8 @@ export default function VendorForm({ onCancel, onSaved }) {
   const [name, setName] = useState("");
   const [specialty, setSpecialty] = useState("");
   const [contact, setContact] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -19,6 +21,8 @@ export default function VendorForm({ onCancel, onSaved }) {
       name: name.trim(),
       specialty_category: specialty || null,
       contact: contact.trim() || null,
+      contact_name: contactName.trim() || null,
+      contact_email: contactEmail.trim() || null,
     });
     setSubmitting(false);
     if (err) {
@@ -52,8 +56,14 @@ export default function VendorForm({ onCancel, onSaved }) {
               options={CATEGORIES}
             />
           </Field>
-          <Field label="Contact" style={{ gridColumn: "1 / -1" }}>
-            <Input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Phone or email" />
+          <Field label="Contact name" help="Optional — who to address the email to">
+            <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="e.g. Dana at the front desk" />
+          </Field>
+          <Field label="Contact email" help="Optional — enables the notify-shop email">
+            <Input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="shop@example.com" />
+          </Field>
+          <Field label="Phone / other" style={{ gridColumn: "1 / -1" }}>
+            <Input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Phone number or other notes" />
           </Field>
         </div>
 

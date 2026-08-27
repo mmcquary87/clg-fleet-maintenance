@@ -13,6 +13,8 @@ const ORDER_SELECT =
 export function useUnitDetail(unitId) {
   const [unit, setUnit] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [openDefects, setOpenDefects] = useState([]);
+  const [recentFaults, setRecentFaults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -20,14 +22,20 @@ export function useUnitDetail(unitId) {
     if (!unitId) {
       setUnit(null);
       setOrders([]);
+      setOpenDefects([]);
+      setRecentFaults([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
-    const [unitRes, ordersRes] = await Promise.all([
+    const [unitRes, ordersRes, defectsRes, faultsRes] = await Promise.all([
       supabase.from("units").select(UNIT_SELECT).eq("id", unitId).single(),
       supabase.from("work_orders").select(ORDER_SELECT).eq("unit_id", unitId).order("date_opened", { ascending: false }),
+      supabase.from("dvir_defects").select("id, defect_type, created_at").eq("unit_id", unitId).eq("is_resolved", false)
+        .order("created_at", { ascending: false }).limit(5),
+      supabase.from("fault_events").select("id, dtc_code, dtc_description, samsara_reading_time, light_severity")
+        .eq("unit_id", unitId).order("samsara_reading_time", { ascending: false }).limit(5),
     ]);
     if (unitRes.error) {
       setError(unitRes.error.message);
@@ -36,6 +44,8 @@ export function useUnitDetail(unitId) {
       setUnit(unitRes.data);
     }
     if (!ordersRes.error) setOrders(ordersRes.data ?? []);
+    if (!defectsRes.error) setOpenDefects(defectsRes.data ?? []);
+    if (!faultsRes.error) setRecentFaults(faultsRes.data ?? []);
     setLoading(false);
   }, [unitId]);
 
@@ -49,5 +59,5 @@ export function useUnitDetail(unitId) {
     return err;
   };
 
-  return { unit, orders, loading, error, reload: load, updateSchedule };
+  return { unit, orders, openDefects, recentFaults, loading, error, reload: load, updateSchedule };
 }

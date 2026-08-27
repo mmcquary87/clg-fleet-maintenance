@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { X, Loader2, ExternalLink, FileWarning } from "lucide-react";
-import { Badge } from "../../ds";
+import { X, Loader2, ExternalLink, FileWarning, Mail } from "lucide-react";
+import { Badge, Button } from "../../ds";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import { supabase } from "../../lib/supabaseClient";
+import { buildMailto } from "../../lib/mailto";
 import FileDropzone from "../shared/FileDropzone";
 
 function money(n) {
@@ -13,6 +14,29 @@ function severityTone(s) {
   if (s === "Unit down") return "critical";
   if (s === "Urgent") return "brand";
   return "neutral";
+}
+
+function shopHeadsUpMailto(order) {
+  const vendor = order.vendor;
+  if (!vendor?.contact_email) return null;
+  const greeting = vendor.contact_name ? `Hi ${vendor.contact_name},` : "Hi,";
+  const lines = [
+    greeting,
+    "",
+    `Heads up — we have Unit ${order.unit?.number || "—"} headed your way${order.severity === "Unit down" ? " (URGENT — unit is down)" : ""}.`,
+    "",
+    `Category: ${order.category}`,
+    (order.complaint || order.description) ? `Issue: ${order.complaint || order.description}` : null,
+    order.promised_back ? `Needed back by: ${order.promised_back}` : null,
+    order.po_number ? `PO #: ${order.po_number}` : null,
+    "",
+    "Let us know your earliest availability. Thanks!",
+  ].filter((l) => l !== null);
+  return buildMailto({
+    to: vendor.contact_email,
+    subject: `Heads up — Unit ${order.unit?.number || ""} inbound`,
+    body: lines.join("\n"),
+  });
 }
 
 async function uploadReceipt(file) {
@@ -101,7 +125,14 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                   )}
                 </div>
               </div>
-              <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}><X size={18} /></button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {shopHeadsUpMailto(order) && (
+                  <Button variant="outline" size="sm" iconLeft={<Mail size={13} />} href={shopHeadsUpMailto(order)}>
+                    Email shop
+                  </Button>
+                )}
+                <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}><X size={18} /></button>
+              </div>
             </div>
 
             <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
