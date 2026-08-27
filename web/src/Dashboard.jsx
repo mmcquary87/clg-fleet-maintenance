@@ -1,74 +1,65 @@
 import { useState } from "react";
-import { Building2, LayoutGrid, Loader2, Wrench, RefreshCw, LogOut, Plus } from "lucide-react";
-import { useWorkOrders } from "./hooks/useWorkOrders";
+import { LogOut } from "lucide-react";
 import { supabase } from "./lib/supabaseClient";
-import CompanyView from "./components/CompanyView";
-import UnitView from "./components/UnitView";
-import NewWorkOrderForm from "./components/NewWorkOrderForm";
+import Board from "./components/board/Board";
+import SpendView from "./components/SpendView";
+import "./ds/tokens.css";
+
+const NAV = [
+  { id: "board", label: "Board" },
+  { id: "spend", label: "Spend" },
+];
 
 export default function Dashboard({ session }) {
-  const [view, setView] = useState("company");
-  const [showForm, setShowForm] = useState(false);
-  const { records, loading, error, reload } = useWorkOrders();
+  const [tab, setTab] = useState("board");
 
   return (
-    <div className="app">
-      <div className="header">
-        <div className="header-title">
-          <Wrench size={20} strokeWidth={2} />
-          <div>
-            <h1>Fleet Maintenance</h1>
-            <div className="header-sub">CLG Transportation · spend dashboard</div>
-          </div>
+    <div className="app" style={{ minHeight: "100vh", background: "var(--clg-surface-subtle)" }}>
+      <div style={{
+        background: "var(--clg-navy)", height: 56, display: "flex", alignItems: "center",
+        padding: "0 24px", gap: 28,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img src="/brand/mark-star-white.svg" alt="" style={{ width: 22, height: 22 }} />
+          <span style={{
+            fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 13,
+            letterSpacing: "0.14em", color: "#fff", textTransform: "uppercase",
+          }}>
+            CLG Maintenance
+          </span>
         </div>
-        <div className="header-actions">
-          <span className="header-user">{session.user.email}</span>
-          <button className="refresh-btn" onClick={reload} disabled={loading} title="Reload from Supabase">
-            <RefreshCw size={14} className={loading ? "spin" : ""} />
-          </button>
-          <button className="refresh-btn" onClick={() => supabase.auth.signOut()} title="Sign out">
-            <LogOut size={14} />
+
+        <nav style={{ display: "flex", gap: 4 }}>
+          {NAV.map((n) => (
+            <button
+              key={n.id}
+              onClick={() => setTab(n.id)}
+              style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12.5,
+                color: tab === n.id ? "#fff" : "var(--clg-mercury)",
+                padding: "18px 4px", borderBottom: tab === n.id ? "2px solid var(--clg-scarlet)" : "2px solid transparent",
+                textTransform: "uppercase", letterSpacing: "0.04em",
+              }}
+            >
+              {n.label}
+            </button>
+          ))}
+        </nav>
+
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 16 }}>
+          <span style={{ fontSize: 12.5, color: "var(--clg-mercury)" }}>{session.user.email}</span>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            title="Sign out"
+            style={{ background: "transparent", border: "none", color: "var(--clg-mercury)", cursor: "pointer", display: "flex" }}
+          >
+            <LogOut size={16} />
           </button>
         </div>
       </div>
 
-      <div className="content">
-        <div className="toolbar">
-          <div className="toggle-row" style={{ marginBottom: 0 }}>
-            <button className={"toggle-btn" + (view === "company" ? " active" : "")} onClick={() => setView("company")}>
-              <Building2 size={14} /> Company
-            </button>
-            <button className={"toggle-btn" + (view === "unit" ? " active" : "")} onClick={() => setView("unit")}>
-              <LayoutGrid size={14} /> By unit
-            </button>
-          </div>
-          <button className="btn-primary" onClick={() => setShowForm(true)}>
-            <Plus size={15} /> New work order
-          </button>
-        </div>
-
-        {showForm && (
-          <NewWorkOrderForm
-            onCancel={() => setShowForm(false)}
-            onSaved={() => { setShowForm(false); reload(); }}
-          />
-        )}
-
-        {error && (
-          <div className="banner warn">
-            <div>
-              <div className="banner-title">Couldn't load data from Supabase</div>
-              <div className="banner-body">{error}</div>
-            </div>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="loading"><Loader2 size={16} className="spin" /> Loading fleet data…</div>
-        ) : !error && (
-          view === "company" ? <CompanyView records={records} /> : <UnitView records={records} />
-        )}
-      </div>
+      {tab === "board" ? <Board /> : <SpendView />}
     </div>
   );
 }
