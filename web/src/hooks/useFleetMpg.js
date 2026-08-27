@@ -17,7 +17,10 @@ export function useFleetMpg(range) {
     setLoading(true);
     setError(null);
     supabase.functions.invoke("samsara-fleet-mpg", {
-      body: { startDate: range.start, endDate: range.end },
+      body: {
+        startDate: new Date(range.start + "T00:00:00Z").toISOString(),
+        endDate: new Date(range.end + "T23:59:59Z").toISOString(),
+      },
     }).then(({ data: res, error: fnError }) => {
       if (cancelled) return;
       if (fnError) { setError(fnError.message); setData(null); }
