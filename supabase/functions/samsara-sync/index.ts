@@ -188,7 +188,15 @@ Deno.serve(async (req) => {
       defectsSkippedUnmatchedVehicle: defects.length - defectRows.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err instanceof Error ? err.message : err) }), {
+    // err can be a plain Postgrest error object ({message, details, hint,
+    // code}), not an Error instance — String(obj) gives "[object Object]"
+    // and hides the real message, so pull .message out explicitly first.
+    const message = err instanceof Error
+      ? err.message
+      : (err && typeof err === "object" && "message" in err)
+        ? String((err as { message: unknown }).message)
+        : JSON.stringify(err);
+    return new Response(JSON.stringify({ error: message, raw: err }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
