@@ -19,7 +19,7 @@ const NAV_GROUPS = [
 ];
 
 function NavDivider() {
-  return <div style={{ width: 1, height: 20, background: "rgba(255,255,255,.14)" }} />;
+  return <div style={{ width: 1, height: 24, background: "rgba(255,255,255,.32)" }} />;
 }
 
 export default function Dashboard({ session }) {
@@ -49,11 +49,11 @@ export default function Dashboard({ session }) {
           </div>
         </div>
 
-        <nav style={{ display: "flex", alignItems: "center", gap: 20 }}>
+        <nav style={{ display: "flex", alignItems: "center", gap: 28 }}>
           {NAV_GROUPS.map((group, i) => (
-            <div key={group.id} style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <div key={group.id} style={{ display: "flex", alignItems: "center", gap: 28 }}>
               {i > 0 && <NavDivider />}
-              <div style={{ display: "flex", gap: 4 }}>
+              <div style={{ display: "flex", gap: 12 }}>
                 {group.items.map((n) => (
                   <button
                     key={n.id}
@@ -62,8 +62,9 @@ export default function Dashboard({ session }) {
                       background: "transparent", border: "none", cursor: "pointer",
                       fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12.5,
                       color: tab === n.id ? "#fff" : "var(--clg-mercury)",
-                      padding: "19px 4px", borderBottom: tab === n.id ? "2px solid var(--clg-scarlet)" : "2px solid transparent",
+                      padding: "19px 2px", borderBottom: tab === n.id ? "2px solid var(--clg-scarlet)" : "2px solid transparent",
                       textTransform: "uppercase", letterSpacing: "0.04em",
+                      transition: "color .12s",
                     }}
                   >
                     {n.label}
