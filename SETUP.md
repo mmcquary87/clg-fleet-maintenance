@@ -23,6 +23,43 @@ data, deployed and auto-deploying from `master`:
 
 Any commit pushed to `master` auto-redeploys the live site.
 
+## Auth (DONE)
+
+Invite-only Supabase Auth. `profiles` table (dispatcher/mechanic/admin,
+default dispatcher) auto-created per user via a trigger on `auth.users`.
+Data tables' RLS tightened from "anyone with the anon key" to "logged-in
+users only" — see
+[supabase/migrations/20260826130000_auth_profiles.sql](supabase/migrations/20260826130000_auth_profiles.sql).
+
+To invite someone: Supabase dashboard -> Authentication -> Users -> Invite
+user. They land on a "set your password" screen via the emailed link.
+Public signup is off. Supabase Auth -> URL Configuration should have Site
+URL set to the production URL and both the production and localhost URLs
+allow-listed under Redirect URLs.
+
+## Phase 1, step 3 — invoice upload + Claude-API scanning (DONE)
+
+**Part A — manual entry + receipt upload**: New Work Order form supports
+multiple services per visit (unit/vendor/dates/invoice-ref/receipt shared,
+each service has its own category/description/cost) — see
+[supabase/migrations/20260827000000_invoice_storage.sql](supabase/migrations/20260827000000_invoice_storage.sql)
+(adds `work_orders.receipt_path` + private `invoices` storage bucket) and
+[web/src/components/NewWorkOrderForm.jsx](web/src/components/NewWorkOrderForm.jsx).
+
+**Part B — AI auto-fill**: "Scan with AI" button appears once a receipt file
+is attached. Calls the `scan-invoice` Supabase Edge Function
+([supabase/functions/scan-invoice/index.ts](supabase/functions/scan-invoice/index.ts)),
+which sends the file to the Claude API (strict tool use for structured
+output — the SDK's `zodOutputFormat` helper fails to load in Supabase's Deno
+runtime, so this uses a raw JSON-schema tool instead) and returns
+vendor/category/cost/date/invoiceRef/description/unitNumberGuess to pre-fill
+the form. Requires the `ANTHROPIC_API_KEY` secret (Edge Functions ->
+Secrets, already set). Deployed via the Supabase dashboard's "Via Editor"
+flow, not the CLI.
+
+Validated against a real invoice from the SPEC.md proof-of-concept set —
+correctly extracted vendor, category, and cost.
+
 ---
 
 ## Original step 1 walkthrough (for reference)
@@ -49,11 +86,11 @@ for this step.
    `work_orders`, `fault_events`, `dvir_defects`, all empty.
 
 Real records (units, vendors, work orders) get entered later through the app
-once it's built — not seeded here. `supabase/seed.sql` in this repo holds the
-6 example work orders from SPEC_1.md's invoice proof-of-concept; it's kept
-around only as a reference dataset for testing the dashboard and invoice
-scanner later, and is not part of this setup — don't run it against the real
-project.
+once it's built — not seeded here. `supabase/example_data.sql` in this repo
+holds the 6 example work orders from SPEC.md's invoice proof-of-concept;
+it's kept around only as a reference dataset for testing the dashboard and
+invoice scanner, and is not part of this setup — don't run it against the
+real project.
 
 ## 3. Get the connection info
 
