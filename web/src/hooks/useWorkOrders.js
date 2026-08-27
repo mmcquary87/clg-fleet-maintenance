@@ -16,7 +16,8 @@ function toRecord(row) {
   };
 }
 
-export function useWorkOrders() {
+// range: { start: "YYYY-MM-DD", end: "YYYY-MM-DD" } | null (null = all time)
+export function useWorkOrders(range) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,13 +25,18 @@ export function useWorkOrders() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
+    let query = supabase
       .from("work_orders")
       .select(
         "id, category, cost, date_closed, invoice_ref, description, unit:units(number), vendor:vendors(name)"
       )
       .eq("status", "Closed")
       .order("date_closed", { ascending: false });
+
+    if (range?.start) query = query.gte("date_closed", range.start);
+    if (range?.end) query = query.lte("date_closed", range.end);
+
+    const { data, error: err } = await query;
 
     if (err) {
       setError(err.message);
@@ -39,7 +45,7 @@ export function useWorkOrders() {
       setRecords((data ?? []).map(toRecord));
     }
     setLoading(false);
-  }, []);
+  }, [range?.start, range?.end]);
 
   useEffect(() => {
     load();

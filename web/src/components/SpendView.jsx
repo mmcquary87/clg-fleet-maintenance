@@ -4,11 +4,13 @@ import { useWorkOrders } from "../hooks/useWorkOrders";
 import CompanyView from "./CompanyView";
 import UnitView from "./UnitView";
 import NewWorkOrderForm from "./NewWorkOrderForm";
+import DateRangeFilter from "./DateRangeFilter";
 
 export default function SpendView() {
   const [view, setView] = useState("company");
   const [showForm, setShowForm] = useState(false);
-  const { records, loading, error, reload } = useWorkOrders();
+  const [range, setRange] = useState(null);
+  const { records, loading, error, reload } = useWorkOrders(range);
 
   return (
     <div className="content">
@@ -24,6 +26,10 @@ export default function SpendView() {
         <button className="btn-primary" onClick={() => setShowForm(true)}>
           <Plus size={15} /> New work order
         </button>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <DateRangeFilter onChange={setRange} />
       </div>
 
       {showForm && (
