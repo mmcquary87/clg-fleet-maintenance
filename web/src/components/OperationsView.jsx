@@ -9,6 +9,7 @@ import DateRangeFilter from "./DateRangeFilter";
 function formatLiveValue(kpi, value) {
   if (kpi.unit === "$") return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   if (kpi.unit === "mi") return `${Math.round(value).toLocaleString()} mi`;
+  if (kpi.unit === "hrs") return `${value.toFixed(1)} hrs`;
   return `${value.toFixed(kpi.unit === "%" ? 1 : 2)} ${kpi.unit}`;
 }
 
@@ -134,6 +135,7 @@ export default function OperationsView() {
     9: { value: tripsData?.onTimePickupPct ?? null, loading: tripsLoading, error: tripsError },
     12: { value: tripsData?.revenueMilesPerActiveDriverPerWeek ?? null, loading: tripsLoading, error: tripsError },
     15: { value: tripsData?.onTimeDeliveryPct ?? null, loading: tripsLoading, error: tripsError },
+    16: { value: tripsData?.waitingDetentionHoursPerActiveDriverPerWeek ?? null, loading: tripsLoading, error: tripsError },
   };
 
   return (
@@ -170,7 +172,11 @@ export default function OperationsView() {
                 liveError={LIVE[kpi.no]?.error ?? null}
                 hasRange={!!(range?.start && range?.end)}
                 breakdown={kpi.no === 12 ? tripsData?.revenueMilesByFleet : null}
-                secondaryStat={kpi.no === 6 ? { label: "per driver:", value: tripsData?.revenuePerActiveDriverPerWeek, unit: "$" } : null}
+                secondaryStat={
+                  kpi.no === 6 ? { label: "per driver:", value: tripsData?.revenuePerActiveDriverPerWeek, unit: "$" }
+                  : kpi.no === 16 ? { label: "of which detention:", value: tripsData?.detentionHoursPerActiveDriverPerWeek, unit: "hrs" }
+                  : null
+                }
               />
             ))}
           </div>

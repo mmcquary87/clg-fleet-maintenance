@@ -123,7 +123,7 @@ export const KPIS = [
     no: 16, module: "driver", name: "Driver Waiting and Detention Hours", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Governed waiting hours + governed detention hours ÷ average active drivers",
     threshold: { status: "pending", green: "At/below approved target", yellow: "Up to 10.0% above target", red: ">10.0% above target" },
-    dataStatus: "blocked", blockedReason: "Needs Samsara geofence events plus Alvys appointment terms, reconciled — not built yet.",
+    dataStatus: "live", unit: "hrs",
   },
   {
     no: 17, module: "driver", name: "Driver Schedule Adherence", classification: "Primary Weekly KPI", type: "Lagging",

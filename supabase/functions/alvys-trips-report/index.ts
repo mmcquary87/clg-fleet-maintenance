@@ -38,6 +38,12 @@ const corsHeaders = {
 // Terminal-ish statuses that carry real actuals worth counting.
 const RELEVANT_STATUSES = ["Delivered", "Completed", "Invoiced", "Paid"];
 
+// Hours a driver can spend at a stop before it counts as detention —
+// a placeholder (2h is a common industry norm) pending CLG's own
+// approved free-time policy. Documented, not hidden: this is exactly
+// why KPI 16 stays "Pending" on the dashboard even with a real number.
+const FREE_TIME_HOURS = 2;
+
 async function getAlvysToken(): Promise<string> {
   const clientId = Deno.env.get("ALVYS_CLIENT_ID");
   const clientSecret = Deno.env.get("ALVYS_CLIENT_SECRET");
@@ -126,6 +132,11 @@ Deno.serve(async (req) => {
     const pickupOnTime: boolean[] = [];
     const deliveryOnTime: boolean[] = [];
 
+    let totalStopHours = 0;
+    let totalDetentionHours = 0;
+    let stopsWithDwellTime = 0;
+    let detentionEvents = 0;
+
     const perTruck = new Map<string, { revenue: number; loadedMiles: number; trips: number }>();
     const perDriver = new Map<string, { revenue: number; loadedMiles: number; trips: number; fleetName: string }>();
 
@@ -141,6 +152,21 @@ Deno.serve(async (req) => {
       const deliveryOk = isOnTime(delivery?.ArrivedAt, delivery?.StopWindow?.End, delivery?.AppointmentDate);
       if (pickupOk !== null) pickupOnTime.push(pickupOk);
       if (deliveryOk !== null) deliveryOnTime.push(deliveryOk);
+
+      // Waiting + detention: every Pickup/Delivery stop's dwell time
+      // (ArrivedAt -> DepartedAt). Not just first-pickup/last-delivery
+      // here — a multi-stop load can accumulate detention at any stop.
+      for (const s of stops) {
+        if ((s.StopType !== "Pickup" && s.StopType !== "Delivery") || !s.ArrivedAt || !s.DepartedAt) continue;
+        const dwellHours = (new Date(s.DepartedAt).getTime() - new Date(s.ArrivedAt).getTime()) / 3600000;
+        if (!(dwellHours > 0) || dwellHours > 48) continue; // guard against bad/missing data
+        totalStopHours += dwellHours;
+        stopsWithDwellTime += 1;
+        if (dwellHours > FREE_TIME_HOURS) {
+          totalDetentionHours += dwellHours - FREE_TIME_HOURS;
+          detentionEvents += 1;
+        }
+      }
 
       const revenue = t.TripValue?.Amount ?? 0;
       const loadedMiles = t.LoadedMileage?.Distance?.Value ?? 0;
@@ -224,6 +250,16 @@ Deno.serve(async (req) => {
       revenueMilesPerActiveDriverPerWeek: driverCount > 0 ? Math.round(totalDriverLoadedMiles / driverCount / weeks) : null,
       activeDrivers: driverCount,
       revenueMilesByFleet,
+      // KPI 16 — waiting + detention hours per active driver per week.
+      // FREE_TIME_HOURS (2h) is a placeholder, not a CLG-approved policy
+      // — that's why this stays "Pending" on the dashboard regardless of
+      // the number. detentionHours is the drill-down split: the portion
+      // of stop dwell time beyond the free-time threshold.
+      waitingDetentionHoursPerActiveDriverPerWeek: driverCount > 0 ? Math.round((totalStopHours / driverCount / weeks) * 10) / 10 : null,
+      detentionHoursPerActiveDriverPerWeek: driverCount > 0 ? Math.round((totalDetentionHours / driverCount / weeks) * 10) / 10 : null,
+      stopsWithDwellTime,
+      detentionEvents,
+      freeTimeHoursAssumed: FREE_TIME_HOURS,
       periodWeeks: Math.round(weeks * 100) / 100,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
