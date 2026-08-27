@@ -81,6 +81,42 @@ read-only — no way to write work orders back into Alvys).
 - Found and fixed during setup: Alvys's `Page` search parameter is
   **0-indexed**, not 1-indexed — easy to get wrong against their docs.
 
+## Samsara integration (DONE — manual pull, no recurring schedule yet)
+
+Credential: `SAMSARA_API` secret (plain bearer token, not OAuth). Base URL
+`https://api.samsara.com`. Full docs: developers.samsara.com.
+
+`samsara-sync` Edge Function does, in one run:
+1. Pulls the vehicle roster, matches to `units` by VIN, sets
+   `units.samsara_vehicle_id`.
+2. Pulls fault codes (OBD-II + J1939), last 7 days, into `fault_events`.
+3. Pulls latest fuel %/odometer/location (last 24h) into `units`
+   (`last_fuel_percent`, `odometer`, `current_location`, `samsara_synced_at`).
+4. Pulls DVIR defects, last 30 days, into `dvir_defects`.
+
+Confirmed working: 68 vehicles found, 51 matched to units by VIN, 1,607
+fault code readings imported, 1 DVIR defect imported (most of the other 37
+found defects belong to the 17 unmatched vehicles).
+
+**Known follow-ups, not urgent:**
+- 17 of 68 vehicles didn't match any unit by VIN — worth checking whether
+  that's a VIN formatting mismatch or units genuinely missing from our
+  system.
+- The fuel/odometer/location pull processes some vehicles more than once
+  per run (duplicate entries across paginated pages) — harmless (idempotent
+  re-writes) but wasteful; not yet root-caused.
+- Read-only against Samsara — no write-back (e.g. marking a DVIR defect
+  resolved when its work order closes), and no recurring schedule (cron)
+  yet. Matches the design spec's phasing: hold off on the live/ops-critical
+  half of this (webhooks, write-back) until there's monitoring in place.
+- Debugging notes: two Postgres NOT NULL violations were hit and fixed
+  during setup — Supabase's `.upsert()` with a partial column set still
+  validates NOT NULL constraints on the full row before checking for a
+  conflict, so updating an existing row via upsert with only 1-2 columns
+  set can fail. Fixed by using per-row `.update()` (fired concurrently via
+  `Promise.all`, not sequentially) instead of a bulk upsert wherever rows
+  might only get partial data.
+
 ---
 
 ## Original step 1 walkthrough (for reference)
