@@ -4,10 +4,12 @@ import { supabase } from "./lib/supabaseClient";
 import Board from "./components/board/Board";
 import SpendView from "./components/SpendView";
 import VendorsView from "./components/vendors/VendorsView";
+import IntakeWizard from "./components/intake/IntakeWizard";
 import "./ds/tokens.css";
 
 const NAV = [
   { id: "board", label: "Board" },
+  { id: "intake", label: "New Work Order" },
   { id: "spend", label: "Spend" },
   { id: "vendors", label: "Vendors" },
 ];
@@ -62,6 +64,7 @@ export default function Dashboard({ session }) {
       </div>
 
       {tab === "board" && <Board />}
+      {tab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
       {tab === "spend" && <SpendView />}
       {tab === "vendors" && <VendorsView />}
     </div>
