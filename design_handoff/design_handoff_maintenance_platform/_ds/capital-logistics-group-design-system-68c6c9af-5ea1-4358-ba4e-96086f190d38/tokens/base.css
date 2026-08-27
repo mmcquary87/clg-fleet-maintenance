@@ -1,0 +1,16 @@
+/* Minimal element defaults so a bare page picks up the brand. */
+html{-webkit-font-smoothing:antialiased}
+body{margin:0;font-family:var(--clg-font-body);font-size:var(--clg-size-body);line-height:var(--clg-leading-body);color:var(--clg-text-body);background:var(--clg-surface-page)}
+h1,h2,h3,h4,h5,h6{font-family:var(--clg-font-heading);color:var(--clg-text-heading);margin:0;line-height:var(--clg-leading-heading)}
+h1{font-size:var(--clg-size-h1);font-weight:var(--clg-weight-bold);line-height:var(--clg-leading-display);letter-spacing:var(--clg-tracking-display)}
+h2{font-size:var(--clg-size-h2);font-weight:var(--clg-weight-bold)}
+h3{font-size:var(--clg-size-h3);font-weight:var(--clg-weight-regular)}
+h4{font-size:var(--clg-size-h4);font-weight:var(--clg-weight-regular)}
+h5{font-size:var(--clg-size-h5);font-weight:var(--clg-weight-bold)}
+p{margin:0 0 var(--clg-space-4);text-wrap:pretty}
+a{color:var(--clg-link);text-decoration:underline;text-underline-offset:2px;transition:color var(--clg-dur-fast) var(--clg-ease-out)}
+a:hover{color:var(--clg-link-hover)}
+strong{font-weight:var(--clg-weight-bold)}
+small{font-size:var(--clg-size-small)}
+:focus-visible{outline:none;box-shadow:var(--clg-focus-ring)}
+.clg-eyebrow{font-family:var(--clg-font-heading);font-size:var(--clg-size-eyebrow);font-weight:var(--clg-weight-bold);letter-spacing:var(--clg-tracking-eyebrow);text-transform:uppercase;color:var(--clg-text-brand)}

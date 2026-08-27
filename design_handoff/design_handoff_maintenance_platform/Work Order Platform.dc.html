@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/colors.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/typography.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/surface.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/motion.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/semantic.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/base.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/styles.css">
+<script src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--clg-reflection);font-family:var(--clg-font-body)}
+a{color:var(--clg-link);text-decoration:none}
+a:hover{color:var(--clg-link-hover)}
+.dv-turn{padding:44px 48px 36px;border-bottom:1px solid rgba(34,59,98,.12);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:var(--clg-navy);color:#fff;border-radius:3px;text-decoration:none}
+.dv-tname{font:700 13px/1.2 var(--clg-font-heading);color:var(--clg-navy);letter-spacing:.02em}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(34,59,98,.1);color:var(--clg-navy);border-radius:3px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.3 var(--clg-font-body);color:rgba(34,59,98,.62)}
+.dv-card{max-width:100%;background:#fff;border:1px solid rgba(34,59,98,.14);box-shadow:0 2px 8px rgba(34,59,98,.12);overflow:hidden}
+.dv-opt:target .dv-oid{background:var(--clg-royal);color:#fff}
+.dv-next{margin:24px 0 0;font:12px/1.6 var(--clg-font-body);color:rgba(34,59,98,.6)}
+</style>
+</helmet>
+
+<section class="dv-turn" id="t2" style="background:var(--clg-reflection)">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">MY OWN DIRECTION — THE DOWNTIME CLOCK</span></div>
+
+<div style="max-width:1240px;background:#fff;border:1px solid var(--clg-moon);border-top:4px solid var(--clg-scarlet);padding:28px 32px;margin:0 0 34px">
+<div class="clg-eyebrow" style="color:var(--clg-royal)">THE ARGUMENT</div>
+<div style="font:400 27px/1.25 var(--clg-font-heading);color:var(--clg-navy);margin-top:12px;max-width:820px;text-wrap:pretty">A work order is not the thing you care about. A tractor that isn't earning is the thing you care about.</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:30px;margin-top:22px;font-size:13.5px;line-height:1.65;color:var(--clg-granite)">
+<div><strong style="color:var(--clg-navy);display:block;margin-bottom:4px">So the unit is the object, not the ticket</strong>Every screen is a list of units and how long each has been idle. Work orders are what's attached to a unit — never the top-level noun. A manager never has to translate "WO-2914" back into "3303 is stuck in Pensacola."</div>
+<div><strong style="color:var(--clg-navy);display:block;margin-bottom:4px">Status names the blocker, not the stage</strong>"In progress" tells you nothing. Lanes are <em>Waiting on you</em>, <em>Waiting on a vendor</em>, <em>Waiting on parts</em>, <em>In the bay</em> — every unit sits under the name of the thing that has to happen and the person who has to do it. The board triages itself.</div>
+<div><strong style="color:var(--clg-navy);display:block;margin-bottom:4px">Urgency is money and time, not a color</strong>Severity chips get gamed — everything becomes P1. A live clock and a dollar figure can't be argued with. Sorting is by cost of waiting, so the expensive problem floats without anyone claiming it.</div>
+</div>
+<div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--clg-smoke);font-size:13px;color:var(--clg-pewter);line-height:1.6">This is the opposite bet from turn <a href="#t1">1</a>, which organized around the work order and the approval inbox. Both are defensible. This one is more opinionated and will feel wrong if your managers think in tickets rather than trucks.</div>
+</div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>The board — every idle unit under the name of what's blocking it, sorted by cost of waiting.</div>
+<div class="dv-card" style="width:1240px">
+<div style="height:1010px;display:flex;flex-direction:column;font-size:13px;color:var(--clg-granite);background:var(--clg-smoke)">
+
+<div style="background:var(--clg-navy);padding:0 28px;display:flex;align-items:center;gap:16px;height:56px;flex:none">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="width:24px;height:24px">
+<div style="font:700 12px var(--clg-font-heading);color:#fff;letter-spacing:.14em">CLG MAINTENANCE</div>
+<div style="display:flex;gap:24px;margin-left:24px;font-size:12.5px;color:var(--clg-mercury)"><span style="color:#fff;box-shadow:inset 0 -2px 0 var(--clg-scarlet);padding-bottom:4px">Board</span><span>Units</span><span>Vendors</span><span>PM</span><span>Spend</span></div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:18px;font-size:11.5px;color:var(--clg-moon)"><span style="display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;background:#4ADE80;border-radius:999px"></span>Alvys live</span><span>J. Reyes</span></div>
+</div>
+
+<div style="position:relative;background:var(--clg-navy);padding:26px 28px 24px;flex:none;overflow:hidden;border-top:1px solid rgba(255,255,255,.08)">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="position:absolute;right:-30px;bottom:-100px;width:260px;opacity:.06">
+<div style="display:flex;align-items:flex-end;gap:56px">
+<div>
+<div class="clg-eyebrow" style="color:var(--clg-mercury);font-size:10px">IDLE RIGHT NOW</div>
+<div style="display:flex;align-items:baseline;gap:14px;margin-top:10px">
+<span style="font:700 54px/1 var(--clg-font-heading);color:#fff">9</span>
+<span style="font-size:13px;color:var(--clg-moon);padding-bottom:6px">of 74 tractors · 3 can't move a load</span>
+</div>
+</div>
+<div style="border-left:1px solid rgba(255,255,255,.18);padding-left:26px">
+<div class="clg-eyebrow" style="color:var(--clg-mercury);font-size:10px">COST OF WAITING, TODAY</div>
+<div style="display:flex;align-items:baseline;gap:12px;margin-top:10px">
+<span style="font:700 54px/1 var(--clg-font-heading);color:var(--clg-scarlet)">$6,412</span>
+<span style="font-size:13px;color:var(--clg-moon);padding-bottom:6px">accrued idle revenue<br>$684/hr running</span>
+</div>
+</div>
+<div style="margin-left:auto;max-width:290px;border-left:4px solid var(--clg-scarlet);padding-left:16px">
+<div style="font-size:12.5px;color:var(--clg-moon);line-height:1.6">Four of the nine are waiting on a decision from someone inside this building. That is the cheapest downtime to eliminate.</div>
+</div>
+</div>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--clg-moon);overflow:hidden">
+
+<div style="background:var(--clg-smoke);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 18px 14px;background:#fff;border-bottom:1px solid var(--clg-moon);border-top:4px solid var(--clg-scarlet)">
+<div style="font:700 11.5px var(--clg-font-heading);letter-spacing:.13em;color:var(--clg-ruby)">WAITING ON YOU</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:5px">4 units · $3,180 accruing · you are the blocker</div>
+</div>
+<div style="padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto">
+
+<div style="background:#fff;border:1px solid var(--clg-moon);border-left:4px solid var(--clg-scarlet);padding:15px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 19px var(--clg-font-heading);color:var(--clg-navy)">3303</span>
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-ruby)">28h</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:7px;font-weight:600">Air compressor failure</div>
+<div style="font-size:11.5px;color:var(--clg-cool);margin-top:3px;line-height:1.5">Pensacola, FL · M. Ellison · Cascadia '22</div>
+<div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--clg-smoke);font-size:12px;color:var(--clg-granite);line-height:1.55">Rush Truck quoted <strong style="color:var(--clg-navy)">$1,240</strong>. Nothing starts until you authorize it.</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="sm" hint-size="104px,32px"><span>Authorize</span></x-import>
+<span style="font-size:11.5px;color:var(--clg-royal)">Open unit</span>
+</div>
+<div style="margin-top:11px;font-size:11.5px;color:var(--clg-pewter)">Costs <strong style="color:var(--clg-ruby)">$117/hr</strong> to keep thinking about it</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:15px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 19px var(--clg-font-heading);color:var(--clg-navy)">3187</span>
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-ruby)">73h</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:7px;font-weight:600">DPF regen fault, derated</div>
+<div style="font-size:11.5px;color:var(--clg-cool);margin-top:3px;line-height:1.5">Valdosta, GA · D. Okafor</div>
+<div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--clg-smoke);font-size:12px;color:var(--clg-granite);line-height:1.55">Revised quote came back <strong style="color:var(--clg-navy)">$3,895</strong>, up $900 from the estimate you approved.</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="sm" hint-size="128px,32px"><span>Re-authorize</span></x-import>
+<span style="font-size:11.5px;color:var(--clg-royal)">Get a 2nd quote</span>
+</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:14px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-navy)">3291</span>
+<span style="font:700 15px var(--clg-font-heading);color:var(--clg-pewter)">19h</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:6px;font-weight:600">Steer tires below 6/32"</div>
+<div style="font-size:12px;color:var(--clg-granite);margin-top:8px;line-height:1.5">$1,860 · DOT finding · still moving loads</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:14px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-navy)">100096</span>
+<span style="font:700 15px var(--clg-font-heading);color:var(--clg-pewter)">2d</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:6px;font-weight:600">Trailer ABS light, right rear</div>
+<div style="font-size:12px;color:var(--clg-granite);margin-top:8px;line-height:1.5">$610 · in-house · needs a bay assignment</div>
+</div>
+
+</div>
+</div>
+
+<div style="background:var(--clg-smoke);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 18px 14px;background:#fff;border-bottom:1px solid var(--clg-moon);border-top:4px solid var(--clg-smoke)">
+<div style="font:700 11.5px var(--clg-font-heading);letter-spacing:.13em;color:var(--clg-navy)">WAITING ON A VENDOR</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:5px">3 units · 2 past promise time</div>
+</div>
+<div style="padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto">
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:15px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 19px var(--clg-font-heading);color:var(--clg-navy)">3412</span>
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-ruby)">41h</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:7px;font-weight:600">Clutch replacement</div>
+<div style="font-size:11.5px;color:var(--clg-cool);margin-top:3px">Peterbilt of Valdosta · PO 88412</div>
+<div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--clg-smoke);font-size:12px;color:var(--clg-granite);line-height:1.55">Promised back <strong style="color:var(--clg-ruby)">yesterday 4:00 PM</strong>. No update logged since Monday.</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="118px,32px"><span>Chase vendor</span></x-import>
+</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:14px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-navy)">3355</span>
+<span style="font:700 15px var(--clg-font-heading);color:var(--clg-pewter)">11h</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:6px;font-weight:600">Alternator, no-start</div>
+<div style="font-size:12px;color:var(--clg-granite);margin-top:8px;line-height:1.5">Rush Truck, Ocala · in the bay, on time</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:14px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-navy)">3208</span>
+<span style="font:700 15px var(--clg-font-heading);color:var(--clg-ruby)">3d</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:6px;font-weight:600">Wet kit rebuild</div>
+<div style="font-size:12px;color:var(--clg-granite);margin-top:8px;line-height:1.5">Southeast Hydraulics · third revised date</div>
+</div>
+
+</div>
+</div>
+
+<div style="background:var(--clg-smoke);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 18px 14px;background:#fff;border-bottom:1px solid var(--clg-moon);border-top:4px solid var(--clg-smoke)">
+<div style="font:700 11.5px var(--clg-font-heading);letter-spacing:.13em;color:var(--clg-navy)">WAITING ON PARTS</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:5px">1 unit · ETA tomorrow</div>
+</div>
+<div style="padding:14px;display:flex;flex-direction:column;gap:12px">
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:15px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 19px var(--clg-font-heading);color:var(--clg-navy)">3129</span>
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-pewter)">22h</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:7px;font-weight:600">Turbo actuator</div>
+<div style="font-size:11.5px;color:var(--clg-cool);margin-top:3px">Jacksonville yard · Bay 3, held</div>
+<div style="margin-top:12px;padding-top:11px;border-top:1px solid var(--clg-smoke);font-size:12px;color:var(--clg-granite);line-height:1.55">Part ships overnight, arrives <strong style="color:var(--clg-navy)">Aug 27, 9:00 AM</strong>. Bay 3 is tied up until it lands.</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="120px,32px"><span>Free the bay</span></x-import>
+</div>
+</div>
+
+<div style="border:1px dashed var(--clg-mercury);padding:16px;font-size:12px;color:var(--clg-pewter);line-height:1.6;background:rgba(255,255,255,.5)">A lane can be empty and that is good news. Nothing is invented to fill it.</div>
+
+</div>
+</div>
+
+<div style="background:var(--clg-smoke);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:16px 18px 14px;background:#fff;border-bottom:1px solid var(--clg-moon);border-top:4px solid var(--clg-smoke)">
+<div style="font:700 11.5px var(--clg-font-heading);letter-spacing:.13em;color:var(--clg-navy)">IN THE BAY</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:5px">2 units · nobody needs to do anything</div>
+</div>
+<div style="padding:14px;display:flex;flex-direction:column;gap:12px">
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:14px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-navy)">3346</span>
+<span style="font:700 15px var(--clg-font-heading);color:var(--clg-pewter)">4h</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:6px;font-weight:600">A-service PM</div>
+<div style="font-size:12px;color:var(--clg-granite);margin-top:8px;line-height:1.5">Bay 1 · R. Salas · 1.2 of 3.0 hrs logged</div>
+<div style="height:6px;background:var(--clg-smoke);margin-top:10px"><div style="width:40%;height:6px;background:var(--clg-royal)"></div></div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:14px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font:700 17px var(--clg-font-heading);color:var(--clg-navy)">3277</span>
+<span style="font:700 15px var(--clg-font-heading);color:var(--clg-pewter)">6h</span>
+</div>
+<div style="font-size:12.5px;color:var(--clg-navy);margin-top:6px;font-weight:600">Brake job, drive axle</div>
+<div style="font-size:12px;color:var(--clg-granite);margin-top:8px;line-height:1.5">Bay 2 · T. Whitfield · road test next</div>
+<div style="height:6px;background:var(--clg-smoke);margin-top:10px"><div style="width:82%;height:6px;background:var(--clg-royal)"></div></div>
+</div>
+
+<div style="background:var(--clg-navy);padding:16px">
+<div class="clg-eyebrow" style="color:var(--clg-mercury);font-size:10px">BACK ON THE ROAD TODAY</div>
+<div style="font:700 30px var(--clg-font-heading);color:#fff;margin-top:8px;line-height:1">5 units</div>
+<div style="font-size:12px;color:var(--clg-moon);margin-top:6px;line-height:1.55">Median idle time 19h, down from 26h last week.</div>
+</div>
+
+</div>
+</div>
+
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Unit view — the truck is the page. The work order is a block inside it, and the decision is the first thing you can touch.</div>
+<div class="dv-card" style="width:1240px">
+<div style="height:1080px;display:flex;flex-direction:column;font-size:13px;color:var(--clg-granite);background:var(--clg-smoke)">
+
+<div style="background:var(--clg-navy);padding:0 28px;display:flex;align-items:center;gap:16px;height:56px;flex:none">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="width:24px;height:24px">
+<div style="font:700 12px var(--clg-font-heading);color:#fff;letter-spacing:.14em">CLG MAINTENANCE</div>
+<div style="margin-left:24px;font-size:12px;color:var(--clg-mercury)">Board / Waiting on you / <span style="color:#fff">Unit 3303</span></div>
+<div style="margin-left:auto;font-size:11.5px;color:var(--clg-moon)">Alvys synced 2 min ago</div>
+</div>
+
+<div style="background:var(--clg-navy);padding:24px 28px 22px;display:flex;align-items:flex-end;gap:44px;flex:none;border-top:1px solid rgba(255,255,255,.08)">
+<div>
+<div style="display:flex;align-items:center;gap:12px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="critical" hint-size="96px,22px"><span>Can't move a load</span></x-import>
+<span style="font-size:11.5px;color:var(--clg-mercury)">Parked at TA, I-10 exit 296 · Pensacola, FL</span>
+</div>
+<div style="font:700 44px var(--clg-font-heading);color:#fff;margin-top:12px;line-height:1">3303</div>
+<div style="font-size:13px;color:var(--clg-moon);margin-top:6px">Freightliner Cascadia '22 · 318,442 mi · driver M. Ellison · trailer 100096</div>
+</div>
+<div style="border-left:1px solid rgba(255,255,255,.18);padding-left:28px">
+<div class="clg-eyebrow" style="color:var(--clg-mercury);font-size:10px">IDLE</div>
+<div style="font:700 44px var(--clg-font-heading);color:var(--clg-scarlet);margin-top:10px;line-height:1">28h 14m</div>
+<div style="font-size:12px;color:var(--clg-moon);margin-top:6px">$3,278 of revenue not moved · $117/hr</div>
+</div>
+<div style="margin-left:auto;display:flex;gap:10px;flex:none">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="inverse" size="md" hint-size="120px,40px"><span>Call driver</span></x-import>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="md" hint-size="180px,40px"><span>Authorize $1,240</span></x-import>
+</div>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:1fr 372px;gap:22px;padding:22px 28px;overflow:hidden">
+
+<div style="display:flex;flex-direction:column;gap:18px">
+
+<div style="background:#fff;border:1px solid var(--clg-moon);border-top:4px solid var(--clg-scarlet)">
+<div style="padding:18px 20px 0">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-ruby)">THE ONE THING BLOCKING THIS TRUCK</div>
+<div style="font:400 21px var(--clg-font-heading);color:var(--clg-navy);margin-top:9px">Rush Truck Center needs authorization to start</div>
+<div style="font-size:12.5px;color:var(--clg-pewter);margin-top:5px">Estimate received 10:38 AM · the unit has been idle 18 hours since</div>
+</div>
+<div style="padding:16px 20px 0">
+<div style="display:grid;grid-template-columns:1fr 78px 104px;padding:10px 0;border-bottom:1px solid var(--clg-smoke)"><span style="color:var(--clg-navy)">Air compressor, remanufactured</span><span style="color:var(--clg-pewter)">1 ea</span><span style="text-align:right;color:var(--clg-navy)">$742.00</span></div>
+<div style="display:grid;grid-template-columns:1fr 78px 104px;padding:10px 0;border-bottom:1px solid var(--clg-smoke)"><span style="color:var(--clg-navy)">Discharge line &amp; fittings</span><span style="color:var(--clg-pewter)">1 kit</span><span style="text-align:right;color:var(--clg-navy)">$96.00</span></div>
+<div style="display:grid;grid-template-columns:1fr 78px 104px;padding:10px 0;border-bottom:1px solid var(--clg-smoke)"><span style="color:var(--clg-navy)">Labor</span><span style="color:var(--clg-pewter)">3.2 hr</span><span style="text-align:right;color:var(--clg-navy)">$384.00</span></div>
+<div style="display:grid;grid-template-columns:1fr 78px 104px;padding:13px 0"><span style="color:var(--clg-navy);font-weight:600">Total, promised back Aug 27 4:00 PM</span><span></span><span style="text-align:right;font:700 18px var(--clg-font-heading);color:var(--clg-navy)">$1,240.00</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:14px 20px;background:var(--clg-smoke);border-top:1px solid var(--clg-moon)">
+<div style="font-size:12.5px;color:var(--clg-granite);line-height:1.55;flex:1">Powertrain warranty runs to 400,000 mi — the compressor may be covered. Claiming it costs a day and recovers <strong style="color:var(--clg-navy)">$742</strong>; the truck idle for that day costs <strong style="color:var(--clg-ruby)">$2,808</strong>.</div>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="176px,32px"><span>Claim it anyway</span></x-import>
+</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);flex:1;min-height:360px;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--clg-smoke)">
+<span style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">WHERE THE 28 HOURS WENT</span>
+<span style="font-size:11.5px;color:var(--clg-royal)">Full history on this unit</span>
+</div>
+<div style="padding:18px 20px;display:flex;flex-direction:column;gap:0">
+<div style="display:grid;grid-template-columns:78px 1fr 90px;padding:0 0 15px;border-left:2px solid var(--clg-scarlet);margin-left:5px;padding-left:18px"><span style="color:var(--clg-pewter);font-size:12px">18h 02m</span><div><div style="color:var(--clg-navy);font-weight:600">Sitting in your queue</div><div style="font-size:12px;color:var(--clg-cool);margin-top:2px">Estimate delivered, nobody authorized it</div></div><span style="text-align:right;color:var(--clg-ruby);font-weight:600">$2,109</span></div>
+<div style="display:grid;grid-template-columns:78px 1fr 90px;padding:0 0 15px;border-left:2px solid var(--clg-mercury);margin-left:5px;padding-left:18px"><span style="color:var(--clg-pewter);font-size:12px">1h 26m</span><div><div style="color:var(--clg-navy);font-weight:600">Vendor diagnosing</div><div style="font-size:12px;color:var(--clg-cool);margin-top:2px">Rush Truck Center, Pensacola</div></div><span style="text-align:right;color:var(--clg-pewter)">$168</span></div>
+<div style="display:grid;grid-template-columns:78px 1fr 90px;padding:0 0 15px;border-left:2px solid var(--clg-mercury);margin-left:5px;padding-left:18px"><span style="color:var(--clg-pewter);font-size:12px">6h 18m</span><div><div style="color:var(--clg-navy);font-weight:600">Waiting on a tow</div><div style="font-size:12px;color:var(--clg-cool);margin-top:2px">Dispatched 9:12 AM, arrived 3:30 PM</div></div><span style="text-align:right;color:var(--clg-pewter)">$738</span></div>
+<div style="display:grid;grid-template-columns:78px 1fr 90px;border-left:2px solid var(--clg-mercury);margin-left:5px;padding-left:18px"><span style="color:var(--clg-pewter);font-size:12px">2h 28m</span><div><div style="color:var(--clg-navy);font-weight:600">Driver reported, truck parked</div><div style="font-size:12px;color:var(--clg-cool);margin-top:2px">K. Nunez took the call at 8:41 AM · 2 photos</div></div><span style="text-align:right;color:var(--clg-pewter)">$289</span></div>
+</div>
+<div style="margin-top:auto;padding:13px 20px;background:var(--clg-smoke);border-top:1px solid var(--clg-moon);font-size:12px;color:var(--clg-granite)">Two thirds of this truck's downtime was internal. That is the number this platform exists to move.</div>
+</div>
+
+</div>
+
+<div style="display:flex;flex-direction:column;gap:16px;overflow-y:auto">
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:18px;flex:none">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px"><span style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">FROM ALVYS</span><span style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.08em">READ-ONLY</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;font-size:12.5px">
+<div><div style="color:var(--clg-cool);font-size:10.5px;letter-spacing:.09em">DRIVER</div><div style="color:var(--clg-navy)">M. Ellison</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px;letter-spacing:.09em">TRAILER</div><div style="color:var(--clg-navy)">100096</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px;letter-spacing:.09em">TRIP</div><div style="color:var(--clg-navy)">ALV-884213</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px;letter-spacing:.09em">DOMICILE</div><div style="color:var(--clg-navy)">Jacksonville</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px;letter-spacing:.09em">ODOMETER</div><div style="color:var(--clg-navy)">318,442 mi</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px;letter-spacing:.09em">LAST PM</div><div style="color:var(--clg-navy)">Jun 14 · A-service</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px;letter-spacing:.09em">VIN</div><div style="color:var(--clg-navy)">…NSNP4471</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px;letter-spacing:.09em">WARRANTY</div><div style="color:var(--clg-ruby);font-weight:600">Powertrain, active</div></div>
+</div>
+<div style="margin-top:15px;padding-top:13px;border-top:1px solid var(--clg-smoke);font-size:12px;color:var(--clg-pewter);line-height:1.55">The load on this trip was reassigned to 3291 at 8:52 AM. Alvys did that, not us.</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:18px;flex:none">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">THIS TRUCK IS GETTING EXPENSIVE</div>
+<div style="display:flex;align-items:flex-end;gap:13px;margin-top:12px"><span style="font:700 34px var(--clg-font-heading);color:var(--clg-navy);line-height:1">$0.147</span><span style="font-size:12px;color:var(--clg-pewter);padding-bottom:4px">per mile, YTD<br>fleet median $0.118</span></div>
+<div style="display:flex;gap:4px;align-items:flex-end;height:56px;margin-top:16px">
+<div style="flex:1;height:34%;background:var(--clg-mercury)"></div>
+<div style="flex:1;height:22%;background:var(--clg-mercury)"></div>
+<div style="flex:1;height:48%;background:var(--clg-mercury)"></div>
+<div style="flex:1;height:31%;background:var(--clg-mercury)"></div>
+<div style="flex:1;height:62%;background:var(--clg-royal)"></div>
+<div style="flex:1;height:55%;background:var(--clg-royal)"></div>
+<div style="flex:1;height:78%;background:var(--clg-royal)"></div>
+<div style="flex:1;height:100%;background:var(--clg-scarlet)"></div>
+</div>
+<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--clg-cool);margin-top:7px"><span>Jan</span><span>Aug</span></div>
+<div style="margin-top:14px;font-size:12px;color:var(--clg-granite);line-height:1.6">Fourth air-system repair in eight months, $4,120 total. Worth a replace-or-keep conversation.</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-moon);padding:18px;flex:none">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">RUSH TRUCK CENTER, PENSACOLA</div>
+<div style="font-size:12.5px;color:var(--clg-granite);margin-top:11px;line-height:1.7">Approved vendor · net 30<br>4.2 mi from the driver<br>Average turn 1.8 days · 14 work orders YTD<br>Hit their promised time 11 of 14</div>
+<div style="display:flex;gap:9px;margin-top:14px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="88px,32px"><span>Call</span></x-import>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="quiet" size="sm" hint-size="132px,32px"><span>Change vendor</span></x-import>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2c">
+<div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Intake — dispatch has a driver on the phone. Four fields, one screen, no wizard.</div>
+<div class="dv-card" style="width:740px">
+<div style="height:1000px;display:flex;flex-direction:column;font-size:13px;color:var(--clg-granite);background:#fff">
+
+<div style="background:var(--clg-navy);padding:0 26px;display:flex;align-items:center;gap:14px;height:56px;flex:none">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="width:22px;height:22px">
+<div style="font:700 11.5px var(--clg-font-heading);letter-spacing:.14em;color:#fff">CLG MAINTENANCE</div>
+<div style="margin-left:auto;font-size:11.5px;color:var(--clg-moon)">K. Nunez · Dispatch</div>
+</div>
+
+<div style="padding:26px 26px 0">
+<div class="clg-eyebrow" style="color:var(--clg-cool);font-size:10px">TAKE THE CALL</div>
+<div style="font:400 27px var(--clg-font-heading);color:var(--clg-navy);margin-top:7px">Which truck is stopped?</div>
+<div style="font-size:12.5px;color:var(--clg-pewter);margin-top:6px;line-height:1.6">Everything else about the unit comes from Alvys. Dispatch types only what Alvys can't know.</div>
+</div>
+
+<div style="padding:20px 26px 0">
+<div style="display:flex;gap:10px">
+<div style="flex:1;border:2px solid var(--clg-royal);padding:14px 16px;font:700 21px var(--clg-font-heading);color:var(--clg-navy)">3303</div>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="secondary" size="lg" hint-size="130px,54px"><span>Look it up</span></x-import>
+</div>
+<div style="margin-top:12px;background:var(--clg-smoke);border-left:4px solid var(--clg-royal);padding:14px 16px">
+<div style="font-size:12.5px;color:var(--clg-navy);font-weight:600">Cascadia '22 · M. Ellison · Pensacola, FL · 318,442 mi</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:5px;line-height:1.55">Trailer 100096 · trip ALV-884213 · last PM Jun 14 · powertrain warranty active · domicile Jacksonville</div>
+</div>
+<div style="margin-top:11px;font-size:12px;color:var(--clg-pewter)">Not in Alvys? <a href="#2c">Enter the unit by hand</a> — rentals and owner-operators land here.</div>
+</div>
+
+<div style="padding:26px 26px 0">
+<div style="font-size:12.5px;color:var(--clg-navy);font-weight:600;margin-bottom:9px">Can it move a load right now?</div>
+<div style="display:flex;gap:10px">
+<div style="flex:1;border:2px solid var(--clg-scarlet);background:rgba(235,33,39,.05);padding:16px">
+<div style="font:700 14px var(--clg-font-heading);color:var(--clg-ruby)">NO — IT'S STOPPED</div>
+<div style="font-size:12px;color:var(--clg-granite);margin-top:5px;line-height:1.5">Clock starts now, load gets flagged for reassignment</div>
+</div>
+<div style="flex:1;border:1px solid var(--clg-mercury);padding:16px">
+<div style="font:700 14px var(--clg-font-heading);color:var(--clg-navy)">YES — IT'S ROLLING</div>
+<div style="font-size:12px;color:var(--clg-granite);margin-top:5px;line-height:1.5">Goes on the schedule instead of the board</div>
+</div>
+</div>
+<div style="margin-top:10px;font-size:12px;color:var(--clg-pewter);line-height:1.6">That is the only urgency question. Priority levels get argued about; a stopped truck doesn't.</div>
+</div>
+
+<div style="padding:26px 26px 0;flex:1;display:flex;flex-direction:column">
+<div style="font-size:12.5px;color:var(--clg-navy);font-weight:600;margin-bottom:9px">What did the driver say?</div>
+<div style="border:1px solid var(--clg-mercury);padding:14px 16px;line-height:1.65;color:var(--clg-granite);min-height:88px">Air pressure dropping below 90 psi under load, buzzer sounding on grade. Parked at the TA on I-10 exit 296.</div>
+<div style="display:flex;gap:9px;margin-top:12px;align-items:center">
+<div style="width:70px;height:54px;background:var(--clg-reflection);border:1px solid var(--clg-mercury);display:grid;place-items:center;color:var(--clg-pewter);font-size:10.5px">PHOTO</div>
+<div style="width:70px;height:54px;background:var(--clg-reflection);border:1px solid var(--clg-mercury);display:grid;place-items:center;color:var(--clg-pewter);font-size:10.5px">PHOTO</div>
+<div style="width:70px;height:54px;border:1px dashed var(--clg-mercury);display:grid;place-items:center;color:var(--clg-royal);font-size:10.5px">+ ADD</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-left:6px;line-height:1.5">System and component get tagged by the shop, not by dispatch.</div>
+</div>
+
+<div style="margin-top:22px;border:1px solid var(--clg-moon);border-top:4px solid var(--clg-scarlet);padding:16px 18px">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">BEFORE YOU SUBMIT</div>
+<div style="font-size:12.5px;color:var(--clg-granite);margin-top:9px;line-height:1.6">WO-2903 was opened on 3303 nine days ago for the same air system and closed Aug 19. This is likely a comeback — it will be linked, and Rush Truck's warranty on their own repair still has 21 days.</div>
+</div>
+</div>
+
+<div style="padding:18px 26px;border-top:1px solid var(--clg-smoke);display:flex;align-items:center;justify-content:space-between;flex:none">
+<div style="font-size:12px;color:var(--clg-pewter);line-height:1.5">Routing, vendor and estimate happen after.<br>Dispatch's job ends here.</div>
+<div style="display:flex;gap:10px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="quiet" size="md" hint-size="96px,40px"><span>Cancel</span></x-import>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="md" hint-size="184px,40px"><span>Stop the clock later</span></x-import>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+
+</div>
+
+<p class="dv-next">Try next: "make <a class="dv-oid" href="#2a">2a</a> clickable end to end" · "show what the shop technician sees" · "merge the turn 1 approval inbox into this board" · "what does the exec see monthly"</p>
+</section>
+
+<section class="dv-turn" id="t1" style="background:var(--clg-smoke)">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">WORK ORDER PLATFORM — FIRST DIRECTIONS</span></div>
+
+<div style="display:flex;gap:28px;align-items:flex-start;max-width:1240px;margin:0 0 34px">
+<div style="flex:1;background:#fff;border:1px solid rgba(34,59,98,.14);border-top:4px solid var(--clg-scarlet);padding:26px 30px">
+<div class="clg-eyebrow" style="color:var(--clg-royal)">WHAT I ASSUMED</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px 34px;margin-top:16px;font-size:13.5px;line-height:1.6;color:var(--clg-granite)">
+<div><strong style="color:var(--clg-navy)">Urgency model (I picked)</strong><br>Three levels — <strong>Unit Down</strong>, <strong>Urgent</strong>, <strong>Routine</strong>. "Down" is a hard binary the whole queue sorts on; priority numbers (P1–P4) read as jargon to dispatch and get gamed.</div>
+<div><strong style="color:var(--clg-navy)">Approval gate (I picked)</strong><br>Dollar threshold: estimates at or under $500 auto-approve, above that a manager signs off. Matches the queue question you flagged — "what needs my approval" is the home screen.</div>
+<div><strong style="color:var(--clg-navy)">Alvys is the system of record for the asset</strong><br>Unit, trailer, VIN, driver, location, odometer, trip ID, domicile, last PM, warranty all arrive from the API and render read-only, with a sync stamp. Humans only type what Alvys can't know: the defect.</div>
+<div><strong style="color:var(--clg-navy)">Vendor path is first-class, not an afterthought</strong><br>Approved vendor list → estimate → PO/authorization number → invoice at close. In-house and vendor are two branches of one work order, not two products.</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opts">
+
+<!-- 1a -->
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Intake — guided, three steps. Unit first, defect second, routing last.</div>
+<div class="dv-card" style="width:1240px">
+<div style="display:flex;height:780px;font-size:13px;color:var(--clg-granite)">
+<div style="width:212px;flex:none;background:var(--clg-navy);display:flex;flex-direction:column;padding:22px 0">
+<div style="display:flex;align-items:center;gap:10px;padding:0 20px 24px"><img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="width:26px;height:26px"><div style="font:700 12px var(--clg-font-heading);color:#fff;letter-spacing:.14em">CLG SHOP</div></div>
+<div style="display:flex;flex-direction:column">
+<div style="padding:10px 20px;color:var(--clg-mercury);font-size:12.5px">Dashboard</div>
+<div style="padding:10px 20px;color:var(--clg-mercury);font-size:12.5px">Work orders</div>
+<div style="padding:10px 20px;color:#fff;font-size:12.5px;background:rgba(255,255,255,.08);border-left:3px solid var(--clg-scarlet)">New work order</div>
+<div style="padding:10px 20px;color:var(--clg-mercury);font-size:12.5px;display:flex;justify-content:space-between">Approvals<span style="background:var(--clg-scarlet);color:#fff;font-size:10.5px;padding:1px 6px;border-radius:999px">6</span></div>
+<div style="padding:10px 20px;color:var(--clg-mercury);font-size:12.5px">Units</div>
+<div style="padding:10px 20px;color:var(--clg-mercury);font-size:12.5px">Vendors</div>
+<div style="padding:10px 20px;color:var(--clg-mercury);font-size:12.5px">PM schedule</div>
+</div>
+<div style="margin-top:auto;padding:16px 20px;border-top:1px solid rgba(255,255,255,.14);color:var(--clg-cool);font-size:11px;line-height:1.5">Alvys sync<br><span style="color:var(--clg-moon)">Live · 2 min ago</span></div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;background:#fff">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:18px 32px;border-bottom:1px solid var(--clg-smoke)">
+<div><div class="clg-eyebrow" style="color:var(--clg-cool);font-size:10px">NEW WORK ORDER</div><div style="font:400 22px var(--clg-font-heading);color:var(--clg-navy);margin-top:4px">Step 2 of 3 — Describe the problem</div></div>
+<div style="display:flex;gap:10px"><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="md" hint-size="120px,38px"><span>Save draft</span></x-import><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="md" hint-size="103px,38px"><span>Continue</span></x-import></div>
+</div>
+
+<div style="display:flex;gap:0;padding:20px 32px;border-bottom:1px solid var(--clg-smoke);background:#F7FAFC">
+<div style="flex:1;display:flex;align-items:center;gap:10px;opacity:.75"><div style="width:22px;height:22px;background:var(--clg-royal);color:#fff;display:grid;place-items:center;font-size:11px">✓</div><div><div style="font-size:12.5px;color:var(--clg-navy);font-weight:600">Unit</div><div style="font-size:11.5px;color:var(--clg-cool)">3303 · pulled from Alvys</div></div></div>
+<div style="flex:1;display:flex;align-items:center;gap:10px"><div style="width:22px;height:22px;background:var(--clg-scarlet);color:#fff;display:grid;place-items:center;font-size:11px">2</div><div><div style="font-size:12.5px;color:var(--clg-navy);font-weight:600">Problem</div><div style="font-size:11.5px;color:var(--clg-cool)">Defect, severity, evidence</div></div></div>
+<div style="flex:1;display:flex;align-items:center;gap:10px;opacity:.5"><div style="width:22px;height:22px;border:1px solid var(--clg-mercury);color:var(--clg-cool);display:grid;place-items:center;font-size:11px">3</div><div><div style="font-size:12.5px;color:var(--clg-navy);font-weight:600">Route &amp; approve</div><div style="font-size:11.5px;color:var(--clg-cool)">In-house or vendor</div></div></div>
+</div>
+
+<div style="flex:1;display:flex;gap:32px;padding:28px 32px;overflow:hidden">
+<div style="flex:1;display:flex;flex-direction:column;gap:22px">
+<div>
+<div style="font-size:12px;color:var(--clg-navy);font-weight:600;margin-bottom:8px">How did this come in?</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<div style="padding:8px 14px;border:1px solid var(--clg-royal);background:rgba(17,85,161,.07);color:var(--clg-royal);font-size:12.5px">Driver breakdown call</div>
+<div style="padding:8px 14px;border:1px solid var(--clg-reflection);color:var(--clg-pewter);font-size:12.5px">DVIR defect</div>
+<div style="padding:8px 14px;border:1px solid var(--clg-reflection);color:var(--clg-pewter);font-size:12.5px">PM due</div>
+<div style="padding:8px 14px;border:1px solid var(--clg-reflection);color:var(--clg-pewter);font-size:12.5px">Roadside</div>
+<div style="padding:8px 14px;border:1px solid var(--clg-reflection);color:var(--clg-pewter);font-size:12.5px">DOT inspection</div>
+<div style="padding:8px 14px;border:1px solid var(--clg-reflection);color:var(--clg-pewter);font-size:12.5px">Shop walk-around</div>
+</div>
+</div>
+<div>
+<div style="font-size:12px;color:var(--clg-navy);font-weight:600;margin-bottom:8px">Severity</div>
+<div style="display:flex;gap:10px">
+<div style="flex:1;padding:14px 16px;border:2px solid var(--clg-scarlet);background:rgba(235,33,39,.05)"><div style="font:700 13px var(--clg-font-heading);color:var(--clg-ruby)">UNIT DOWN</div><div style="font-size:11.5px;color:var(--clg-pewter);margin-top:3px">Cannot move a load</div></div>
+<div style="flex:1;padding:14px 16px;border:1px solid var(--clg-reflection)"><div style="font:700 13px var(--clg-font-heading);color:var(--clg-navy)">URGENT</div><div style="font-size:11.5px;color:var(--clg-pewter);margin-top:3px">Moves, fix in 48h</div></div>
+<div style="flex:1;padding:14px 16px;border:1px solid var(--clg-reflection)"><div style="font:700 13px var(--clg-font-heading);color:var(--clg-navy)">ROUTINE</div><div style="font-size:11.5px;color:var(--clg-pewter);margin-top:3px">Next shop visit</div></div>
+</div>
+</div>
+<div>
+<div style="font-size:12px;color:var(--clg-navy);font-weight:600;margin-bottom:8px">System &amp; component</div>
+<div style="display:flex;gap:12px">
+<div style="flex:1;padding:11px 13px;border:1px solid var(--clg-mercury);font-size:13px;color:var(--clg-navy);display:flex;justify-content:space-between">Air system <span style="color:var(--clg-cool)">▾</span></div>
+<div style="flex:1;padding:11px 13px;border:1px solid var(--clg-mercury);font-size:13px;color:var(--clg-navy);display:flex;justify-content:space-between">Compressor / governor <span style="color:var(--clg-cool)">▾</span></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;flex:1">
+<div style="font-size:12px;color:var(--clg-navy);font-weight:600;margin-bottom:8px">What the driver reported</div>
+<div style="flex:1;min-height:96px;border:1px solid var(--clg-mercury);padding:12px 13px;font-size:13px;color:var(--clg-granite);line-height:1.6">Air pressure dropping below 90 psi under load, buzzer sounding on grade. Driver parked at the TA on I-10 exit 296.</div>
+<div style="display:flex;gap:10px;margin-top:12px">
+<div style="width:74px;height:56px;background:var(--clg-reflection);border:1px solid var(--clg-mercury);display:grid;place-items:center;color:var(--clg-pewter);font-size:10.5px">PHOTO</div>
+<div style="width:74px;height:56px;background:var(--clg-reflection);border:1px solid var(--clg-mercury);display:grid;place-items:center;color:var(--clg-pewter);font-size:10.5px">PHOTO</div>
+<div style="width:74px;height:56px;border:1px dashed var(--clg-mercury);display:grid;place-items:center;color:var(--clg-royal);font-size:10.5px">+ ADD</div>
+</div>
+</div>
+</div>
+
+<div style="width:320px;flex:none;display:flex;flex-direction:column;gap:14px">
+<div style="background:var(--clg-navy);padding:20px">
+<div style="display:flex;align-items:baseline;justify-content:space-between"><div class="clg-eyebrow" style="color:var(--clg-mercury);font-size:10px">UNIT 3303</div><div style="font-size:10.5px;color:var(--clg-moon)">FROM ALVYS</div></div>
+<div style="font:700 26px var(--clg-font-heading);color:#fff;margin-top:6px">Freightliner Cascadia</div>
+<div style="font-size:12px;color:var(--clg-moon);margin-top:2px">2022 · VIN 3AKJHHDR8NSNP4471</div>
+<div style="height:1px;background:rgba(255,255,255,.16);margin:16px 0"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;font-size:12px">
+<div><div style="color:var(--clg-cool);font-size:10.5px">DRIVER</div><div style="color:#fff">M. Ellison</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">TRAILER</div><div style="color:#fff">100096</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">LOCATION</div><div style="color:#fff">Pensacola, FL</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">TRIP</div><div style="color:#fff">ALV-884213</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">ODOMETER</div><div style="color:#fff">318,442 mi</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">DOMICILE</div><div style="color:#fff">Jacksonville</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">LAST PM</div><div style="color:#fff">Jun 14 · A-service</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">WARRANTY</div><div style="color:var(--clg-scarlet);font-weight:600">Powertrain active</div></div>
+</div>
+</div>
+<div style="border:1px solid var(--clg-reflection);border-left:4px solid var(--clg-royal);padding:14px 16px;background:#F7FAFC">
+<div style="font-size:12px;color:var(--clg-navy);font-weight:600">Warranty may cover this</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:4px;line-height:1.5">Air compressor is inside the powertrain warranty through 400,000 mi. Route to a Freightliner dealer to avoid paying out of pocket.</div>
+</div>
+<div style="border:1px solid var(--clg-reflection);padding:14px 16px">
+<div style="font-size:12px;color:var(--clg-navy);font-weight:600;margin-bottom:8px">Open history on 3303</div>
+<div style="display:flex;flex-direction:column;gap:9px;font-size:12px;color:var(--clg-pewter)">
+<div style="display:flex;justify-content:space-between"><span>WO-2841 · Air leak, front axle</span><span style="color:var(--clg-ruby)">Closed</span></div>
+<div style="display:flex;justify-content:space-between"><span>WO-2790 · A-service PM</span><span style="color:var(--clg-cool)">Closed</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- 1b -->
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Intake — one screen. Dispatch takes the call and never scrolls or clicks Next.</div>
+<div class="dv-card" style="width:1240px">
+<div style="height:800px;display:flex;flex-direction:column;font-size:13px;color:var(--clg-granite)">
+<div style="background:var(--clg-navy);padding:14px 28px;display:flex;align-items:center;gap:14px">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="width:24px;height:24px">
+<div style="font:700 12px var(--clg-font-heading);color:#fff;letter-spacing:.14em">CLG MAINTENANCE</div>
+<div style="display:flex;gap:22px;margin-left:26px;font-size:12.5px;color:var(--clg-mercury)">
+<span>Queue</span><span style="color:#fff;border-bottom:2px solid var(--clg-scarlet);padding-bottom:3px">Intake</span><span>Approvals</span><span>Vendors</span><span>Units</span>
+</div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:12px;font-size:11.5px;color:var(--clg-moon)"><span style="width:7px;height:7px;background:#4ADE80;border-radius:999px;display:inline-block"></span>Alvys connected</div>
+</div>
+
+<div style="padding:22px 28px 0;display:flex;align-items:flex-end;justify-content:space-between">
+<div><div class="clg-eyebrow" style="color:var(--clg-cool);font-size:10px">INTAKE</div><div style="font:400 26px var(--clg-font-heading);color:var(--clg-navy);margin-top:5px">Log a repair</div></div>
+<div style="display:flex;gap:8px;font-size:12px;color:var(--clg-pewter)"><span>Draft saves automatically</span></div>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:26px;padding:20px 28px 0;overflow:hidden">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="border:1px solid var(--clg-mercury);background:#F7FAFC;padding:16px 18px">
+<div style="display:flex;gap:10px;align-items:center">
+<div style="flex:1;background:#fff;border:1px solid var(--clg-royal);padding:11px 13px;font-size:14px;color:var(--clg-navy);font-weight:600">3303</div>
+<div style="padding:11px 16px;background:var(--clg-royal);color:#fff;font-size:12.5px">Pull from Alvys</div>
+</div>
+<div style="font-size:11.5px;color:var(--clg-pewter);margin-top:9px">Unit, trailer, VIN, driver, location, odometer, trip, domicile, last PM and warranty come back read-only. No unit number? <a href="#1b">Build it manually</a>.</div>
+</div>
+
+<div style="border:1px solid var(--clg-reflection)">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--clg-smoke);border-bottom:1px solid var(--clg-reflection)"><span style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">FROM ALVYS</span><span style="font-size:11px;color:var(--clg-pewter)">Synced 10:42 AM</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+<div style="padding:12px 16px;border-bottom:1px solid var(--clg-smoke);border-right:1px solid var(--clg-smoke)"><div style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.1em">TRACTOR</div><div style="color:var(--clg-navy);font-weight:600">3303 · Cascadia '22</div></div>
+<div style="padding:12px 16px;border-bottom:1px solid var(--clg-smoke)"><div style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.1em">TRAILER</div><div style="color:var(--clg-navy);font-weight:600">100096 · dry van</div></div>
+<div style="padding:12px 16px;border-bottom:1px solid var(--clg-smoke);border-right:1px solid var(--clg-smoke)"><div style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.1em">DRIVER</div><div style="color:var(--clg-navy)">M. Ellison · (904) 555-0142</div></div>
+<div style="padding:12px 16px;border-bottom:1px solid var(--clg-smoke)"><div style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.1em">TRIP</div><div style="color:var(--clg-navy)">ALV-884213</div></div>
+<div style="padding:12px 16px;border-bottom:1px solid var(--clg-smoke);border-right:1px solid var(--clg-smoke)"><div style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.1em">LOCATION</div><div style="color:var(--clg-navy)">Pensacola, FL · I-10 x296</div></div>
+<div style="padding:12px 16px;border-bottom:1px solid var(--clg-smoke)"><div style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.1em">ODOMETER</div><div style="color:var(--clg-navy)">318,442 mi</div></div>
+<div style="padding:12px 16px;border-right:1px solid var(--clg-smoke)"><div style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.1em">LAST PM</div><div style="color:var(--clg-navy)">Jun 14 · A-service</div></div>
+<div style="padding:12px 16px"><div style="font-size:10.5px;color:var(--clg-cool);letter-spacing:.1em">WARRANTY</div><div style="color:var(--clg-ruby);font-weight:600">Powertrain to 400k</div></div>
+</div>
+</div>
+
+<div style="border:1px solid var(--clg-reflection);border-top:4px solid var(--clg-scarlet);padding:14px 16px">
+<div style="font-size:12px;color:var(--clg-navy);font-weight:600">Duplicate check</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:4px;line-height:1.5">WO-2903 was opened on unit 3303 nine days ago for the same air system. <a href="#1d">Open it</a> instead of starting a second ticket.</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:15px">
+<div style="display:flex;gap:10px">
+<div style="flex:1;padding:12px 14px;border:2px solid var(--clg-scarlet);background:rgba(235,33,39,.05);text-align:center"><div style="font:700 12.5px var(--clg-font-heading);color:var(--clg-ruby)">UNIT DOWN</div></div>
+<div style="flex:1;padding:12px 14px;border:1px solid var(--clg-reflection);text-align:center"><div style="font:700 12.5px var(--clg-font-heading);color:var(--clg-navy)">URGENT</div></div>
+<div style="flex:1;padding:12px 14px;border:1px solid var(--clg-reflection);text-align:center"><div style="font:700 12.5px var(--clg-font-heading);color:var(--clg-navy)">ROUTINE</div></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div><div style="font-size:11.5px;color:var(--clg-navy);font-weight:600;margin-bottom:6px">Source</div><div style="padding:11px 13px;border:1px solid var(--clg-mercury);color:var(--clg-navy);display:flex;justify-content:space-between">Driver breakdown call <span style="color:var(--clg-cool)">▾</span></div></div>
+<div><div style="font-size:11.5px;color:var(--clg-navy);font-weight:600;margin-bottom:6px">System</div><div style="padding:11px 13px;border:1px solid var(--clg-mercury);color:var(--clg-navy);display:flex;justify-content:space-between">Air system <span style="color:var(--clg-cool)">▾</span></div></div>
+</div>
+<div><div style="font-size:11.5px;color:var(--clg-navy);font-weight:600;margin-bottom:6px">Complaint</div><div style="border:1px solid var(--clg-mercury);padding:12px 13px;height:70px;line-height:1.6">Air pressure dropping below 90 psi under load, buzzer on grade.</div></div>
+<div style="border:1px solid var(--clg-reflection);padding:15px 16px;background:#F7FAFC">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">WHO FIXES IT</span><div style="display:flex;gap:6px"><span style="padding:5px 11px;border:1px solid var(--clg-reflection);background:#fff;font-size:11.5px;color:var(--clg-pewter)">In-house</span><span style="padding:5px 11px;background:var(--clg-royal);color:#fff;font-size:11.5px">Vendor</span></div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div><div style="font-size:11px;color:var(--clg-cool);letter-spacing:.08em;margin-bottom:5px">APPROVED VENDOR</div><div style="padding:10px 12px;border:1px solid var(--clg-mercury);background:#fff;color:var(--clg-navy);font-size:12.5px;display:flex;justify-content:space-between">Rush Truck Ctr — Pensacola <span style="color:var(--clg-cool)">▾</span></div></div>
+<div><div style="font-size:11px;color:var(--clg-cool);letter-spacing:.08em;margin-bottom:5px">ESTIMATE</div><div style="padding:10px 12px;border:1px solid var(--clg-mercury);background:#fff;color:var(--clg-navy);font-size:12.5px">$ 1,240.00</div></div>
+<div><div style="font-size:11px;color:var(--clg-cool);letter-spacing:.08em;margin-bottom:5px">PO / AUTHORIZATION</div><div style="padding:10px 12px;border:1px solid var(--clg-mercury);background:#fff;color:var(--clg-cool);font-size:12.5px">Assigned on approval</div></div>
+<div><div style="font-size:11px;color:var(--clg-cool);letter-spacing:.08em;margin-bottom:5px">PROMISED BACK</div><div style="padding:10px 12px;border:1px solid var(--clg-mercury);background:#fff;color:var(--clg-navy);font-size:12.5px">Aug 27 · 4:00 PM</div></div>
+</div>
+<div style="margin-top:12px;padding:10px 12px;background:rgba(235,33,39,.07);border-left:4px solid var(--clg-scarlet);font-size:12px;color:var(--clg-granite)">Over the $500 threshold — this will go to J. Reyes for approval before the vendor is authorized.</div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-top:1px solid var(--clg-reflection);background:#fff">
+<div style="font-size:12px;color:var(--clg-cool)">WO number assigned on submit · Alvys unit 3303 will show <strong style="color:var(--clg-ruby)">Out of service</strong></div>
+<div style="display:flex;gap:10px"><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="lg" hint-size="90px,42px"><span>Cancel</span></x-import><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="lg" hint-size="179px,42px"><span>Create work order</span></x-import></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- 1c -->
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Queue — approval-first table. Opens on what's waiting on you, not on everything.</div>
+<div class="dv-card" style="width:1240px">
+<div style="height:880px;display:flex;flex-direction:column;font-size:13px;color:var(--clg-granite);background:#F7FAFC">
+<div style="background:var(--clg-navy);padding:14px 28px;display:flex;align-items:center;gap:14px">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="width:24px;height:24px">
+<div style="font:700 12px var(--clg-font-heading);color:#fff;letter-spacing:.14em">CLG MAINTENANCE</div>
+<div style="display:flex;gap:22px;margin-left:26px;font-size:12.5px;color:var(--clg-mercury)"><span style="color:#fff;border-bottom:2px solid var(--clg-scarlet);padding-bottom:3px">Queue</span><span>Intake</span><span>Approvals</span><span>Vendors</span><span>Units</span></div>
+<div style="margin-left:auto;font-size:11.5px;color:var(--clg-moon)">J. Reyes · Maintenance Manager</div>
+</div>
+
+<div style="padding:24px 28px 0;display:flex;align-items:flex-end;justify-content:space-between">
+<div><div class="clg-eyebrow" style="color:var(--clg-cool);font-size:10px">TUESDAY, AUGUST 26</div><div style="font:400 26px var(--clg-font-heading);color:var(--clg-navy);margin-top:5px">6 estimates need your approval</div></div>
+<div style="display:flex;gap:10px"><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="md" hint-size="90px,40px"><span>Export</span></x-import><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="md" hint-size="154px,40px"><span>New work order</span></x-import></div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:20px 28px">
+<div style="background:#fff;border:1px solid var(--clg-reflection);border-top:4px solid var(--clg-scarlet);padding:16px 18px"><div style="font:700 34px var(--clg-font-heading);color:var(--clg-ruby);line-height:1">6</div><div style="font-size:12px;color:var(--clg-navy);margin-top:5px;font-weight:600">Needs approval</div><div style="font-size:11.5px;color:var(--clg-cool)">$14,380 pending</div></div>
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:16px 18px"><div style="font:700 34px var(--clg-font-heading);color:var(--clg-navy);line-height:1">3</div><div style="font-size:12px;color:var(--clg-navy);margin-top:5px;font-weight:600">Units down</div><div style="font-size:11.5px;color:var(--clg-cool)">2 on the road</div></div>
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:16px 18px"><div style="font:700 34px var(--clg-font-heading);color:var(--clg-navy);line-height:1">8</div><div style="font-size:12px;color:var(--clg-navy);margin-top:5px;font-weight:600">At a vendor</div><div style="font-size:11.5px;color:var(--clg-cool)">3 past promise time</div></div>
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:16px 18px"><div style="font:700 34px var(--clg-font-heading);color:var(--clg-navy);line-height:1">12</div><div style="font-size:12px;color:var(--clg-navy);margin-top:5px;font-weight:600">PM coming due</div><div style="font-size:11.5px;color:var(--clg-cool)">Within 2,500 mi</div></div>
+</div>
+
+<div style="margin:0 28px 24px;background:#fff;border:1px solid var(--clg-reflection);flex:1;display:flex;flex-direction:column;overflow:hidden">
+<div style="display:flex;align-items:center;gap:20px;padding:14px 20px;border-bottom:1px solid var(--clg-smoke)">
+<div style="display:flex;gap:16px;font-size:12.5px"><span style="color:var(--clg-navy);font-weight:600;border-bottom:2px solid var(--clg-scarlet);padding-bottom:6px">Needs approval (6)</span><span style="color:var(--clg-pewter)">Open (29)</span><span style="color:var(--clg-pewter)">At vendor (8)</span><span style="color:var(--clg-pewter)">Closed</span></div>
+<div style="margin-left:auto;display:flex;gap:8px;font-size:12px;color:var(--clg-pewter)"><span style="padding:6px 12px;border:1px solid var(--clg-reflection)">All terminals ▾</span><span style="padding:6px 12px;border:1px solid var(--clg-reflection)">Any severity ▾</span></div>
+</div>
+<div style="display:grid;grid-template-columns:96px 1fr 132px 190px 118px 92px 120px;padding:10px 20px;background:#F7FAFC;border-bottom:1px solid var(--clg-smoke);font:700 10.5px var(--clg-font-heading);letter-spacing:.12em;color:var(--clg-pewter)">
+<div>WO</div><div>UNIT &amp; ISSUE</div><div>SEVERITY</div><div>VENDOR</div><div>ESTIMATE</div><div>AGE</div><div></div>
+</div>
+<div style="display:grid;grid-template-columns:96px 1fr 132px 190px 118px 92px 120px;padding:15px 20px;border-bottom:1px solid var(--clg-smoke);align-items:center;background:rgba(235,33,39,.04)">
+<div style="color:var(--clg-royal);font-weight:600">WO-2914</div>
+<div><div style="color:var(--clg-navy);font-weight:600">3303 · Air compressor failure</div><div style="font-size:11.5px;color:var(--clg-cool)">Pensacola, FL · driver M. Ellison · warranty may apply</div></div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="critical" hint-size="108px,22px"><span>Unit down</span></x-import></div>
+<div style="color:var(--clg-granite)">Rush Truck — Pensacola</div>
+<div style="color:var(--clg-navy);font-weight:600">$1,240.00</div>
+<div style="color:var(--clg-pewter)">2h</div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="sm" hint-size="95px,32px"><span>Approve</span></x-import></div>
+</div>
+<div style="display:grid;grid-template-columns:96px 1fr 132px 190px 118px 92px 120px;padding:15px 20px;border-bottom:1px solid var(--clg-smoke);align-items:center">
+<div style="color:var(--clg-royal);font-weight:600">WO-2911</div>
+<div><div style="color:var(--clg-navy);font-weight:600">3187 · DPF regen fault, derated</div><div style="font-size:11.5px;color:var(--clg-cool)">Valdosta, GA · DVIR defect</div></div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="critical" hint-size="108px,22px"><span>Unit down</span></x-import></div>
+<div style="color:var(--clg-granite)">Peterbilt of Valdosta</div>
+<div style="color:var(--clg-navy);font-weight:600">$3,895.00</div>
+<div style="color:var(--clg-pewter)">6h</div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="90px,32px"><span>Review</span></x-import></div>
+</div>
+<div style="display:grid;grid-template-columns:96px 1fr 132px 190px 118px 92px 120px;padding:15px 20px;border-bottom:1px solid var(--clg-smoke);align-items:center">
+<div style="color:var(--clg-royal);font-weight:600">WO-2908</div>
+<div><div style="color:var(--clg-navy);font-weight:600">100096 · Trailer ABS light, right rear</div><div style="font-size:11.5px;color:var(--clg-cool)">Jacksonville yard · shop walk-around</div></div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="brand" hint-size="90px,22px"><span>Urgent</span></x-import></div>
+<div style="color:var(--clg-granite)">In-house · Bay 2</div>
+<div style="color:var(--clg-navy);font-weight:600">$610.00</div>
+<div style="color:var(--clg-pewter)">1d</div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="90px,32px"><span>Review</span></x-import></div>
+</div>
+<div style="display:grid;grid-template-columns:96px 1fr 132px 190px 118px 92px 120px;padding:15px 20px;border-bottom:1px solid var(--clg-smoke);align-items:center">
+<div style="color:var(--clg-royal);font-weight:600">WO-2905</div>
+<div><div style="color:var(--clg-navy);font-weight:600">3291 · Steer tires below 6/32"</div><div style="font-size:11.5px;color:var(--clg-cool)">Lake City, FL · DOT inspection finding</div></div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="brand" hint-size="90px,22px"><span>Urgent</span></x-import></div>
+<div style="color:var(--clg-granite)">Southeast Tire Service</div>
+<div style="color:var(--clg-navy);font-weight:600">$1,860.00</div>
+<div style="color:var(--clg-pewter)">1d</div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="90px,32px"><span>Review</span></x-import></div>
+</div>
+<div style="display:grid;grid-template-columns:96px 1fr 132px 190px 118px 92px 120px;padding:15px 20px;border-bottom:1px solid var(--clg-smoke);align-items:center">
+<div style="color:var(--clg-royal);font-weight:600">WO-2899</div>
+<div><div style="color:var(--clg-navy);font-weight:600">3346 · A-service PM, 25k interval</div><div style="font-size:11.5px;color:var(--clg-cool)">Jacksonville yard · PM due in 900 mi</div></div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="neutral" hint-size="91px,22px"><span>Routine</span></x-import></div>
+<div style="color:var(--clg-granite)">In-house · Bay 1</div>
+<div style="color:var(--clg-navy);font-weight:600">$540.00</div>
+<div style="color:var(--clg-pewter)">3d</div>
+<div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="90px,32px"><span>Review</span></x-import></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;color:var(--clg-cool);font-size:12px">
+<span>Showing 5 of 6 · sorted by severity, then age</span>
+<span style="color:var(--clg-royal)">Approve all under $500 automatically →</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- 1d -->
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Work order detail — the estimate/approval decision sits above the log, not below it.</div>
+<div class="dv-card" style="width:1240px">
+<div style="height:1010px;display:flex;flex-direction:column;font-size:13px;color:var(--clg-granite);background:#F7FAFC">
+<div style="background:var(--clg-navy);padding:14px 28px;display:flex;align-items:center;gap:14px">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="width:24px;height:24px">
+<div style="font:700 12px var(--clg-font-heading);color:#fff;letter-spacing:.14em">CLG MAINTENANCE</div>
+<div style="margin-left:26px;font-size:12px;color:var(--clg-mercury)">Queue / Needs approval / <span style="color:#fff">WO-2914</span></div>
+</div>
+
+<div style="background:#fff;border-bottom:1px solid var(--clg-reflection);padding:22px 28px">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px">
+<div>
+<div style="display:flex;align-items:center;gap:10px"><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="critical" hint-size="108px,22px"><span>Unit down</span></x-import><span style="font-size:11.5px;color:var(--clg-cool)">Opened 8:41 AM by Dispatch (K. Nunez) · driver breakdown call</span></div>
+<div style="font:400 28px var(--clg-font-heading);color:var(--clg-navy);margin-top:10px">Air compressor failure — Unit 3303</div>
+<div style="font-size:12.5px;color:var(--clg-pewter);margin-top:5px">Freightliner Cascadia '22 · 318,442 mi · Pensacola, FL · trip ALV-884213 · trailer 100096</div>
+</div>
+<div style="display:flex;gap:10px;flex:none"><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="lg" hint-size="95px,42px"><span>Decline</span></x-import><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="lg" hint-size="246px,42px"><span>Approve $1,240 &amp; issue PO</span></x-import></div>
+</div>
+<div style="display:flex;gap:0;margin-top:22px;align-items:center">
+<div style="display:flex;align-items:center;gap:9px"><div style="width:9px;height:9px;background:var(--clg-royal)"></div><span style="font-size:11.5px;color:var(--clg-navy);font-weight:600">Reported</span></div>
+<div style="flex:1;height:2px;background:var(--clg-royal);margin:0 12px"></div>
+<div style="display:flex;align-items:center;gap:9px"><div style="width:9px;height:9px;background:var(--clg-royal)"></div><span style="font-size:11.5px;color:var(--clg-navy);font-weight:600">Estimated</span></div>
+<div style="flex:1;height:2px;background:var(--clg-scarlet);margin:0 12px"></div>
+<div style="display:flex;align-items:center;gap:9px"><div style="width:9px;height:9px;background:var(--clg-scarlet)"></div><span style="font-size:11.5px;color:var(--clg-ruby);font-weight:600">Awaiting approval</span></div>
+<div style="flex:1;height:2px;background:var(--clg-reflection);margin:0 12px"></div>
+<div style="display:flex;align-items:center;gap:9px"><div style="width:9px;height:9px;background:var(--clg-reflection)"></div><span style="font-size:11.5px;color:var(--clg-cool)">In repair</span></div>
+<div style="flex:1;height:2px;background:var(--clg-reflection);margin:0 12px"></div>
+<div style="display:flex;align-items:center;gap:9px"><div style="width:9px;height:9px;background:var(--clg-reflection)"></div><span style="font-size:11.5px;color:var(--clg-cool)">Invoiced &amp; closed</span></div>
+</div>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:1fr 380px;gap:22px;padding:22px 28px;overflow:hidden">
+<div style="display:flex;flex-direction:column;gap:18px">
+<div style="background:#fff;border:1px solid var(--clg-reflection)">
+<div style="padding:13px 18px;border-bottom:1px solid var(--clg-smoke);display:flex;justify-content:space-between;align-items:center"><span style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">ESTIMATE — RUSH TRUCK CENTER, PENSACOLA</span><span style="font-size:11.5px;color:var(--clg-cool)">Received 10:38 AM</span></div>
+<div style="padding:6px 18px">
+<div style="display:grid;grid-template-columns:1fr 90px 110px;padding:11px 0;border-bottom:1px solid #F0F5F9"><span style="color:var(--clg-navy)">Air compressor, remanufactured</span><span style="color:var(--clg-pewter)">1 ea</span><span style="text-align:right;color:var(--clg-navy)">$742.00</span></div>
+<div style="display:grid;grid-template-columns:1fr 90px 110px;padding:11px 0;border-bottom:1px solid #F0F5F9"><span style="color:var(--clg-navy)">Discharge line &amp; fittings</span><span style="color:var(--clg-pewter)">1 kit</span><span style="text-align:right;color:var(--clg-navy)">$96.00</span></div>
+<div style="display:grid;grid-template-columns:1fr 90px 110px;padding:11px 0;border-bottom:1px solid #F0F5F9"><span style="color:var(--clg-navy)">Labor</span><span style="color:var(--clg-pewter)">3.2 hr</span><span style="text-align:right;color:var(--clg-navy)">$384.00</span></div>
+<div style="display:grid;grid-template-columns:1fr 90px 110px;padding:13px 0"><span style="color:var(--clg-navy);font-weight:600">Total</span><span></span><span style="text-align:right;font:700 17px var(--clg-font-heading);color:var(--clg-navy)">$1,240.00</span></div>
+</div>
+<div style="padding:12px 18px;background:rgba(17,85,161,.06);border-top:1px solid var(--clg-reflection);font-size:12px;color:var(--clg-granite)">Powertrain warranty is active to 400,000 mi — <a href="#1d">request warranty coverage</a> before authorizing. Potential recovery $742.00.</div>
+</div>
+
+<div style="background:#fff;border:1px solid var(--clg-reflection);flex:1;display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:13px 18px;border-bottom:1px solid var(--clg-smoke);font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">ACTIVITY</div>
+<div style="padding:18px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;gap:13px"><div style="width:8px;height:8px;background:var(--clg-scarlet);margin-top:6px;flex:none"></div><div><div style="color:var(--clg-navy);font-weight:600">Estimate submitted — $1,240.00</div><div style="font-size:12px;color:var(--clg-cool)">Rush Truck Center · 10:38 AM · promised back Aug 27, 4:00 PM</div></div></div>
+<div style="display:flex;gap:13px"><div style="width:8px;height:8px;background:var(--clg-mercury);margin-top:6px;flex:none"></div><div><div style="color:var(--clg-navy);font-weight:600">Routed to vendor</div><div style="font-size:12px;color:var(--clg-cool)">J. Reyes · 9:12 AM · nearest approved vendor, 4.2 mi from driver</div></div></div>
+<div style="display:flex;gap:13px"><div style="width:8px;height:8px;background:var(--clg-mercury);margin-top:6px;flex:none"></div><div><div style="color:var(--clg-navy);font-weight:600">Unit marked out of service in Alvys</div><div style="font-size:12px;color:var(--clg-cool)">System · 8:43 AM · load ALV-884213 flagged for reassignment</div></div></div>
+<div style="display:flex;gap:13px"><div style="width:8px;height:8px;background:var(--clg-mercury);margin-top:6px;flex:none"></div><div><div style="color:var(--clg-navy);font-weight:600">Work order created from driver call</div><div style="font-size:12px;color:var(--clg-cool)">K. Nunez, Dispatch · 8:41 AM · 2 photos attached</div></div></div>
+</div>
+<div style="margin-top:auto;border-top:1px solid var(--clg-smoke);padding:13px 18px;display:flex;gap:10px;align-items:center"><div style="flex:1;border:1px solid var(--clg-mercury);padding:10px 12px;color:var(--clg-cool);font-size:12.5px">Add a note or call log…</div><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="secondary" size="md" hint-size="90px,38px"><span>Post</span></x-import></div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="background:#fff;border:1px solid var(--clg-reflection);border-top:4px solid var(--clg-scarlet);padding:18px">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">DOWNTIME</div>
+<div style="font:700 32px var(--clg-font-heading);color:var(--clg-ruby);margin-top:8px;line-height:1">1d 4h</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:4px">Load reassigned to unit 3291 · revenue at risk $2,850</div>
+</div>
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:18px">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy);margin-bottom:13px">VENDOR</div>
+<div style="color:var(--clg-navy);font-weight:600">Rush Truck Center — Pensacola</div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:3px;line-height:1.6">Approved vendor · net 30<br>(850) 555-0119 · 4.2 mi from driver<br>Avg turn 1.8 days · 14 WOs YTD</div>
+<div style="display:flex;gap:8px;margin-top:13px"><div style="padding:8px 13px;border:1px solid var(--clg-mercury);color:var(--clg-royal);font-size:12px">Call</div><div style="padding:8px 13px;border:1px solid var(--clg-mercury);color:var(--clg-royal);font-size:12px">Change vendor</div></div>
+</div>
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:18px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:13px"><span style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">FROM ALVYS</span><span style="font-size:10.5px;color:var(--clg-cool)">2 MIN AGO</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px">
+<div><div style="color:var(--clg-cool);font-size:10.5px">DRIVER</div><div style="color:var(--clg-navy)">M. Ellison</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">DOMICILE</div><div style="color:var(--clg-navy)">Jacksonville</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">ODOMETER</div><div style="color:var(--clg-navy)">318,442 mi</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">LAST PM</div><div style="color:var(--clg-navy)">Jun 14</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">VIN</div><div style="color:var(--clg-navy)">…NSNP4471</div></div>
+<div><div style="color:var(--clg-cool);font-size:10.5px">WARRANTY</div><div style="color:var(--clg-ruby);font-weight:600">Active</div></div>
+</div>
+</div>
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:18px">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy);margin-bottom:11px">SPEND ON 3303, YTD</div>
+<div style="display:flex;flex-direction:column;gap:9px;font-size:12px">
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Repairs (7)</span><span style="color:var(--clg-navy);font-weight:600">$9,412</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">PM (3)</span><span style="color:var(--clg-navy);font-weight:600">$1,620</span></div>
+<div style="display:flex;justify-content:space-between;padding-top:9px;border-top:1px solid var(--clg-smoke)"><span style="color:var(--clg-navy)">Cost per mile</span><span style="color:var(--clg-navy);font-weight:600">$0.147</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- 1e -->
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Dashboard — downtime and spend, framed as decisions rather than charts.</div>
+<div class="dv-card" style="width:1240px">
+<div style="height:880px;display:flex;flex-direction:column;font-size:13px;color:var(--clg-granite);background:#F7FAFC">
+<div style="background:var(--clg-navy);padding:14px 28px;display:flex;align-items:center;gap:14px">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="width:24px;height:24px">
+<div style="font:700 12px var(--clg-font-heading);color:#fff;letter-spacing:.14em">CLG MAINTENANCE</div>
+<div style="display:flex;gap:22px;margin-left:26px;font-size:12.5px;color:var(--clg-mercury)"><span style="color:#fff;border-bottom:2px solid var(--clg-scarlet);padding-bottom:3px">Dashboard</span><span>Queue</span><span>Intake</span><span>Vendors</span><span>Units</span></div>
+<div style="margin-left:auto;font-size:11.5px;color:var(--clg-moon)">Jacksonville terminal ▾</div>
+</div>
+
+<div style="position:relative;background:var(--clg-navy);padding:30px 28px 26px;overflow:hidden">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="position:absolute;right:-40px;bottom:-90px;width:280px;opacity:.07">
+<div class="clg-eyebrow" style="color:var(--clg-mercury);font-size:10px">FLEET STATUS · AUGUST 26</div>
+<div style="display:flex;align-items:flex-end;gap:54px;margin-top:16px">
+<div><div style="font:700 52px var(--clg-font-heading);color:#fff;line-height:1">94.2%</div><div style="font-size:12.5px;color:var(--clg-moon);margin-top:5px">Fleet availability · 71 of 74 tractors</div></div>
+<div><div style="font:700 52px var(--clg-font-heading);color:var(--clg-scarlet);line-height:1">3</div><div style="font-size:12.5px;color:var(--clg-moon);margin-top:5px">Units down · 2 roadside, 1 in shop</div></div>
+<div><div style="font:700 52px var(--clg-font-heading);color:#fff;line-height:1">$0.132</div><div style="font-size:12.5px;color:var(--clg-moon);margin-top:5px">Maintenance cost per mile · down $0.009 MoM</div></div>
+<div style="margin-left:auto;border-left:4px solid var(--clg-scarlet);padding-left:16px"><div style="font-size:12px;color:var(--clg-moon);line-height:1.6;max-width:230px">6 estimates worth <strong style="color:#fff">$14,380</strong> are waiting on approval — oldest is 3 days old.</div><div style="margin-top:10px"><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="md" hint-size="170px,38px"><span>Review approvals</span></x-import></div></div>
+</div>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:1.35fr 1fr;gap:20px;padding:22px 28px;overflow:hidden">
+<div style="display:flex;flex-direction:column;gap:18px">
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:20px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">DOWN RIGHT NOW</span><span style="font-size:11.5px;color:var(--clg-royal)">See all open work</span></div>
+<div style="display:flex;flex-direction:column;margin-top:6px">
+<div style="display:grid;grid-template-columns:70px 1fr 130px 96px;align-items:center;padding:13px 0;border-bottom:1px solid #F0F5F9"><span style="color:var(--clg-navy);font-weight:600">3303</span><div><div style="color:var(--clg-navy)">Air compressor failure</div><div style="font-size:11.5px;color:var(--clg-cool)">Rush Truck, Pensacola · awaiting approval</div></div><span style="color:var(--clg-pewter);font-size:12px">Pensacola, FL</span><span style="color:var(--clg-ruby);font-weight:600;text-align:right">1d 4h</span></div>
+<div style="display:grid;grid-template-columns:70px 1fr 130px 96px;align-items:center;padding:13px 0;border-bottom:1px solid #F0F5F9"><span style="color:var(--clg-navy);font-weight:600">3187</span><div><div style="color:var(--clg-navy)">DPF regen fault, derated</div><div style="font-size:11.5px;color:var(--clg-cool)">Peterbilt of Valdosta · parts on order</div></div><span style="color:var(--clg-pewter);font-size:12px">Valdosta, GA</span><span style="color:var(--clg-ruby);font-weight:600;text-align:right">3d 1h</span></div>
+<div style="display:grid;grid-template-columns:70px 1fr 130px 96px;align-items:center;padding:13px 0"><span style="color:var(--clg-navy);font-weight:600">3412</span><div><div style="color:var(--clg-navy)">Clutch replacement</div><div style="font-size:11.5px;color:var(--clg-cool)">In-house · Bay 3 · in repair</div></div><span style="color:var(--clg-pewter);font-size:12px">Jacksonville</span><span style="color:var(--clg-navy);font-weight:600;text-align:right">14h</span></div>
+</div>
+</div>
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:20px;flex:1">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">SPEND BY VENDOR · LAST 90 DAYS</div>
+<div style="display:flex;flex-direction:column;gap:14px;margin-top:18px">
+<div><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span style="color:var(--clg-navy)">Rush Truck Center</span><span style="color:var(--clg-navy);font-weight:600">$38,410</span></div><div style="height:9px;background:var(--clg-smoke)"><div style="width:78%;height:9px;background:var(--clg-royal)"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span style="color:var(--clg-navy)">In-house shop</span><span style="color:var(--clg-navy);font-weight:600">$24,980</span></div><div style="height:9px;background:var(--clg-smoke)"><div style="width:51%;height:9px;background:var(--clg-navy)"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span style="color:var(--clg-navy)">Southeast Tire Service</span><span style="color:var(--clg-navy);font-weight:600">$16,220</span></div><div style="height:9px;background:var(--clg-smoke)"><div style="width:33%;height:9px;background:var(--clg-pewter)"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px"><span style="color:var(--clg-navy)">Roadside / emergency</span><span style="color:var(--clg-ruby);font-weight:600">$11,905</span></div><div style="height:9px;background:var(--clg-smoke)"><div style="width:24%;height:9px;background:var(--clg-scarlet)"></div></div></div>
+</div>
+<div style="margin-top:18px;padding:12px 14px;background:#F7FAFC;border-left:4px solid var(--clg-royal);font-size:12px;color:var(--clg-granite)">Roadside spend is up 41% over the prior 90 days. 6 of 9 roadside calls were on units past their PM interval.</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:18px">
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:20px">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">PM COMPLIANCE</div>
+<div style="display:flex;align-items:flex-end;gap:12px;margin-top:12px"><div style="font:700 40px var(--clg-font-heading);color:var(--clg-navy);line-height:1">88%</div><div style="font-size:12px;color:var(--clg-pewter);padding-bottom:5px">on time this quarter<br>target 95%</div></div>
+<div style="height:9px;background:var(--clg-smoke);margin-top:14px"><div style="width:88%;height:9px;background:var(--clg-royal)"></div></div>
+<div style="font-size:12px;color:var(--clg-pewter);margin-top:12px;line-height:1.6">12 units come due within 2,500 mi. 4 of them are on dedicated lanes that don't pass the Jacksonville yard.</div>
+<div style="margin-top:13px"><x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="md" hint-size="246px,38px"><span>Build next week's PM plan</span></x-import></div>
+</div>
+<div style="background:#fff;border:1px solid var(--clg-reflection);padding:20px;flex:1">
+<div style="font:700 11px var(--clg-font-heading);letter-spacing:.14em;color:var(--clg-navy)">WHERE WORK COMES FROM</div>
+<div style="display:flex;flex-direction:column;gap:11px;margin-top:16px;font-size:12.5px">
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Alvys feed (DVIR, PM due)</span><span style="color:var(--clg-navy);font-weight:600">61%</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Driver breakdown call</span><span style="color:var(--clg-navy);font-weight:600">18%</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Shop walk-around</span><span style="color:var(--clg-navy);font-weight:600">13%</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">DOT / inspection finding</span><span style="color:var(--clg-navy);font-weight:600">8%</span></div>
+</div>
+<div style="height:1px;background:var(--clg-smoke);margin:16px 0"></div>
+<div style="font-size:12px;color:var(--clg-pewter);line-height:1.6">Manual intake is the minority path — worth protecting anyway, since it's how the worst events arrive.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+
+<p class="dv-next">Try next: "build out <a class="dv-oid" href="#1b">1b</a> as a clickable flow" · "queue as a board instead of a table" · "add the technician's mobile view" · "make the approval rule configurable per terminal"</p>
+</section>
+
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,39 @@
+/* Semantic aliases — use these in components, not raw palette names. */
+:root{
+  --clg-text-heading:var(--clg-navy);
+  --clg-text-body:var(--clg-granite);
+  --clg-text-muted:var(--clg-cool);
+  --clg-text-inverse:var(--clg-white);
+  --clg-text-brand:var(--clg-royal);
+  --clg-text-accent:var(--clg-scarlet);
+
+  --clg-link:var(--clg-ruby);
+  --clg-link-hover:var(--clg-scarlet);
+
+  --clg-surface-page:var(--clg-white);
+  --clg-surface-subtle:var(--clg-smoke);
+  --clg-surface-sunken:var(--clg-reflection);
+  --clg-surface-card:var(--clg-white);
+  --clg-surface-brand:var(--clg-royal);
+  --clg-surface-brand-deep:var(--clg-navy);
+  --clg-surface-accent:var(--clg-scarlet);
+  --clg-surface-inverse-subtle:rgb(var(--clg-white-rgb)/.08);
+
+  --clg-border-subtle:var(--clg-moon);
+  --clg-border-default:var(--clg-mercury);
+  --clg-border-strong:var(--clg-cool);
+  --clg-border-inverse:rgb(var(--clg-white-rgb)/.24);
+
+  --clg-action-primary-bg:var(--clg-scarlet);
+  --clg-action-primary-bg-hover:var(--clg-ruby);
+  --clg-action-primary-fg:var(--clg-white);
+  --clg-action-secondary-bg:var(--clg-royal);
+  --clg-action-secondary-bg-hover:var(--clg-navy);
+  --clg-action-secondary-fg:var(--clg-white);
+  --clg-action-quiet-fg:var(--clg-royal);
+  --clg-action-disabled-bg:var(--clg-moon);
+  --clg-action-disabled-fg:var(--clg-cool);
+
+  --clg-status-info:var(--clg-royal);
+  --clg-status-critical:var(--clg-ruby);
+}

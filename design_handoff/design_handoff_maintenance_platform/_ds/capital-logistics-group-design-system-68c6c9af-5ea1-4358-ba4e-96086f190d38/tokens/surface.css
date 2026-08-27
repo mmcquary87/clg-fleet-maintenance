@@ -1,0 +1,20 @@
+/* Borders, radii, elevation. The brand reads angular — squared corners on
+   collateral, an angular star mark, an italic wordmark. Keep radii at 0–4px. */
+:root{
+  --clg-radius-none:0px;
+  --clg-radius-sm:2px;
+  --clg-radius-md:4px;
+  --clg-radius-pill:999px;
+
+  --clg-border-hair:1px;
+  --clg-border-thick:2px;
+  --clg-rule-accent:4px;       /* scarlet rule used to lead a heading block */
+
+  --clg-shadow-sm:0 1px 2px rgb(var(--clg-navy-rgb)/.10);
+  --clg-shadow-md:0 2px 8px rgb(var(--clg-navy-rgb)/.12);
+  --clg-shadow-lg:0 12px 32px rgb(var(--clg-navy-rgb)/.16);
+  --clg-shadow-inset:inset 0 -2px 0 rgb(var(--clg-navy-rgb)/.10);
+  --clg-focus-ring:0 0 0 3px rgb(var(--clg-royal-rgb)/.35);
+
+  --clg-blur-panel:blur(10px); /* @kind other */
+}

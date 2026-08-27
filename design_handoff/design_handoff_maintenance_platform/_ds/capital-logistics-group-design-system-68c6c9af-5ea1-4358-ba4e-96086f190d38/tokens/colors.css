@@ -1,0 +1,33 @@
+/* Palette — Visual Brand Guide p.3. Hex values read from the guide's own swatch fills. */
+:root{
+  /* Primary */
+  --clg-royal:#1155A1;   /* R17 G85 B161  — C96 M75 Y4 K0 */
+  --clg-navy:#223B62;    /* R34 G59 B98   — C96 M81 Y36 K25 */
+  --clg-scarlet:#EB2127; /* R235 G33 B39  — C1 M99 Y97 K0 */
+  --clg-ruby:#BE202E;    /* R190 G32 B46  — C18 M100 Y91 K8 */
+
+  /* Neutrals, dark to light */
+  --clg-granite:#485767;
+  --clg-pewter:#5A6D80;
+  --clg-cool:#7A8B99;
+  --clg-mercury:#A3BACB;
+  --clg-moon:#BFD3E1;
+  --clg-reflection:#DAE7F1;
+  --clg-smoke:#E7EDF1;
+  --clg-white:#FFFFFF;
+
+  /* rgb channels for alpha composition */
+  --clg-royal-rgb:17 85 161; /* @kind other */
+  --clg-navy-rgb:34 59 98; /* @kind other */
+  --clg-scarlet-rgb:235 33 39; /* @kind other */
+  --clg-ruby-rgb:190 32 46; /* @kind other */
+  --clg-granite-rgb:72 87 103; /* @kind other */
+  --clg-white-rgb:255 255 255; /* @kind other */
+
+  /* Brand gradient — sampled from the guide's gradient plate (p.25) */
+  --clg-gradient-brand:linear-gradient(48deg,#0B1B32 0%,#223B62 52%,#29459B 100%); /* @kind color */
+  --clg-gradient-brand-soft:linear-gradient(48deg,#223B62 0%,#1155A1 100%); /* @kind color */
+  /* Protection wash for copy over photography */
+  --clg-scrim-navy:linear-gradient(90deg,rgb(var(--clg-navy-rgb)/.92) 0%,rgb(var(--clg-navy-rgb)/.72) 45%,rgb(var(--clg-navy-rgb)/0) 100%);
+  --clg-scrim-bottom:linear-gradient(180deg,rgb(11 27 50/0) 0%,rgb(11 27 50/.75) 100%); /* @kind color */
+}

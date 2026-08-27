@@ -1,0 +1,7 @@
+/* Brand webfonts. Montserrat = headings, Poppins = body (Visual Brand Guide, p.21).
+   Only Montserrat Regular and Poppins Regular were supplied as binaries; the remaining
+   weights/italics load from Google Fonts (same families) until the .otf files arrive. */
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,700&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,700&display=swap");
+
+@font-face{font-family:"Montserrat CLG";src:url("../assets/fonts/Montserrat-Regular.otf") format("opentype");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Poppins CLG";src:url("../assets/fonts/Poppins-Regular.otf") format("opentype");font-weight:400;font-style:normal;font-display:swap}

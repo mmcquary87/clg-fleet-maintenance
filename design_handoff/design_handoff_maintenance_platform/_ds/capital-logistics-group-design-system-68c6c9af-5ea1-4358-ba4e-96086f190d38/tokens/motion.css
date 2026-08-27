@@ -1,0 +1,11 @@
+/* Motion. The brand guide is print-first and specifies no animation;
+   these are restrained defaults for digital work — short, linear-feeling,
+   no bounce or overshoot. */
+:root{
+  --clg-dur-fast:120ms; /* @kind other */
+  --clg-dur-base:180ms; /* @kind other */
+  --clg-dur-slow:280ms; /* @kind other */
+  --clg-ease-out:cubic-bezier(.2,.7,.3,1); /* @kind other */
+  --clg-ease-in-out:cubic-bezier(.4,0,.2,1); /* @kind other */
+  --clg-transition:all var(--clg-dur-base) var(--clg-ease-out); /* @kind other */
+}

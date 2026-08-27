@@ -1,0 +1,36 @@
+/* Type — Visual Brand Guide p.21. Headings Montserrat, body copy Poppins.
+   Sizes are the guide's own ladder (40/36/30/24/18/14pt). Line-heights and the
+   weight assignment per level are this system's interpretation — see readme.md. */
+:root{
+  --clg-font-heading:"Montserrat CLG","Montserrat",system-ui,sans-serif;
+  --clg-font-body:"Poppins CLG","Poppins",system-ui,sans-serif;
+
+  --clg-weight-regular:400; /* @kind font */
+  --clg-weight-medium:500; /* @kind font */
+  --clg-weight-semibold:600; /* @kind font */
+  --clg-weight-bold:700; /* @kind font */
+
+  /* Heading ladder */
+  --clg-size-h1:40px;
+  --clg-size-h2:36px;
+  --clg-size-h3:30px;
+  --clg-size-h4:24px;
+  --clg-size-h5:18px;
+  --clg-size-eyebrow:14px;
+
+  /* Body ladder */
+  --clg-size-lead:20px;
+  --clg-size-body:16px;
+  --clg-size-small:14px;
+  --clg-size-caption:12px;
+
+  --clg-leading-display:1.05; /* @kind font */
+  --clg-leading-heading:1.18; /* @kind font */
+  --clg-leading-body:1.6; /* @kind font */
+  --clg-leading-tight:1.35; /* @kind font */
+
+  --clg-tracking-display:-0.01em; /* @kind font */
+  --clg-tracking-heading:0em; /* @kind font */
+  --clg-tracking-eyebrow:0.18em; /* @kind font */   /* the guide's letterspaced "H E A D I N G" style */
+  --clg-tracking-body:0em; /* @kind font */
+}

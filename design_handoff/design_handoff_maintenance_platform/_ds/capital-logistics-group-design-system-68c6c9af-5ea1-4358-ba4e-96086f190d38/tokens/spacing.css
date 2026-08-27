@@ -1,0 +1,22 @@
+/* Spacing. The guide's only hard measurement rule is logo clearspace
+   (half the wordmark height on all edges, p.29); the step scale below is this
+   system's 4px-based interpretation. */
+:root{
+  --clg-space-0:0;
+  --clg-space-1:4px;
+  --clg-space-2:8px;
+  --clg-space-3:12px;
+  --clg-space-4:16px;
+  --clg-space-5:24px;
+  --clg-space-6:32px;
+  --clg-space-7:48px;
+  --clg-space-8:64px;
+  --clg-space-9:96px;
+  --clg-space-10:128px;
+
+  --clg-gutter:24px;
+  --clg-page-margin:64px;
+  --clg-measure:64ch; /* @kind spacing */          /* comfortable body measure */
+  --clg-container:1200px;
+  --clg-logo-clearspace:0.5; /* @kind other */   /* multiplier against wordmark height */
+}
