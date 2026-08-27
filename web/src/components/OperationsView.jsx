@@ -31,7 +31,7 @@ function statusFor(kpi, value) {
   return "pending";
 }
 
-function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown }) {
+function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, secondaryStat }) {
   const [open, setOpen] = useState(false);
   const hasLive = kpi.dataStatus === "live";
   const status = hasLive ? statusFor(kpi, liveValue) : "pending";
@@ -51,23 +51,31 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown }
         </Badge>
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", alignItems: "baseline", gap: 10 }}>
-        {hasLive ? (
-          liveLoading ? (
-            <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontSize: 22, color: "var(--clg-text-muted)" }}>…</span>
-          ) : liveError ? (
-            <span style={{ fontSize: 12, color: "var(--clg-scarlet)" }}>{liveError}</span>
-          ) : liveValue != null ? (
+      <div style={{ marginTop: 12, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        {!hasLive ? (
+          <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>{kpi.blockedReason}</span>
+        ) : liveLoading ? (
+          <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontSize: 22, color: "var(--clg-text-muted)" }}>…</span>
+        ) : liveError ? (
+          <span style={{ fontSize: 12, color: "var(--clg-scarlet)" }}>{liveError}</span>
+        ) : liveValue == null ? (
+          <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>
+            {hasRange ? "No data for this range" : "Select a date range"}
+          </span>
+        ) : (
+          <>
             <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontSize: 22, fontWeight: 700, color: "var(--clg-navy)" }}>
               {formatLiveValue(kpi, liveValue)}
             </span>
-          ) : (
-            <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>
-              {hasRange ? "No data for this range" : "Select a date range"}
-            </span>
-          )
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>{kpi.blockedReason}</span>
+            {secondaryStat?.value != null && (
+              <span style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>
+                · {secondaryStat.label}{" "}
+                <span style={{ fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-body)", fontWeight: 600 }}>
+                  {formatLiveValue({ unit: secondaryStat.unit }, secondaryStat.value)}
+                </span>
+              </span>
+            )}
+          </>
         )}
       </div>
 
@@ -162,6 +170,7 @@ export default function OperationsView() {
                 liveError={LIVE[kpi.no]?.error ?? null}
                 hasRange={!!(range?.start && range?.end)}
                 breakdown={kpi.no === 12 ? tripsData?.revenueMilesByFleet : null}
+                secondaryStat={kpi.no === 6 ? { label: "per driver:", value: tripsData?.revenuePerActiveDriverPerWeek, unit: "$" } : null}
               />
             ))}
           </div>

@@ -167,6 +167,7 @@ Deno.serve(async (req) => {
     const truckCount = perTruck.size;
     const driverCount = perDriver.size;
     const totalRevenue = [...perTruck.values()].reduce((s, v) => s + v.revenue, 0);
+    const totalDriverRevenue = [...perDriver.values()].reduce((s, v) => s + v.revenue, 0);
     const totalDriverLoadedMiles = [...perDriver.values()].reduce((s, v) => s + v.loadedMiles, 0);
 
     // Revenue per Active Tractor and Revenue Miles per Active Driver are
@@ -215,6 +216,11 @@ Deno.serve(async (req) => {
       onTimeDeliveryPct: deliveryOnTime.length > 0 ? Math.round((deliveryOnTime.filter(Boolean).length / deliveryOnTime.length) * 1000) / 10 : null,
       revenuePerActiveTractorPerWeek: truckCount > 0 ? Math.round((totalRevenue / truckCount / weeks) * 100) / 100 : null,
       activeTractors: truckCount,
+      // Supporting figure alongside Revenue per Active Tractor, not a
+      // separate governed KPI — same revenue, divided by the labor asset
+      // (driver) instead of the capital asset (tractor), for a quick
+      // capital-vs-labor efficiency comparison.
+      revenuePerActiveDriverPerWeek: driverCount > 0 ? Math.round((totalDriverRevenue / driverCount / weeks) * 100) / 100 : null,
       revenueMilesPerActiveDriverPerWeek: driverCount > 0 ? Math.round(totalDriverLoadedMiles / driverCount / weeks) : null,
       activeDrivers: driverCount,
       revenueMilesByFleet,
