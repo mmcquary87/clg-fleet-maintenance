@@ -40,8 +40,13 @@ export default function WorkOrdersView() {
   const { orders, loading, error, reload } = useAllWorkOrders(range);
   const [tab, setTab] = useState("All");
   const [category, setCategory] = useState("All");
+  const [unit, setUnit] = useState("All");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
+
+  const unitOptions = useMemo(() => {
+    return ["All", ...Array.from(new Set(orders.map((o) => o.unit?.number).filter(Boolean))).sort()];
+  }, [orders]);
 
   const filtered = useMemo(() => {
     return orders
@@ -51,13 +56,14 @@ export default function WorkOrdersView() {
         return o.status === tab;
       })
       .filter((o) => category === "All" || o.category === category)
+      .filter((o) => unit === "All" || o.unit?.number === unit)
       .filter((o) => {
         if (!query.trim()) return true;
         const q = query.toLowerCase();
         return [o.unit?.number, o.vendor?.name, o.category, o.description, o.complaint, o.invoice_ref]
           .filter(Boolean).some((v) => v.toLowerCase().includes(q));
       });
-  }, [orders, tab, category, query]);
+  }, [orders, tab, category, unit, query]);
 
   const totalCost = filtered.reduce((s, o) => s + (Number(o.cost) || 0), 0);
 
@@ -75,8 +81,8 @@ export default function WorkOrdersView() {
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search unit, vendor, category…" style={{ paddingLeft: 30 }} />
           </div>
-          <div style={{ width: 170 }}>
-            <Select value={category} onChange={(e) => setCategory(e.target.value)} options={["All", ...CATEGORIES]} />
+          <div style={{ width: 130 }}>
+            <Select value={unit} onChange={(e) => setUnit(e.target.value)} options={unitOptions} />
           </div>
           <Button
             variant="outline" size="sm" iconLeft={<Download size={14} />}
@@ -92,7 +98,7 @@ export default function WorkOrdersView() {
         <DateRangeFilter onChange={setRange} />
       </div>
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {STATUS_TABS.map((t) => (
           <button
             key={t}
@@ -105,6 +111,23 @@ export default function WorkOrdersView() {
             }}
           >
             {t}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {["All", ...CATEGORIES].map((c) => (
+          <button
+            key={c}
+            onClick={() => setCategory(c)}
+            style={{
+              padding: "6px 12px", fontSize: 11.5, cursor: "pointer",
+              border: "1px solid " + (category === c ? "var(--clg-royal)" : "var(--clg-reflection)"),
+              background: category === c ? "var(--clg-royal)" : "#fff",
+              color: category === c ? "#fff" : "var(--clg-pewter)",
+            }}
+          >
+            {c}
           </button>
         ))}
       </div>
