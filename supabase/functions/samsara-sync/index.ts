@@ -72,16 +72,20 @@ Deno.serve(async (req) => {
     const unitByVin = new Map(units.filter((u: any) => u.vin).map((u: any) => [u.vin.toLowerCase(), u.id]));
 
     const vehicleIdToUnitId = new Map<string, string>();
-    let vehiclesMatched = 0;
+    const vehicleMatches: { id: string; samsara_vehicle_id: string }[] = [];
     for (const v of vehicles) {
       if (!v.vin) continue;
       const unitId = unitByVin.get(v.vin.toLowerCase());
       if (unitId) {
         vehicleIdToUnitId.set(v.id, unitId);
-        vehiclesMatched += 1;
-        await supabase.from("units").update({ samsara_vehicle_id: v.id }).eq("id", unitId);
+        vehicleMatches.push({ id: unitId, samsara_vehicle_id: v.id });
       }
     }
+    if (vehicleMatches.length > 0) {
+      const { error } = await supabase.from("units").upsert(vehicleMatches, { onConflict: "id" });
+      if (error) throw error;
+    }
+    const vehiclesMatched = vehicleMatches.length;
 
     // ---- 2. Fault codes, last 7 days ----
     const faultVehicles = await fetchAllPaginated("/fleet/vehicles/stats/history", {
@@ -129,21 +133,27 @@ Deno.serve(async (req) => {
       endTime: rfc3339(0),
     });
 
-    let unitsRefreshed = 0;
+    const syncedAt = new Date().toISOString();
+    const unitUpdateTasks: Promise<{ error: unknown }>[] = [];
     for (const v of statVehicles) {
       const unitId = vehicleIdToUnitId.get(v.id);
       if (!unitId) continue;
-      const fields: Record<string, unknown> = { samsara_synced_at: new Date().toISOString() };
+      const fields: Record<string, unknown> = { samsara_synced_at: syncedAt };
       const lastFuel = v.fuelPercents?.at(-1);
       if (lastFuel) fields.last_fuel_percent = lastFuel.value;
       const lastOdo = v.obdOdometerMeters?.at(-1);
       if (lastOdo) fields.odometer = Math.round(lastOdo.value * 0.000621371); // meters -> miles
       const lastGps = v.gps?.at(-1);
       if (lastGps?.address?.name) fields.current_location = lastGps.address.name;
-      const { error } = await supabase.from("units").update(fields).eq("id", unitId);
-      if (error) throw error;
-      unitsRefreshed += 1;
+      // Per-row update (not a bulk upsert) so only the fields this vehicle
+      // actually reported get touched — a bulk upsert across rows with
+      // different key sets would null out fields missing on some rows.
+      unitUpdateTasks.push(supabase.from("units").update(fields).eq("id", unitId));
     }
+    const unitUpdateResults = await Promise.all(unitUpdateTasks);
+    const firstUnitUpdateError = unitUpdateResults.find((r) => r.error)?.error;
+    if (firstUnitUpdateError) throw firstUnitUpdateError;
+    const unitsRefreshed = unitUpdateTasks.length;
 
     // ---- 4. DVIR defects, last 30 days ----
     const defects = await fetchAllPaginated("/fleet/defects/history", {
