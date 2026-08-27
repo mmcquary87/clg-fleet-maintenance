@@ -56,7 +56,7 @@ async function getAlvysToken(): Promise<string> {
 
 async function fetchAllMaintenance(token: string) {
   const items: any[] = [];
-  let page = 1;
+  let page = 0; // Alvys' Page parameter is 0-indexed
   const dateRange = {
     Start: new Date(Date.now() - 5 * 365 * 24 * 3600 * 1000).toISOString(),
     End: new Date().toISOString(),

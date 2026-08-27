@@ -37,7 +37,7 @@ async function getAlvysToken(): Promise<string> {
 
 async function fetchAllPages(token: string, path: string, extraBody: Record<string, unknown>) {
   const items: any[] = [];
-  let page = 1;
+  let page = 0; // Alvys' Page parameter is 0-indexed
   while (true) {
     const res = await fetch(`${ALVYS_API_BASE}/${path}`, {
       method: "POST",
