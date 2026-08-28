@@ -1,15 +1,14 @@
-// Fleet Maintenance System — one-off probe: does Alvys expose a drivers
-// endpoint, and if so what fields does it carry?
+// Fleet Maintenance System — one-off probe: what does a real Alvys driver
+// record look like?
 //
-// Every other Alvys resource we've found follows the same shape:
-// POST /api/p/v1.0/<controller>/search with {Page, PageSize}. Trying
-// "drivers/search" on that same convention — unconfirmed since Alvys's
-// docs are gated, same empirical-probe pattern as alvys-explore-trips.
-//
-// Goal: see whether a driver record carries a real NAME (not just an
-// opaque Id, which is all trips/search's Driver1 gives us) and any kind
-// of employment/active status — if so, this could become the canonical
-// driver list this app doesn't have yet. Delete this function once answered.
+// Round 1 confirmed "drivers/search" is a real endpoint (400, not 404) and
+// its validation error named the driver's searchable fields: Name, Status,
+// IsActive, FleetName, EmployeeId — meaning Alvys's public API does carry
+// a real driver name, not just the opaque Driver1.Id trips/search gives
+// us. This round passes IsActive:true (a guess at the required shape,
+// same empirical pattern as everything else in this Alvys integration)
+// to actually pull driver records and see the full field set. Delete this
+// function once answered.
 //
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets.
 
@@ -35,16 +34,16 @@ async function getAlvysToken(): Promise<string> {
   return (await res.json()).access_token;
 }
 
-async function tryEndpoint(token: string, controller: string) {
-  const res = await fetch(`${ALVYS_API_BASE}/${controller}/search`, {
+async function tryBody(token: string, label: string, body: unknown) {
+  const res = await fetch(`${ALVYS_API_BASE}/drivers/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ Page: 0, PageSize: 5 }),
+    body: JSON.stringify(body),
   });
   const text = await res.text();
   let json: unknown = null;
   try { json = JSON.parse(text); } catch { /* leave null, raw text still reported */ }
-  return { controller, status: res.status, ok: res.ok, raw: json ?? text.slice(0, 500) };
+  return { label, status: res.status, ok: res.ok, raw: json ?? text.slice(0, 800) };
 }
 
 Deno.serve(async (req) => {
@@ -53,20 +52,15 @@ Deno.serve(async (req) => {
   try {
     const token = await getAlvysToken();
 
-    // Try a few plausible controller names since the exact one isn't documented.
-    // The "drivers"/"driver"/"employees" set targets a driver roster; the
-    // rest target the driver-activity-timeline concept confirmed to exist
-    // in Alvys's own web UI (Trip/Hometime/Other events, flagged when
-    // overlapping) — unconfirmed whether the *public* partner API exposes
-    // the same feed the UI uses internally.
-    const candidates = [
-      "drivers", "driver", "employees",
-      "driverEvents", "driver-events", "driverActivity", "driver-activity",
-      "activity", "events", "hometime", "homeTime",
-    ];
-    const results = await Promise.all(candidates.map((c) => tryEndpoint(token, c)));
+    // A few plausible shapes for "at least one search parameter" —
+    // trying the simplest first.
+    const attempts = await Promise.all([
+      tryBody(token, "IsActive:true + paging", { IsActive: true, Page: 0, PageSize: 10 }),
+      tryBody(token, "Status array + paging", { Status: ["Active"], Page: 0, PageSize: 10 }),
+      tryBody(token, "IsActive:true only", { IsActive: true }),
+    ]);
 
-    return new Response(JSON.stringify({ results }, null, 2), {
+    return new Response(JSON.stringify({ attempts }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
