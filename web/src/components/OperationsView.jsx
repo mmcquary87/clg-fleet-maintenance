@@ -4,6 +4,7 @@ import { Card, Badge, Eyebrow } from "../ds";
 import { MODULES, KPIS } from "../lib/opsKpis";
 import { useFleetMpg } from "../hooks/useFleetMpg";
 import { useAlvysTripsReport } from "../hooks/useAlvysTripsReport";
+import { thisMonthRange } from "../lib/dateRangePresets";
 import DateRangeFilter from "./DateRangeFilter";
 
 function formatLiveValue(kpi, value) {
@@ -124,7 +125,10 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, 
 }
 
 export default function OperationsView() {
-  const [range, setRange] = useState(null);
+  // Defaults to "This month" (not "All time") — Alvys's trips/search
+  // always needs a bounded date range, so an unbounded default would
+  // silently return nothing on first load instead of real numbers.
+  const [range, setRange] = useState(thisMonthRange());
   const { data: mpgData, loading: mpgLoading, error: mpgError } = useFleetMpg(range);
   const { data: tripsData, loading: tripsLoading, error: tripsError } = useAlvysTripsReport(range);
 
@@ -153,7 +157,7 @@ export default function OperationsView() {
       </div>
 
       <div style={{ marginBottom: 24 }}>
-        <DateRangeFilter onChange={setRange} />
+        <DateRangeFilter onChange={setRange} disableAllTime />
       </div>
 
       {MODULES.map((mod) => (

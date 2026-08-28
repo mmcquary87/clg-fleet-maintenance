@@ -11,7 +11,7 @@ function startOfWeek(d) {
   return diff;
 }
 
-const PRESETS = [
+const ALL_PRESETS = [
   { id: "all", label: "All time", range: () => null },
   { id: "today", label: "Today", range: () => { const t = new Date(); return { start: toISO(t), end: toISO(t) }; } },
   { id: "week", label: "This week", range: () => { const t = new Date(); return { start: toISO(startOfWeek(t)), end: toISO(t) }; } },
@@ -21,8 +21,13 @@ const PRESETS = [
   { id: "custom", label: "Custom", range: null },
 ];
 
-export default function DateRangeFilter({ onChange }) {
-  const [active, setActive] = useState("all");
+// disableAllTime: for date filters backed by a live external API that has
+// no "give me everything" mode (e.g. Alvys trips/search always needs a
+// bounded PickupDateRange/DeliveryDateRange) — "All time" there wouldn't
+// just be slow, it silently returns nothing, which reads as broken.
+export default function DateRangeFilter({ onChange, disableAllTime = false }) {
+  const PRESETS = disableAllTime ? ALL_PRESETS.filter((p) => p.id !== "all") : ALL_PRESETS;
+  const [active, setActive] = useState(disableAllTime ? "month" : "all");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
