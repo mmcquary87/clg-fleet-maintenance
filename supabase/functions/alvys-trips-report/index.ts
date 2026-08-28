@@ -263,6 +263,11 @@ Deno.serve(async (req) => {
       detentionEvents,
       freeTimeHoursAssumed: FREE_TIME_HOURS,
       periodWeeks: Math.round(weeks * 100) / 100,
+      // Diagnostic for KPI 17 feasibility: does Alvys expose a driver NAME
+      // anywhere on the trip, or only the opaque Driver1.Id we already use?
+      // If a name field exists here, our roster's free-text driver_name
+      // could potentially be matched against it. Remove once answered.
+      sampleDriver1: trips.find((t: any) => t.Driver1)?.Driver1 ?? null,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error
