@@ -1,14 +1,18 @@
-// Fleet Maintenance System — one-off probe: what does a real Alvys driver
-// record look like?
+// Fleet Maintenance System — one-off probe, round 3: find the endpoint
+// behind Alvys's own "driver Activity" timeline (Trip/Hometime/Other
+// events, flagged when overlapping — seen in CLG's own Alvys dashboard).
 //
-// Round 1 confirmed "drivers/search" is a real endpoint (400, not 404) and
-// its validation error named the driver's searchable fields: Name, Status,
-// IsActive, FleetName, EmployeeId — meaning Alvys's public API does carry
-// a real driver name, not just the opaque Driver1.Id trips/search gives
-// us. This round passes IsActive:true (a guess at the required shape,
-// same empirical pattern as everything else in this Alvys integration)
-// to actually pull driver records and see the full field set. Delete this
-// function once answered.
+// Round 1: drivers/search is real (400, named its fields). Round 2:
+// pulled real driver records (name, license/medical dates, fleet) via
+// IsActive:true — that's confirmed and already synced into our own
+// `drivers` table. This round is specifically hunting for the
+// Hometime/Activity feed so planned home-time can be PULLED from Alvys
+// instead of re-entered by hand — trying more controller names AND (since
+// drivers/search needed a specific param shape) a couple of guessed
+// bodies keyed by a real driver Id, in case a flat empty-body /search
+// isn't how this resource works.
+//
+// Delete this function once answered.
 //
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets.
 
@@ -34,16 +38,28 @@ async function getAlvysToken(): Promise<string> {
   return (await res.json()).access_token;
 }
 
-async function tryBody(token: string, label: string, body: unknown) {
+async function getSampleDriverId(token: string): Promise<string | null> {
   const res = await fetch(`${ALVYS_API_BASE}/drivers/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ IsActive: true, Page: 0, PageSize: 1 }),
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json.Items?.[0]?.Id ?? null;
+}
+
+async function tryEndpoint(token: string, controller: string, method: "GET" | "POST", body?: unknown) {
+  const url = `${ALVYS_API_BASE}/${controller}`;
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
   });
   const text = await res.text();
   let json: unknown = null;
-  try { json = JSON.parse(text); } catch { /* leave null, raw text still reported */ }
-  return { label, status: res.status, ok: res.ok, raw: json ?? text.slice(0, 800) };
+  try { json = JSON.parse(text); } catch { /* leave null */ }
+  return { url, method, status: res.status, ok: res.ok, raw: json ?? text.slice(0, 500) };
 }
 
 Deno.serve(async (req) => {
@@ -51,16 +67,27 @@ Deno.serve(async (req) => {
 
   try {
     const token = await getAlvysToken();
+    const driverId = await getSampleDriverId(token);
 
-    // A few plausible shapes for "at least one search parameter" —
-    // trying the simplest first.
     const attempts = await Promise.all([
-      tryBody(token, "IsActive:true + paging", { IsActive: true, Page: 0, PageSize: 10 }),
-      tryBody(token, "Status array + paging", { Status: ["Active"], Page: 0, PageSize: 10 }),
-      tryBody(token, "IsActive:true only", { IsActive: true }),
+      // Flat /search controllers, empty-ish body (same shape as round 1)
+      tryEndpoint(token, "driverSchedule/search", "POST", { Page: 0, PageSize: 5 }),
+      tryEndpoint(token, "schedule/search", "POST", { Page: 0, PageSize: 5 }),
+      tryEndpoint(token, "timeline/search", "POST", { Page: 0, PageSize: 5 }),
+      tryEndpoint(token, "hometimeEvents/search", "POST", { Page: 0, PageSize: 5 }),
+      tryEndpoint(token, "otherEvents/search", "POST", { Page: 0, PageSize: 5 }),
+      tryEndpoint(token, "driverTimeline/search", "POST", { Page: 0, PageSize: 5 }),
+      // Same controllers but keyed by a real driver Id, in case they
+      // require it rather than being paginated collections
+      driverId ? tryEndpoint(token, "driverEvents/search", "POST", { DriverId: driverId, Page: 0, PageSize: 5 }) : null,
+      driverId ? tryEndpoint(token, "activity/search", "POST", { DriverId: driverId, Page: 0, PageSize: 5 }) : null,
+      // Nested-resource guesses (REST-style, not the flat /search convention)
+      driverId ? tryEndpoint(token, `drivers/${driverId}`, "GET") : null,
+      driverId ? tryEndpoint(token, `drivers/${driverId}/activity`, "GET") : null,
+      driverId ? tryEndpoint(token, `drivers/${driverId}/events`, "GET") : null,
     ]);
 
-    return new Response(JSON.stringify({ attempts }, null, 2), {
+    return new Response(JSON.stringify({ driverIdUsed: driverId, attempts: attempts.filter(Boolean) }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
