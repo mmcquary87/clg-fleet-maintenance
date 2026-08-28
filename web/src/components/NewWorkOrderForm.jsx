@@ -3,16 +3,48 @@ import { X, Loader2, Plus, Trash2, Sparkles } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert, Eyebrow } from "../ds";
 import { supabase } from "../lib/supabaseClient";
 import { CATEGORIES } from "../lib/categories";
+import { useDriverNames } from "../hooks/useDriverNames";
 import FileDropzone from "./shared/FileDropzone";
 
 const STATUSES = ["Open", "In Progress", "Closed"];
+const NEW_DRIVER = "__new__";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
 function emptyLineItem() {
-  return { id: uid(), category: CATEGORIES[0], description: "", cost: "", isChargeback: false, chargebackDriver: "", inspectionType: "" };
+  return { id: uid(), category: CATEGORIES[0], description: "", cost: "", isChargeback: false, chargebackDriver: "", chargebackDriverId: null, inspectionType: "" };
+}
+
+function ChargebackDriverPicker({ name, onChange }) {
+  const { options } = useDriverNames();
+  const [customMode, setCustomMode] = useState(!!name && options.length > 0 && !options.some((o) => o.name === name));
+
+  const selectValue = customMode ? NEW_DRIVER : name || "";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 260 }}>
+      <Select
+        required={!customMode} value={selectValue}
+        onChange={(e) => {
+          if (e.target.value === NEW_DRIVER) {
+            setCustomMode(true);
+            onChange("", null);
+          } else {
+            setCustomMode(false);
+            const match = options.find((o) => o.name === e.target.value);
+            onChange(e.target.value, match?.id ?? null);
+          }
+        }}
+        placeholder="Choose a driver"
+        options={[...options.map((o) => o.name), { value: NEW_DRIVER, label: "+ Add a new driver" }]}
+      />
+      {customMode && (
+        <Input required value={name} onChange={(e) => onChange(e.target.value, null)} placeholder="Full name or driver ID" />
+      )}
+    </div>
+  );
 }
 
 async function findOrCreateUnit(number) {
@@ -136,6 +168,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
         receipt_path: receiptPath,
         is_chargeback: li.isChargeback,
         chargeback_driver_name: li.isChargeback ? (li.chargebackDriver.trim() || null) : null,
+        chargeback_driver_id: li.isChargeback ? li.chargebackDriverId : null,
       }));
 
       const { error: insertErr } = await supabase.from("work_orders").insert(rows);
@@ -266,9 +299,11 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
                     Charge back to driver
                   </label>
                   {li.isChargeback && (
-                    <Input
-                      required value={li.chargebackDriver} onChange={setLineItem(li.id, "chargebackDriver")}
-                      placeholder="Driver name" style={{ maxWidth: 220 }}
+                    <ChargebackDriverPicker
+                      name={li.chargebackDriver}
+                      onChange={(name, driverId) => {
+                        setLineItems(lineItems.map((x) => (x.id === li.id ? { ...x, chargebackDriver: name, chargebackDriverId: driverId } : x)));
+                      }}
                     />
                   )}
                   {li.category === "DOT Inspection" && (
