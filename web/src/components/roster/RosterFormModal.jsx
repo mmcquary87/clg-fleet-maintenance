@@ -13,10 +13,10 @@ function emptyForm() {
 
 export default function RosterFormModal({ row, onClose, onSave, onDelete }) {
   const [form, setForm] = useState(row ? {
-    driver_name: row.driver_name, eligibility: row.eligibility, unavailable_reason: row.unavailable_reason || "",
+    driver_name: row.driver_name, driver_id: row.driver_id || null, eligibility: row.eligibility, unavailable_reason: row.unavailable_reason || "",
     start_date: row.start_date || "", end_date: row.end_date || "", approval: row.approval || "",
     effective_date: row.effective_date || "",
-  } : emptyForm());
+  } : { ...emptyForm(), driver_id: null });
   const [changedBy, setChangedBy] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -31,6 +31,7 @@ export default function RosterFormModal({ row, onClose, onSave, onDelete }) {
     try {
       const patch = {
         driver_name: form.driver_name.trim(),
+        driver_id: form.driver_id,
         eligibility: form.eligibility,
         unavailable_reason: form.unavailable_reason || null,
         start_date: form.start_date || null,
@@ -71,7 +72,10 @@ export default function RosterFormModal({ row, onClose, onSave, onDelete }) {
 
         <form onSubmit={onSubmit}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-            <DriverPicker value={form.driver_name} onChange={(v) => setForm({ ...form, driver_name: v })} />
+            <DriverPicker
+              value={form.driver_name} driverId={form.driver_id}
+              onChange={({ name, driverId }) => setForm({ ...form, driver_name: name, driver_id: driverId })}
+            />
             <Field label="Eligibility" required>
               <Select value={form.eligibility} onChange={set("eligibility")} options={ELIGIBILITY_OPTIONS} />
             </Field>

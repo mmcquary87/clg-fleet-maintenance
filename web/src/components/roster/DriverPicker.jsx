@@ -5,15 +5,18 @@ import { useDriverNames } from "../../hooks/useDriverNames";
 const NEW_DRIVER = "__new__";
 
 /** Driver name field shared by the Roster and Home Time forms — a dropdown
- * of every driver name already seen in the app, with a "+ Add a new
- * driver" escape hatch since there's no canonical driver list yet. */
-export default function DriverPicker({ value, onChange }) {
-  const { names } = useDriverNames();
+ * of every driver name already seen in the app (real synced Alvys drivers
+ * plus anything entered by hand), with a "+ Add a new driver" escape
+ * hatch since not every driver is in Alvys yet. Reports both the name and
+ * the matched driver's real id (null if unmatched/custom) so callers can
+ * link records to a real driver instead of just a name string. */
+export default function DriverPicker({ value, driverId, onChange }) {
+  const { options } = useDriverNames();
   const [customMode, setCustomMode] = useState(false);
 
   useEffect(() => {
-    if (value && names.length > 0 && !names.includes(value)) setCustomMode(true);
-  }, [names, value]);
+    if (value && options.length > 0 && !options.some((o) => o.name === value)) setCustomMode(true);
+  }, [options, value]);
 
   const selectValue = customMode ? NEW_DRIVER : value || "";
 
@@ -25,17 +28,18 @@ export default function DriverPicker({ value, onChange }) {
         onChange={(e) => {
           if (e.target.value === NEW_DRIVER) {
             setCustomMode(true);
-            onChange("");
+            onChange({ name: "", driverId: null });
           } else {
             setCustomMode(false);
-            onChange(e.target.value);
+            const match = options.find((o) => o.name === e.target.value);
+            onChange({ name: e.target.value, driverId: match?.id ?? null });
           }
         }}
         placeholder="Choose a driver"
-        options={[...names, { value: NEW_DRIVER, label: "+ Add a new driver" }]}
+        options={[...options.map((o) => o.name), { value: NEW_DRIVER, label: "+ Add a new driver" }]}
       />
       {customMode && (
-        <Input required value={value} onChange={(e) => onChange(e.target.value)} placeholder="Full name or driver ID" style={{ marginTop: 8 }} />
+        <Input required value={value} onChange={(e) => onChange({ name: e.target.value, driverId: null })} placeholder="Full name or driver ID" style={{ marginTop: 8 }} />
       )}
     </Field>
   );

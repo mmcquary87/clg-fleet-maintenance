@@ -13,11 +13,11 @@ function emptyForm() {
 
 export default function HomeTimeFormModal({ row, onClose, onSave, onDelete }) {
   const [form, setForm] = useState(row ? {
-    driver_name: row.driver_name, cadence: row.cadence, days_of_week: row.days_of_week || [],
+    driver_name: row.driver_name, driver_id: row.driver_id || null, cadence: row.cadence, days_of_week: row.days_of_week || [],
     anchor_date: row.anchor_date || "", month_occurrence: row.month_occurrence ?? 1,
     effective_start_date: row.effective_start_date || "", effective_end_date: row.effective_end_date || "",
     approval: row.approval || "", notes: row.notes || "",
-  } : emptyForm());
+  } : { ...emptyForm(), driver_id: null });
   const [changedBy, setChangedBy] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +40,7 @@ export default function HomeTimeFormModal({ row, onClose, onSave, onDelete }) {
     try {
       const patch = {
         driver_name: form.driver_name.trim(),
+        driver_id: form.driver_id,
         cadence: form.cadence,
         days_of_week: form.days_of_week,
         anchor_date: form.cadence === "biweekly" ? form.anchor_date : null,
@@ -82,7 +83,10 @@ export default function HomeTimeFormModal({ row, onClose, onSave, onDelete }) {
 
         <form onSubmit={onSubmit}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-            <DriverPicker value={form.driver_name} onChange={(v) => setForm({ ...form, driver_name: v })} />
+            <DriverPicker
+              value={form.driver_name} driverId={form.driver_id}
+              onChange={({ name, driverId }) => setForm({ ...form, driver_name: name, driver_id: driverId })}
+            />
 
             <Field label="Cadence" required>
               <Select value={form.cadence} onChange={set("cadence")} options={CADENCE_OPTIONS} />
