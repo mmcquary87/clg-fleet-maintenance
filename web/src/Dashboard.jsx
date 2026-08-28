@@ -11,6 +11,7 @@ import IntakeWizard from "./components/intake/IntakeWizard";
 import OperationsView from "./components/OperationsView";
 import SettingsView from "./components/settings/SettingsView";
 import RosterView from "./components/roster/RosterView";
+import HomeTimeView from "./components/roster/HomeTimeView";
 import "./ds/tokens.css";
 
 // Grouped so related views sit together instead of one flat row — each
@@ -19,7 +20,7 @@ const NAV_GROUPS = [
   { id: "overview", items: [{ id: "board", label: "Board" }, { id: "operations", label: "Operations" }] },
   { id: "work", items: [{ id: "workorders", label: "Work Orders" }] },
   { id: "fleet", items: [{ id: "spend", label: "Spend" }, { id: "units", label: "Units" }, { id: "vendors", label: "Vendors" }] },
-  { id: "driver", items: [{ id: "roster", label: "Roster" }] },
+  { id: "driver", items: [{ id: "roster", label: "Roster" }, { id: "hometime", label: "Home Time" }] },
 ];
 
 function NavDivider() {
@@ -123,6 +124,7 @@ export default function Dashboard({ session }) {
       {tab === "units" && <UnitsView />}
       {tab === "vendors" && <VendorsView />}
       {tab === "roster" && <RosterView session={session} />}
+      {tab === "hometime" && <HomeTimeView session={session} />}
       {tab === "settings" && isAdmin && <SettingsView />}
     </div>
   );

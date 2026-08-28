@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X, Loader2, Trash2 } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { ELIGIBILITY_OPTIONS, UNAVAILABLE_REASONS } from "../../lib/rosterStatus";
+import DriverPicker from "./DriverPicker";
 
 function emptyForm() {
   return {
@@ -70,9 +71,7 @@ export default function RosterFormModal({ row, onClose, onSave, onDelete }) {
 
         <form onSubmit={onSubmit}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-            <Field label="Driver" required style={{ gridColumn: "1 / -1" }}>
-              <Input required value={form.driver_name} onChange={set("driver_name")} placeholder="Full name or driver ID" />
-            </Field>
+            <DriverPicker value={form.driver_name} onChange={(v) => setForm({ ...form, driver_name: v })} />
             <Field label="Eligibility" required>
               <Select value={form.eligibility} onChange={set("eligibility")} options={ELIGIBILITY_OPTIONS} />
             </Field>
