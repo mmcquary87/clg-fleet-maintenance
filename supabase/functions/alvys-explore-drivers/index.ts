@@ -54,7 +54,16 @@ Deno.serve(async (req) => {
     const token = await getAlvysToken();
 
     // Try a few plausible controller names since the exact one isn't documented.
-    const candidates = ["drivers", "driver", "employees"];
+    // The "drivers"/"driver"/"employees" set targets a driver roster; the
+    // rest target the driver-activity-timeline concept confirmed to exist
+    // in Alvys's own web UI (Trip/Hometime/Other events, flagged when
+    // overlapping) — unconfirmed whether the *public* partner API exposes
+    // the same feed the UI uses internally.
+    const candidates = [
+      "drivers", "driver", "employees",
+      "driverEvents", "driver-events", "driverActivity", "driver-activity",
+      "activity", "events", "hometime", "homeTime",
+    ];
     const results = await Promise.all(candidates.map((c) => tryEndpoint(token, c)));
 
     return new Response(JSON.stringify({ results }, null, 2), {
