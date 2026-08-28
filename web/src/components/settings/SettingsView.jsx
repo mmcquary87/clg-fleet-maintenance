@@ -1,9 +1,73 @@
 import { useState } from "react";
 import { UserPlus, Loader2, CheckCircle2 } from "lucide-react";
-import { Card, Field, Input, Select, Button, Alert, Eyebrow } from "../../ds";
+import { Card, Field, Input, Select, Button, Alert, Eyebrow, Toggle, Badge } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
+import { useUsersAdmin } from "../../hooks/useUsersAdmin";
 
 const ROLES = ["dispatcher", "mechanic", "admin"];
+
+function UsersPanel() {
+  const { users, loading, error, setCanEditRoster } = useUsersAdmin();
+  const [toggleError, setToggleError] = useState(null);
+
+  const onToggle = async (userId, next) => {
+    setToggleError(null);
+    const err = await setCanEditRoster(userId, next);
+    if (err) setToggleError(err);
+  };
+
+  return (
+    <Card>
+      <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Users</h3>
+      <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
+        Roster rights controls who can add, edit, or remove records on the driver availability roster.
+      </p>
+
+      {error && <Alert tone="critical" title="Couldn't load users" style={{ marginBottom: 16 }}>{error}</Alert>}
+      {toggleError && <Alert tone="critical" title="Couldn't update permission" style={{ marginBottom: 16 }}>{toggleError}</Alert>}
+
+      {loading ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "24px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
+          <Loader2 size={16} className="spin" /> Loading users…
+        </div>
+      ) : users.length === 0 ? (
+        <div style={{ padding: "24px 0", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>No users yet.</div>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
+          <thead>
+            <tr>
+              {["Name", "Email", "Role", "Roster rights"].map((h) => (
+                <th key={h} style={{
+                  textAlign: h === "Roster rights" ? "right" : "left", padding: "8px 10px", fontFamily: "var(--clg-font-heading)",
+                  fontSize: 10.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+                  color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)",
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u, i) => (
+              <tr key={u.id} style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent" }}>
+                <td style={{ padding: "8px 10px", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                  {u.full_name || "—"}
+                </td>
+                <td style={{ padding: "8px 10px", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                  {u.email || "—"}
+                </td>
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                  <Badge tone={u.role === "admin" ? "brand" : "neutral"}>{u.role}</Badge>
+                </td>
+                <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                  <Toggle checked={u.can_edit_roster} onChange={(next) => onToggle(u.id, next)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  );
+}
 
 export default function SettingsView() {
   const [email, setEmail] = useState("");
@@ -35,7 +99,7 @@ export default function SettingsView() {
   };
 
   return (
-    <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 800, margin: "0 auto" }}>
       <div style={{ marginBottom: 20 }}>
         <Eyebrow tone="brand">Settings</Eyebrow>
         <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>Invite a user</h2>
@@ -75,6 +139,10 @@ export default function SettingsView() {
           </div>
         </form>
       </Card>
+
+      <div style={{ marginTop: 32 }}>
+        <UsersPanel />
+      </div>
     </div>
   );
 }

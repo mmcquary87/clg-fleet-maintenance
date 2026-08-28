@@ -14,7 +14,7 @@ export function useProfile(userId) {
     }
     let cancelled = false;
     setLoading(true);
-    supabase.from("profiles").select("id, full_name, role").eq("id", userId).single()
+    supabase.from("profiles").select("id, full_name, role, can_edit_roster").eq("id", userId).single()
       .then(({ data }) => {
         if (cancelled) return;
         setProfile(data ?? null);
@@ -23,5 +23,6 @@ export function useProfile(userId) {
     return () => { cancelled = true; };
   }, [userId]);
 
-  return { profile, loading, isAdmin: profile?.role === "admin" };
+  const isAdmin = profile?.role === "admin";
+  return { profile, loading, isAdmin, canEditRoster: isAdmin || !!profile?.can_edit_roster };
 }
