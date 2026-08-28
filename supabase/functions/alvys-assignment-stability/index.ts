@@ -65,12 +65,13 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { startDate, endDate } = await req.json();
+    const { startDate, endDate, checkpointHours } = await req.json();
     if (!startDate || !endDate) {
       return new Response(JSON.stringify({ error: "startDate and endDate (YYYY-MM-DD) are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const checkpointMs = (checkpointHours ?? 72) * 3600 * 1000;
     const rangeStartMs = new Date(startDate + "T00:00:00Z").getTime();
     const rangeEndMs = new Date(endDate + "T23:59:59Z").getTime();
 
@@ -111,16 +112,25 @@ Deno.serve(async (req) => {
 
     let eligible = 0;
     let stable = 0;
+    let loadsInRange = 0;
+    let loadsWithNoLeadTime = 0; // in range, but earliest snapshot isn't checkpointHours before pickup
+    let loadsWithNoDriverAtCheckpoint = 0; // had lead time, but no driver assigned yet at that point
+    const leadHoursSamples: number[] = [];
     const changedLoads: { loadNumber: string; checkpointDriver: string; finalDriver: string }[] = [];
 
     for (const [loadNumber, snaps] of byLoad) {
       const scheduledPickupMs = snaps.find((s) => s.scheduledPickupMs != null)?.scheduledPickupMs ?? null;
       if (scheduledPickupMs == null) continue;
       if (scheduledPickupMs < rangeStartMs || scheduledPickupMs > rangeEndMs) continue;
+      loadsInRange += 1;
 
-      const checkpointCutoff = scheduledPickupMs - 72 * 3600 * 1000;
+      const earliestSnapMs = snaps[0].snapshotMs;
+      leadHoursSamples.push((scheduledPickupMs - earliestSnapMs) / 3600000);
+
+      const checkpointCutoff = scheduledPickupMs - checkpointMs;
       const checkpointSnap = [...snaps].reverse().find((s) => s.snapshotMs <= checkpointCutoff);
-      if (!checkpointSnap || !checkpointSnap.tripDriverId) continue; // no eligible assignment at the 72h checkpoint
+      if (!checkpointSnap) { loadsWithNoLeadTime += 1; continue; } // no snapshot old enough to check
+      if (!checkpointSnap.tripDriverId) { loadsWithNoDriverAtCheckpoint += 1; continue; } // tracked early enough, but unassigned at that point
 
       const finalSnap = [...snaps].reverse().find((s) => s.snapshotMs <= scheduledPickupMs) ?? snaps[snaps.length - 1];
       const finalDriver = finalSnap.tripDriverId;
@@ -133,9 +143,20 @@ Deno.serve(async (req) => {
       }
     }
 
+    leadHoursSamples.sort((a, b) => a - b);
+    const medianLeadHours = leadHoursSamples.length
+      ? leadHoursSamples[Math.floor(leadHoursSamples.length / 2)]
+      : null;
+
     return new Response(JSON.stringify({
+      checkpointHours: checkpointMs / 3600000,
       totalSnapshotRows: rows.length,
       loadsTracked: byLoad.size,
+      loadsInRange,
+      loadsWithNoLeadTime,
+      loadsWithNoDriverAtCheckpoint,
+      medianLeadHoursFromFirstSnapshotToPickup: medianLeadHours != null ? Math.round(medianLeadHours * 10) / 10 : null,
+      maxLeadHoursObserved: leadHoursSamples.length ? Math.round(leadHoursSamples[leadHoursSamples.length - 1] * 10) / 10 : null,
       eligibleAssignments: eligible,
       stableAssignments: stable,
       stabilityPct: eligible > 0 ? Math.round((stable / eligible) * 1000) / 10 : null,
