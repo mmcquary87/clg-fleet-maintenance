@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-// There's no canonical drivers table yet, so this unions every driver name
-// already seen anywhere in the app — current unit assignments (Samsara),
-// existing roster/home-time entries, and chargebacks — rather than only
-// currently-assigned drivers, since the people most likely to need a
-// roster entry (on leave, ineligible) are often NOT currently assigned to
-// a unit. Grows more complete over time as more names get entered.
+// `drivers` (synced from Alvys) is the real driver directory when it's
+// populated — but also unions every driver name already seen anywhere
+// else in the app (unit assignments, existing roster/home-time entries,
+// chargebacks), so a name entered before the sync existed, or a driver
+// not yet in Alvys, doesn't disappear from the list.
 export function useDriverNames() {
   const [names, setNames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,7 +13,8 @@ export function useDriverNames() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [unitsRes, rosterRes, homeTimeRes, chargebackRes] = await Promise.all([
+      const [driversRes, unitsRes, rosterRes, homeTimeRes, chargebackRes] = await Promise.all([
+        supabase.from("drivers").select("name"),
         supabase.from("units").select("driver_name").not("driver_name", "is", null),
         supabase.from("driver_roster").select("driver_name"),
         supabase.from("planned_home_time").select("driver_name"),
@@ -22,6 +22,7 @@ export function useDriverNames() {
       ]);
       if (cancelled) return;
       const set = new Set();
+      (driversRes.data ?? []).forEach((r) => r.name && set.add(r.name.trim()));
       (unitsRes.data ?? []).forEach((r) => r.driver_name && set.add(r.driver_name.trim()));
       (rosterRes.data ?? []).forEach((r) => r.driver_name && set.add(r.driver_name.trim()));
       (homeTimeRes.data ?? []).forEach((r) => r.driver_name && set.add(r.driver_name.trim()));
