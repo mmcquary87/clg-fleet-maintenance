@@ -48,7 +48,10 @@ function Row({ row }) {
       >
         <td style={{ padding: "12px 8px" }}><SeverityTag tier={eta.severityTier} /></td>
         <td style={{ padding: "12px 8px", fontSize: 13.5, color: "var(--clg-navy)" }}>
-          <strong>{unit.number}</strong> <span style={{ color: "var(--clg-cool)" }}>· {driverName}</span>
+          <div><strong>{unit.number}</strong> <span style={{ color: "var(--clg-cool)" }}>· {driverName}</span></div>
+          {trip.load_number && (
+            <div style={{ fontSize: 11, color: "var(--clg-pewter)" }}>Load {trip.load_number}</div>
+          )}
         </td>
         <td style={{ padding: "12px 8px", textAlign: "right", fontWeight: 700, fontSize: 13.5, color: "var(--clg-ruby)" }}>
           {fmtHM(eta.hoursShort)}

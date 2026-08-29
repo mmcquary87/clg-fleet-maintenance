@@ -62,8 +62,13 @@ function Row({ row, variant, zebra }) {
         style={{ cursor: "pointer", background: bg, borderBottom: open ? "none" : "1px solid var(--clg-smoke)" }}
       >
         <td style={{ padding: "12px 8px", fontSize: 13.5 }}>
-          <strong style={{ color: "var(--clg-navy)" }}>{unit.number}</strong>{" "}
-          <span style={{ color: "var(--clg-cool)" }}>· {driverName}</span>
+          <div>
+            <strong style={{ color: "var(--clg-navy)" }}>{unit.number}</strong>{" "}
+            <span style={{ color: "var(--clg-cool)" }}>· {driverName}</span>
+          </div>
+          {trip.load_number && (
+            <div style={{ fontSize: 11, color: "var(--clg-pewter)" }}>Load {trip.load_number}</div>
+          )}
         </td>
         <td style={{ padding: "12px 8px", fontSize: 13, color: "var(--clg-granite)", maxWidth: 200 }}>
           {unit.current_location || <span style={{ color: "var(--clg-mercury)" }}>No GPS lock</span>}
