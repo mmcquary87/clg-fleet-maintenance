@@ -3,7 +3,7 @@
 // Pulls from Samsara and updates our tables:
 //   1. Vehicle roster -> matches units by VIN, sets units.samsara_vehicle_id
 //   2. Fault codes (last 7 days) -> fault_events (OBD-II + J1939)
-//   3. Fuel/odometer/GPS (last 24h, latest reading per vehicle) -> units
+//   3. Fuel/odometer/GPS, each vehicle's latest known reading -> units
 //      (current_lat/current_lng feed the Tracking page's ETA math)
 //   4. DVIR defects (last 30 days) -> dvir_defects
 //
@@ -54,6 +54,20 @@ async function fetchAllPaginated(path: string, params: Record<string, string>) {
 
 function rfc3339(msAgo: number) {
   return new Date(Date.now() - msAgo).toISOString();
+}
+
+// /fleet/vehicles/stats/history returned nothing for a vehicle whenever it
+// hadn't reported a new reading inside the queried window — but the sync
+// still stamped samsara_synced_at as "just synced" regardless, so a truck
+// that had gone quiet for longer than the window silently kept an old
+// position under a fresh-looking timestamp (confirmed: unit 3313 held a
+// current_lat/lng hundreds of miles from Samsara's own live map, feeding a
+// falsely inflated distance into the Tracking page's ETA math). Handles
+// both possible shapes defensively (a single latest-reading object, per
+// this endpoint's actual behavior, or an array, matching /stats/history)
+// in case that assumption is ever wrong for a given account/fleet.
+function latestOf(value: any) {
+  return Array.isArray(value) ? value.at(-1) : (value ?? null);
 }
 
 Deno.serve(async (req) => {
@@ -152,11 +166,13 @@ Deno.serve(async (req) => {
       faultsUpserted = faultRows.length;
     }
 
-    // ---- 3. Fuel / odometer / GPS, last 24h, latest reading per vehicle ----
-    const statVehicles = await fetchAllPaginated("/fleet/vehicles/stats/history", {
+    // ---- 3. Fuel / odometer / GPS, each vehicle's latest known reading ----
+    // /fleet/vehicles/stats (not /stats/history) — the current-snapshot
+    // endpoint, which returns each vehicle's latest known value regardless
+    // of when it last reported, instead of only what fell inside a fixed
+    // time window (see latestOf()'s comment for why that mattered).
+    const statVehicles = await fetchAllPaginated("/fleet/vehicles/stats", {
       types: "fuelPercents,obdOdometerMeters,gps",
-      startTime: rfc3339(24 * 3600 * 1000),
-      endTime: rfc3339(0),
     });
 
     const syncedAt = new Date().toISOString();
@@ -165,11 +181,11 @@ Deno.serve(async (req) => {
       const unitId = vehicleIdToUnitId.get(v.id);
       if (!unitId) continue;
       const fields: Record<string, unknown> = { samsara_synced_at: syncedAt };
-      const lastFuel = v.fuelPercents?.at(-1);
+      const lastFuel = latestOf(v.fuelPercents);
       if (lastFuel) fields.last_fuel_percent = lastFuel.value;
-      const lastOdo = v.obdOdometerMeters?.at(-1);
+      const lastOdo = latestOf(v.obdOdometerMeters);
       if (lastOdo) fields.odometer = Math.round(lastOdo.value * 0.000621371); // meters -> miles
-      const lastGps = v.gps?.at(-1);
+      const lastGps = latestOf(v.gps);
       if (lastGps?.address?.name) fields.current_location = lastGps.address.name;
       if (typeof lastGps?.latitude === "number") fields.current_lat = lastGps.latitude;
       if (typeof lastGps?.longitude === "number") fields.current_lng = lastGps.longitude;
