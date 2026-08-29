@@ -189,10 +189,18 @@ export function useTracking() {
   const attention = rows
     .filter((r) => r.eta.severity === "attention")
     .sort((a, b) => (b.eta.hoursShort ?? 0) - (a.eta.hoursShort ?? 0));
+  // Tightest cushion first — this is a risk radar, not a dock schedule, so
+  // it should read as a continuation of "Needs attention"'s worst-first
+  // order rather than switching to arrival time. A load with no deadline on
+  // file has no buffer to rank by, so it sorts to the end.
   const onTrack = rows
     .filter((r) => r.eta.severity === "ok")
-    .sort((a, b) => (a.eta.projectedArrival?.getTime() ?? Infinity) - (b.eta.projectedArrival?.getTime() ?? Infinity));
-  const noData = rows.filter((r) => r.eta.severity === "no_data");
+    .sort((a, b) => (a.eta.bufferHours ?? Infinity) - (b.eta.bufferHours ?? Infinity));
+  // Nearest known deadline first — a missing-data load with an appointment
+  // coming up is more urgent to chase down than one with nothing on file.
+  const noData = rows
+    .filter((r) => r.eta.severity === "no_data")
+    .sort((a, b) => (a.eta.deadline ? new Date(a.eta.deadline).getTime() : Infinity) - (b.eta.deadline ? new Date(b.eta.deadline).getTime() : Infinity));
 
   return {
     groups: { attention, onTrack, noData },
