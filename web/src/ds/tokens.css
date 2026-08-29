@@ -1,5 +1,5 @@
 /* CLG Design System — ported from design_handoff/.../_ds/.../tokens/*.css
-   Source of truth: design_handoff/design_handoff_maintenance_platform/README.md */
+   Source of truth: design_handoff/CLG-OS-Design-Package/README.md */
 
 @import url("https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,700&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,700&display=swap");
 
@@ -95,6 +95,13 @@
   --clg-shadow-lg: 0 12px 32px rgb(var(--clg-navy-rgb) / .16);
   --clg-shadow-inset: inset 0 -2px 0 rgb(var(--clg-navy-rgb) / .10);
   --clg-focus-ring: 0 0 0 3px rgb(var(--clg-royal-rgb) / .35);
+
+  /* Elevation system — cards separated by shadow and gap, not hairlines.
+     Hairlines survive only *inside* a card, as row/divider borders. */
+  --clg-shadow-resting: 0 1px 2px rgb(var(--clg-navy-rgb) / .06);
+  --clg-shadow-raised: 0 1px 2px rgb(var(--clg-navy-rgb) / .06), 0 6px 20px rgb(var(--clg-navy-rgb) / .07);
+  --clg-shadow-focus: 0 1px 2px rgb(var(--clg-navy-rgb) / .07), 0 8px 26px rgb(var(--clg-navy-rgb) / .09);
+  --clg-shadow-appbar: 0 1px 0 rgb(var(--clg-navy-rgb) / .08);
 
   /* Motion */
   --clg-dur-fast: 120ms;

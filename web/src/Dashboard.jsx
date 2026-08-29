@@ -36,7 +36,7 @@ export default function Dashboard({ session }) {
     <div className="app" style={{ minHeight: "100vh", background: "var(--clg-surface-subtle)" }}>
       <div style={{
         background: "var(--clg-navy)", height: 60, display: "flex", alignItems: "center",
-        padding: "0 24px", gap: 24,
+        padding: "0 24px", gap: 24, boxShadow: "var(--clg-shadow-appbar)", position: "relative", zIndex: 1,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <img src="/brand/mark-star-white.svg" alt="" style={{ width: 24, height: 24 }} />

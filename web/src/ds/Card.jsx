@@ -1,19 +1,32 @@
 import { useState } from "react";
 
 const TONES = {
-  default: { background: "var(--clg-surface-card)", border: "1px solid var(--clg-border-subtle)", color: "var(--clg-text-body)" },
+  default: { background: "var(--clg-surface-card)", border: "none", color: "var(--clg-text-body)" },
   subtle: { background: "var(--clg-surface-subtle)", border: "1px solid transparent", color: "var(--clg-text-body)" },
   brand: { background: "var(--clg-surface-brand)", border: "1px solid transparent", color: "var(--clg-text-inverse)" },
   deep: { background: "var(--clg-surface-brand-deep)", border: "1px solid transparent", color: "var(--clg-text-inverse)" },
   gradient: { background: "var(--clg-gradient-brand)", border: "1px solid transparent", color: "var(--clg-text-inverse)" },
 };
 
-/** Content card: white on a hairline, squared corners, optional scarlet lead rule. */
+// Elevation, not hairlines, separates cards on a light surface — a hairline
+// survives only *inside* a card, as a row/section divider. "focus" is the
+// one-per-screen decision card (pair with rule to add its 3px Scarlet top rule).
+const ELEVATION_SHADOW = {
+  none: "none",
+  resting: "var(--clg-shadow-resting)",
+  raised: "var(--clg-shadow-raised)",
+  focus: "var(--clg-shadow-focus)",
+};
+
+/** Content card: elevated on a light surface, squared corners, optional scarlet lead rule. */
 export default function Card({
-  rule = false, tone = "default", padding = 24, interactive = false, children, style, ...rest
+  rule = false, tone = "default", padding = 24, interactive = false,
+  elevation = tone === "default" ? "resting" : "none",
+  children, style, ...rest
 }) {
   const [hover, setHover] = useState(false);
   const t = TONES[tone] || TONES.default;
+  const activeElevation = interactive && hover ? "raised" : elevation;
   return (
     <div
       onMouseEnter={() => setHover(true)}
@@ -23,7 +36,7 @@ export default function Card({
         borderRadius: "var(--clg-radius-md)",
         padding,
         boxSizing: "border-box",
-        boxShadow: interactive && hover ? "var(--clg-shadow-md)" : "none",
+        boxShadow: ELEVATION_SHADOW[activeElevation] ?? "none",
         transition: "box-shadow var(--clg-dur-base) var(--clg-ease-out)",
         cursor: interactive ? "pointer" : undefined,
         ...style,
