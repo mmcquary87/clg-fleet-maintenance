@@ -121,17 +121,27 @@ Deno.serve(async (req) => {
     if (driversErr) throw driversErr;
     const knownDriverIds = new Set(drivers.map((d: any) => d.id));
 
-    const rows: any[] = [];
+    // A truck can carry more than one active trip record at once — e.g. a
+    // currently-moving "In Transit" leg plus an already-queued "Dispatched"
+    // one for its next load. unit_current_trip.unit_id is unique, and an
+    // upsert can't touch the same row twice in one statement, so pick the
+    // single most relevant trip per unit rather than erroring: "In Transit"
+    // (actually moving right now) beats "Dispatched" (not yet picked up).
+    const STATUS_PRIORITY: Record<string, number> = { "In Transit": 2, "Dispatched": 1 };
+    const rowByUnitId = new Map<string, any>();
     let skippedNoTruckMatch = 0;
     for (const t of trips) {
       const truckAssetId = t.Truck?.Id;
       const unitId = truckAssetId ? unitIdByAssetId.get(truckAssetId) : undefined;
       if (!unitId) { skippedNoTruckMatch += 1; continue; }
 
+      const existing = rowByUnitId.get(unitId);
+      if (existing && (STATUS_PRIORITY[existing.status] ?? 0) >= (STATUS_PRIORITY[t.Status] ?? 0)) continue;
+
       const delivery = lastDeliveryStop(t.Stops);
       const driverId = t.Driver1?.Id && knownDriverIds.has(t.Driver1.Id) ? t.Driver1.Id : null;
 
-      rows.push({
+      rowByUnitId.set(unitId, {
         unit_id: unitId,
         alvys_trip_id: t.Id,
         driver_id: driverId,
@@ -146,6 +156,7 @@ Deno.serve(async (req) => {
         synced_at: new Date().toISOString(),
       });
     }
+    const rows = [...rowByUnitId.values()];
 
     // Full snapshot: drop any unit's row that isn't in this run's active
     // set (its trip delivered/cancelled since the last sync), then upsert

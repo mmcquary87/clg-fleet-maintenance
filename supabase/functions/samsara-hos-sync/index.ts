@@ -80,23 +80,44 @@ Deno.serve(async (req) => {
     if (unitsErr) throw unitsErr;
     const unitIdByVehicleId = new Map(units.map((u: any) => [u.samsara_vehicle_id, u.id]));
 
-    const rows: any[] = [];
+    // A team-driven truck has two drivers both reporting the same
+    // currentVehicle.id — unit_hos_status.unit_id is unique, and an upsert
+    // can't touch the same row twice in one statement, so keep the one
+    // driver whose clock actually governs whether the truck can keep
+    // moving right now: whichever is "driving" wins; if neither is (both
+    // resting/off duty), keep the more conservative (lower) drive-time
+    // remaining rather than an arbitrary one.
+    const rowByUnitId = new Map<string, any>();
     let skippedNoVehicle = 0;
     for (const d of clocks) {
       const vehicleId = d.currentVehicle?.id;
       const unitId = vehicleId ? unitIdByVehicleId.get(vehicleId) : undefined;
       if (!unitId) { skippedNoVehicle += 1; continue; }
 
-      rows.push({
+      const driveRemaining = msToMinutes(d.clocks?.drive?.driveRemainingDurationMs);
+      const isDriving = d.currentDutyStatus?.hosStatusType === "driving";
+      const existing = rowByUnitId.get(unitId);
+      if (existing) {
+        const existingIsDriving = existing.duty_status === "driving";
+        const keepExisting = existingIsDriving && !isDriving
+          ? true
+          : !existingIsDriving && isDriving
+            ? false
+            : (existing.drive_remaining_minutes ?? Infinity) <= (driveRemaining ?? Infinity);
+        if (keepExisting) continue;
+      }
+
+      rowByUnitId.set(unitId, {
         unit_id: unitId,
         driver_id: null, // see header comment — Samsara/Alvys driver ids don't share an id space
         duty_status: d.currentDutyStatus?.hosStatusType ?? null,
-        drive_remaining_minutes: msToMinutes(d.clocks?.drive?.driveRemainingDurationMs),
+        drive_remaining_minutes: driveRemaining,
         shift_remaining_minutes: msToMinutes(d.clocks?.shift?.shiftRemainingDurationMs),
         cycle_remaining_minutes: msToMinutes(d.clocks?.cycle?.cycleRemainingDurationMs),
         synced_at: new Date().toISOString(),
       });
     }
+    const rows = [...rowByUnitId.values()];
 
     const activeUnitIds = rows.map((r) => r.unit_id);
     if (activeUnitIds.length > 0) {
