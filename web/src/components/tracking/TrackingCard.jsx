@@ -8,7 +8,7 @@ function fmtFull(date) {
   return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function Stat({ label, value, accent }) {
+function Stat({ label, value, accent, note }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{
@@ -23,6 +23,7 @@ function Stat({ label, value, accent }) {
       }}>
         {value}
       </div>
+      {note && <div style={{ fontSize: 10.5, color: "var(--clg-cool)", fontStyle: "italic" }}>{note}</div>}
     </div>
   );
 }
@@ -50,11 +51,13 @@ export default function TrackingCard({ row }) {
         <Stat
           label="Projected ETA"
           value={eta.etaAt ? fmtFull(eta.etaAt) : "—"}
-          accent={eta.severity === "attention"}
+          accent={eta.lateRisk === true}
+          note={eta.hosMarginMinutes != null && eta.hosMarginMinutes < 0 ? "assumes no required rest" : null}
         />
         <Stat
           label={eta.deadline ? appointmentLabel : "Appointment"}
           value={eta.deadline ? fmtFull(new Date(eta.deadline)) : "Not on file"}
+          accent={eta.lateRisk === true}
         />
       </div>
 
