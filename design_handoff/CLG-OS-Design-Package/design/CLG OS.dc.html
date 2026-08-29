@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/colors.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/typography.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/surface.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/motion.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/semantic.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/tokens/base.css">
+<link rel="stylesheet" href="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/styles.css">
+<script src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--clg-smoke);font-family:var(--clg-font-body)}
+a{color:var(--clg-ruby);text-decoration:none}
+a:hover{color:var(--clg-scarlet)}
+</style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><rect width="400" height="400" fill="#223B62"/><path d="M200 108l22 62h66l-53 40 20 64-55-40-55 40 20-64-53-40h66z" fill="#EB2127"/><text x="200" y="330" text-anchor="middle" font-family="Montserrat,sans-serif" font-weight="700" font-size="46" letter-spacing="6" fill="#ffffff">CLG</text></svg></template>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;font-family:var(--clg-font-body);font-size:13.5px;color:var(--clg-granite);background:var(--clg-smoke)">
+
+<div style="background:#fff;padding:0 26px;display:flex;align-items:center;gap:0;height:64px;flex:none;box-shadow:0 1px 0 rgba(34,59,98,.08);position:sticky;top:0;z-index:20">
+<div style="display:flex;align-items:center;gap:11px;padding-right:24px;cursor:pointer" onClick="{{ goBoard }}">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star.svg" alt="" style="width:26px;height:26px">
+<div><div style="font-family:var(--clg-font-heading);font-weight:700;font-size:14px;color:var(--clg-navy);letter-spacing:.04em;line-height:1.1">CLG OS</div><div style="font-size:9.5px;letter-spacing:.13em;color:var(--clg-cool);margin-top:1px">FLEET &amp; OPERATIONS</div></div>
+</div>
+<div style="display:flex;align-items:center;gap:22px;font-size:13.5px">
+<span style="{{ navBoard }}" onClick="{{ goBoard }}">Board</span>
+<span style="{{ navTracking }}" onClick="{{ goTracking }}">Tracking</span>
+<span style="{{ navOperations }}" onClick="{{ goOperations }}">Operations</span>
+</div>
+<div style="width:1px;height:20px;background:var(--clg-reflection);margin:0 20px"></div>
+<div style="display:flex;align-items:center;gap:22px;font-size:13.5px">
+<span style="{{ navWorkOrders }}" onClick="{{ goWorkOrders }}">Work orders</span>
+<span style="{{ navSpend }}" onClick="{{ goSpend }}">Spend</span>
+<span style="{{ navUnits }}" onClick="{{ goUnits }}">Units</span>
+<span style="{{ navVendors }}" onClick="{{ goVendors }}">Vendors</span>
+</div>
+<div style="width:1px;height:20px;background:var(--clg-reflection);margin:0 20px"></div>
+<div style="display:flex;align-items:center;gap:22px;font-size:13.5px">
+<span style="{{ navRoster }}" onClick="{{ goRoster }}">Roster</span>
+<span style="{{ navHomeTime }}" onClick="{{ goHomeTime }}">Home time</span>
+</div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:18px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="secondary" size="sm" hint-size="176px,34px"><span>New work order</span></x-import>
+<span style="font-size:12.5px;color:var(--clg-cool)">mmcquary@clgdelivers.com</span>
+<span style="width:30px;height:30px;border-radius:4px;background:var(--clg-reflection);display:grid;place-items:center;color:var(--clg-navy);font-size:11.5px;font-weight:600">MM</span>
+</div>
+</div>
+
+<sc-if value="{{ isBoard }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;flex:1">
+
+<div style="padding:32px 26px 26px;display:flex;align-items:flex-end;gap:56px;flex:none;flex-wrap:wrap">
+<div>
+<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clg-cool)">Idle right now</div>
+<div style="display:flex;align-items:baseline;gap:15px;margin-top:11px"><span style="font-family:var(--clg-font-heading);font-weight:700;font-size:56px;line-height:1;color:var(--clg-navy);letter-spacing:-.02em">2</span><span style="font-size:13.5px;color:var(--clg-pewter);padding-bottom:8px;line-height:1.5">both stopped<br>neither can move a load</span></div>
+</div>
+<div>
+<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clg-cool)">Cost of waiting, today</div>
+<div style="display:flex;align-items:baseline;gap:15px;margin-top:11px"><span style="font-family:var(--clg-font-heading);font-weight:700;font-size:56px;line-height:1;color:var(--clg-mercury);letter-spacing:-.02em">—</span><span style="font-size:13.5px;color:var(--clg-pewter);padding-bottom:8px;line-height:1.5">can't compute yet<br><span style="color:var(--clg-ruby);cursor:pointer">Set an hourly revenue rate</span></span></div>
+</div>
+<div style="margin-left:auto;max-width:300px;font-size:13.5px;color:var(--clg-pewter);line-height:1.6;padding-bottom:6px">Both trucks are waiting on a decision inside this building — five days of idle time between them.</div>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:minmax(0,46fr) minmax(0,54fr);gap:26px;padding:24px 26px 32px">
+
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:baseline;gap:12px">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:12px;letter-spacing:.14em;color:var(--clg-ruby)">WAITING ON YOU</span>
+<span style="font-size:12.5px;color:var(--clg-pewter)">2 units · you are the blocker on both</span>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.07),0 8px 26px rgba(34,59,98,.09);border-top:3px solid var(--clg-scarlet);flex:none;cursor:pointer" onClick="{{ goWorkOrderDetail }}">
+<div style="padding:22px 24px 0">
+<div style="display:flex;align-items:baseline;gap:14px">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:26px;color:var(--clg-navy);letter-spacing:-.01em">3307</span>
+<span style="font-size:13.5px;color:var(--clg-pewter);flex:1">Winched out of the parking area</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:22px;color:var(--clg-ruby)">2d 4h</span>
+</div>
+<div style="font-family:var(--clg-font-heading);font-weight:400;font-size:21px;color:var(--clg-navy);margin-top:16px;line-height:1.3">Suburban Towing is waiting on your authorization to start</div>
+<div style="font-size:13.5px;color:var(--clg-granite);margin-top:11px;line-height:1.6">No estimate on file yet. Until Suburban sends a number, this truck can't be authorized and the delay isn't priced.</div>
+</div>
+<div style="display:flex;gap:14px;padding:18px 24px 0">
+<div style="flex:1;background:var(--clg-smoke);border-radius:4px;padding:14px 16px">
+<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--clg-cool)">Estimate</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:22px;color:var(--clg-mercury);margin-top:7px;line-height:1">Not in yet</div>
+<div style="font-size:12.5px;color:var(--clg-pewter);margin-top:5px;line-height:1.5">Requested 2 days ago</div>
+</div>
+<div style="flex:1;background:var(--clg-smoke);border-radius:4px;padding:14px 16px">
+<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--clg-cool)">Idle so far</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:22px;color:var(--clg-navy);margin-top:7px;line-height:1">52 <span style="font-size:13px;font-weight:400;color:var(--clg-pewter)">hours</span></div>
+<div style="font-size:12.5px;color:var(--clg-pewter);margin-top:5px;line-height:1.5">Longest open item on the board</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:11px;padding:20px 24px 22px;flex-wrap:wrap">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="md" hint-size="180px,40px"><span>Chase the estimate</span></x-import>
+<span style="padding:11px 18px;border-radius:4px;background:var(--clg-moon);color:var(--clg-cool);font-size:13px">Authorize</span>
+<span style="font-size:12px;color:var(--clg-cool);margin-left:4px">Unlocks when Suburban sends a number</span>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);flex:none;cursor:pointer" onClick="{{ goWorkOrderDetail }}">
+<div style="display:grid;grid-template-columns:90px 1fr 92px 66px;align-items:center;gap:12px;padding:17px 20px">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:19px;color:var(--clg-navy)">4212</span>
+<div><div style="font-size:13.5px;color:var(--clg-navy);font-weight:600">Leaking transmission fluid</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:3px">River City Truck Center · waiting on an estimate too</div></div>
+<span style="font-size:13.5px;color:var(--clg-mercury)">—</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:16px;color:var(--clg-ruby);text-align:right">3d</span>
+</div>
+</div>
+
+<div style="font-size:12.5px;color:var(--clg-pewter);line-height:1.6;padding:2px 2px 0">Two open items is a light board. Once estimates land on both, this lane sorts by cost of waiting rather than by age.</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-content:start">
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">AT A VENDOR</span><span style="font-size:12.5px;color:var(--clg-cool);margin-left:auto">0</span></div>
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.05);padding:16px 18px;font-size:12.5px;color:var(--clg-cool);line-height:1.55">Nothing at a vendor.</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">WAITING ON PARTS</span><span style="font-size:12.5px;color:var(--clg-cool);margin-left:auto">0</span></div>
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.05);padding:16px 18px;font-size:12.5px;color:var(--clg-cool);line-height:1.55">No parts on order.</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">IN THE BAY</span><span style="font-size:12.5px;color:var(--clg-cool);margin-left:auto">0</span></div>
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.05);padding:16px 18px;font-size:12.5px;color:var(--clg-cool);line-height:1.55">No unit in a bay.</div>
+</div>
+
+<div style="grid-column:1 / -1;display:flex;gap:18px;align-items:stretch;margin-top:2px;flex-wrap:wrap">
+<div style="flex:1;min-width:260px;background:var(--clg-navy);border-radius:4px;padding:20px;position:relative;overflow:hidden">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="position:absolute;right:-34px;bottom:-58px;width:158px;opacity:.07">
+<div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--clg-mercury)">Back on the road today</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:34px;color:#fff;margin-top:10px;line-height:1">0 units</div>
+<div style="font-size:12.5px;color:var(--clg-moon);margin-top:8px;line-height:1.55">Nothing has returned to service today.</div>
+</div>
+<div style="flex:1;min-width:260px;background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:20px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">THREE EMPTY LANES</div>
+<div style="font-size:13px;color:var(--clg-granite);margin-top:11px;line-height:1.65">An empty lane is good news — nothing is invented to fill it. But both open items sitting in <em>your</em> lane means the bottleneck is authorization, not shop capacity.</div>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isWorkOrders }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:32px 26px 34px">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
+<div>
+<div style="font-family:var(--clg-font-heading);font-weight:400;font-size:34px;color:var(--clg-navy);letter-spacing:-.015em;line-height:1.15">Work orders</div>
+<div style="font-size:13.5px;color:var(--clg-pewter);margin-top:10px;line-height:1.6">Two open, four closed this month. Open items are sorted by who's blocking them, then by age.</div>
+</div>
+<div style="display:flex;gap:10px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="md" hint-size="106px,40px"><span>Export</span></x-import>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="secondary" size="md" hint-size="176px,40px"><span>New work order</span></x-import>
+</div>
+</div>
+
+<div style="display:flex;gap:8px;margin-top:26px;flex-wrap:wrap">
+<span style="padding:7px 14px;border-radius:999px;background:var(--clg-navy);color:#fff;font-size:12.5px">Open · 2</span>
+<span style="padding:7px 14px;border-radius:999px;background:#fff;color:var(--clg-pewter);font-size:12.5px;box-shadow:0 1px 2px rgba(34,59,98,.06)">Closed · 4</span>
+<span style="padding:7px 14px;border-radius:999px;background:#fff;color:var(--clg-pewter);font-size:12.5px;box-shadow:0 1px 2px rgba(34,59,98,.06)">All · 6</span>
+</div>
+
+<div style="margin-top:20px;background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06),0 6px 20px rgba(34,59,98,.06);overflow:hidden">
+<div style="display:grid;grid-template-columns:110px 92px minmax(0,1fr) 230px 200px 108px 78px;gap:14px;padding:14px 22px;background:var(--clg-smoke)">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:10.5px;letter-spacing:.13em;color:var(--clg-pewter)">WO</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:10.5px;letter-spacing:.13em;color:var(--clg-pewter)">UNIT</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:10.5px;letter-spacing:.13em;color:var(--clg-pewter)">ISSUE</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:10.5px;letter-spacing:.13em;color:var(--clg-pewter)">BLOCKED ON</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:10.5px;letter-spacing:.13em;color:var(--clg-pewter)">VENDOR</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:10.5px;letter-spacing:.13em;color:var(--clg-pewter)">COST</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:10.5px;letter-spacing:.13em;color:var(--clg-pewter);text-align:right">AGE</span>
+</div>
+
+<div style="display:grid;grid-template-columns:110px 92px minmax(0,1fr) 230px 200px 108px 78px;gap:14px;padding:18px 22px;align-items:center;border-bottom:1px solid var(--clg-smoke);cursor:pointer" onClick="{{ goWorkOrderDetail }}">
+<span style="color:var(--clg-ruby);font-weight:600">WO-1041</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:17px;color:var(--clg-navy)">3307</span>
+<span style="color:var(--clg-navy);font-weight:600">Winched out of the parking area</span>
+<span style="color:var(--clg-granite)">Your authorization</span>
+<span style="color:var(--clg-granite)">Suburban Towing</span>
+<span style="color:var(--clg-mercury)">No estimate</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:15px;color:var(--clg-ruby);text-align:right">2d 4h</span>
+</div>
+
+<div style="display:grid;grid-template-columns:110px 92px minmax(0,1fr) 230px 200px 108px 78px;gap:14px;padding:18px 22px;align-items:center;border-bottom:1px solid var(--clg-smoke)">
+<span style="color:var(--clg-ruby);font-weight:600">WO-1038</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:17px;color:var(--clg-navy)">4212</span>
+<span style="color:var(--clg-navy);font-weight:600">Leaking transmission fluid</span>
+<span style="color:var(--clg-granite)">Your authorization</span>
+<span style="color:var(--clg-granite)">River City Truck Center</span>
+<span style="color:var(--clg-mercury)">No estimate</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:15px;color:var(--clg-ruby);text-align:right">3d</span>
+</div>
+
+<div style="display:grid;grid-template-columns:110px 92px minmax(0,1fr) 230px 200px 108px 78px;gap:14px;padding:18px 22px;align-items:center;border-bottom:1px solid var(--clg-smoke)">
+<span style="color:var(--clg-pewter);font-weight:600">WO-1034</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:17px;color:var(--clg-pewter)">3307</span>
+<span style="color:var(--clg-pewter)">Air dryer replacement</span>
+<span style="color:var(--clg-cool)">Closed Aug 18</span>
+<span style="color:var(--clg-cool)">River City Truck Center</span>
+<span style="color:var(--clg-pewter)">$1,180</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:15px;color:var(--clg-cool);text-align:right">3d</span>
+</div>
+
+<div style="display:grid;grid-template-columns:110px 92px minmax(0,1fr) 230px 200px 108px 78px;gap:14px;padding:18px 22px;align-items:center;border-bottom:1px solid var(--clg-smoke)">
+<span style="color:var(--clg-pewter);font-weight:600">WO-1029</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:17px;color:var(--clg-pewter)">4212</span>
+<span style="color:var(--clg-pewter)">DOT annual inspection</span>
+<span style="color:var(--clg-cool)">Closed Aug 11</span>
+<span style="color:var(--clg-cool)">In-house</span>
+<span style="color:var(--clg-pewter)">$420</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:15px;color:var(--clg-cool);text-align:right">1d</span>
+</div>
+
+<div style="display:grid;grid-template-columns:110px 92px minmax(0,1fr) 230px 200px 108px 78px;gap:14px;padding:18px 22px;align-items:center">
+<span style="color:var(--clg-pewter);font-weight:600">WO-1024</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:17px;color:var(--clg-pewter)">3307</span>
+<span style="color:var(--clg-pewter)">Steer tire replacement, pair</span>
+<span style="color:var(--clg-cool)">Closed Aug 4</span>
+<span style="color:var(--clg-cool)">Suburban Towing</span>
+<span style="color:var(--clg-pewter)">$1,640</span>
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:15px;color:var(--clg-cool);text-align:right">2d</span>
+</div>
+</div>
+
+<div style="margin-top:18px;font-size:12.5px;color:var(--clg-pewter);line-height:1.6;max-width:760px">Neither open item has an estimate, which is why the board can't price the delay. Both vendors were sent a request — Suburban two days ago, River City three.</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isWorkOrderDetail }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column">
+
+<div style="padding:24px 26px 0;font-size:13px;color:var(--clg-pewter)"><span style="cursor:pointer" onClick="{{ goWorkOrders }}">Work orders</span> · <span style="color:var(--clg-navy);font-weight:600">WO-1041</span></div>
+
+<div style="padding:22px 26px 26px;display:flex;align-items:flex-end;gap:52px;flex:none;flex-wrap:wrap">
+<div>
+<div style="display:flex;align-items:center;gap:12px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="critical" hint-size="150px,22px"><span>Can't move a load</span></x-import>
+<span style="font-size:12.5px;color:var(--clg-cool)">Opened Aug 27, 6:20 AM by Dispatch</span>
+</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:50px;color:var(--clg-navy);margin-top:14px;line-height:1;letter-spacing:-.02em">3307</div>
+<div style="font-size:13.5px;color:var(--clg-pewter);margin-top:9px">Winched out of the parking area · Jacksonville, FL</div>
+</div>
+<div>
+<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clg-cool)">Idle</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:44px;color:var(--clg-ruby);margin-top:11px;line-height:1;letter-spacing:-.02em">2d 4h</div>
+<div style="font-size:13px;color:var(--clg-pewter);margin-top:8px">52 hours · not yet priced</div>
+</div>
+<div style="margin-left:auto;display:flex;gap:11px;padding-bottom:6px;flex-wrap:wrap">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="quiet" size="md" hint-size="124px,40px"><span>Call vendor</span></x-import>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="md" hint-size="180px,40px"><span>Chase the estimate</span></x-import>
+</div>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;padding:0 26px 34px">
+
+<div style="display:flex;flex-direction:column;gap:20px">
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.07),0 8px 26px rgba(34,59,98,.09);border-top:3px solid var(--clg-scarlet)">
+<div style="padding:22px 24px 0">
+<div style="font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--clg-ruby)">The one thing blocking this truck</div>
+<div style="font-family:var(--clg-font-heading);font-weight:400;font-size:23px;color:var(--clg-navy);margin-top:11px;line-height:1.3">Suburban Towing hasn't sent an estimate</div>
+<div style="font-size:13.5px;color:var(--clg-granite);margin-top:11px;line-height:1.6;max-width:560px">The tow was authorized and completed on the 27th. The repair estimate was requested the same day and hasn't arrived, so there's nothing to approve and no way to price the downtime.</div>
+</div>
+<div style="display:flex;gap:14px;padding:18px 24px 0;flex-wrap:wrap">
+<div style="flex:1;min-width:180px;background:var(--clg-smoke);border-radius:4px;padding:14px 16px">
+<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--clg-cool)">Estimate requested</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:22px;color:var(--clg-navy);margin-top:7px;line-height:1">2 days ago</div>
+<div style="font-size:12.5px;color:var(--clg-pewter);margin-top:5px;line-height:1.5">Suburban's average is 6 hours</div>
+</div>
+<div style="flex:1;min-width:180px;background:var(--clg-smoke);border-radius:4px;padding:14px 16px">
+<div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--clg-cool)">Tow already billed</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:22px;color:var(--clg-navy);margin-top:7px;line-height:1">$685.00</div>
+<div style="font-size:12.5px;color:var(--clg-pewter);margin-top:5px;line-height:1.5">Approved Aug 27 · PO 4471</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:11px;padding:20px 24px 22px;flex-wrap:wrap">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="primary" size="md" hint-size="180px,40px"><span>Chase the estimate</span></x-import>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="md" hint-size="188px,40px"><span>Move to another vendor</span></x-import>
+<span style="padding:11px 18px;border-radius:4px;background:var(--clg-moon);color:var(--clg-cool);font-size:13px">Authorize repair</span>
+</div>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);flex:none">
+<div style="display:flex;align-items:baseline;justify-content:space-between;padding:20px 24px 4px">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:12px;letter-spacing:.14em;color:var(--clg-navy)">WHERE THE 52 HOURS WENT</span>
+</div>
+<div style="padding:14px 24px 0">
+<div style="display:grid;grid-template-columns:96px minmax(0,1fr);align-items:baseline;padding:14px 0;border-bottom:1px solid var(--clg-smoke)"><span style="font-size:13px;color:var(--clg-pewter)">44h 10m</span><div><div style="font-size:14px;color:var(--clg-navy);font-weight:600">Waiting on Suburban's estimate</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:3px">Requested Aug 27, 10:40 AM · no reply logged</div></div></div>
+<div style="display:grid;grid-template-columns:96px minmax(0,1fr);align-items:baseline;padding:14px 0;border-bottom:1px solid var(--clg-smoke)"><span style="font-size:13px;color:var(--clg-pewter)">3h 50m</span><div><div style="font-size:14px;color:var(--clg-navy);font-weight:600">Tow in progress</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:3px">Winched out and hauled to Suburban's yard</div></div></div>
+<div style="display:grid;grid-template-columns:96px minmax(0,1fr);align-items:baseline;padding:14px 0"><span style="font-size:13px;color:var(--clg-pewter)">4h 00m</span><div><div style="font-size:14px;color:var(--clg-navy);font-weight:600">Reported, waiting on a tow to be authorized</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:3px">Dispatch logged it 6:20 AM, tow approved 10:20 AM</div></div></div>
+</div>
+<div style="margin:18px 24px 22px;background:var(--clg-smoke);border-radius:4px;padding:14px 18px;font-size:13px;color:var(--clg-granite);line-height:1.6">85% of this truck's downtime is a vendor not replying. That's a vendor-management problem, not a shop problem.</div>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);flex:none">
+<div style="padding:20px 24px 0;font-family:var(--clg-font-heading);font-weight:700;font-size:12px;letter-spacing:.14em;color:var(--clg-navy)">ACTIVITY</div>
+<div style="padding:16px 24px 8px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;gap:13px"><div style="width:8px;height:8px;background:var(--clg-scarlet);margin-top:6px;flex:none;border-radius:2px"></div><div><div style="color:var(--clg-navy);font-weight:600">Estimate requested from Suburban Towing</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:2px">M. McQuary · Aug 27, 10:40 AM</div></div></div>
+<div style="display:flex;gap:13px"><div style="width:8px;height:8px;background:var(--clg-mercury);margin-top:6px;flex:none;border-radius:2px"></div><div><div style="color:var(--clg-navy);font-weight:600">Tow completed, unit at Suburban's yard</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:2px">Suburban Towing · Aug 27, 10:10 AM · $685.00 billed</div></div></div>
+<div style="display:flex;gap:13px"><div style="width:8px;height:8px;background:var(--clg-mercury);margin-top:6px;flex:none;border-radius:2px"></div><div><div style="color:var(--clg-navy);font-weight:600">Tow authorized, PO 4471 issued</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:2px">M. McQuary · Aug 27, 10:20 AM</div></div></div>
+<div style="display:flex;gap:13px"><div style="width:8px;height:8px;background:var(--clg-mercury);margin-top:6px;flex:none;border-radius:2px"></div><div><div style="color:var(--clg-navy);font-weight:600">Work order created — unit won't move under its own power</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:2px">Dispatch · Aug 27, 6:20 AM</div></div></div>
+</div>
+<div style="border-top:1px solid var(--clg-smoke);padding:14px 24px;display:flex;gap:11px;align-items:center">
+<div style="flex:1;background:var(--clg-smoke);border-radius:4px;padding:11px 14px;color:var(--clg-cool);font-size:13px">Add a note or log a call…</div>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="secondary" size="sm" hint-size="90px,32px"><span>Post</span></x-import>
+</div>
+</div>
+
+</div>
+
+<div style="display:flex;flex-direction:column;gap:18px">
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:20px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:15px"><span style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">THE UNIT</span><span style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool);cursor:pointer" onClick="{{ goUnitDetail }}">OPEN</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:15px 16px;font-size:13px">
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">UNIT</div><div style="color:var(--clg-navy);margin-top:2px">3307</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">DOMICILE</div><div style="color:var(--clg-navy);margin-top:2px">Jacksonville</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">ODOMETER</div><div style="color:var(--clg-navy);margin-top:2px">412,880 mi</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">LAST PM</div><div style="color:var(--clg-navy);margin-top:2px">Jul 30</div></div>
+</div>
+<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--clg-smoke);font-size:12.5px;color:var(--clg-pewter);line-height:1.55">Driver, trip, and location come from Alvys once the integration is live. These are the fields your build already has.</div>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:20px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">SUBURBAN TOWING</div>
+<div style="font-size:13px;color:var(--clg-granite);margin-top:12px;line-height:1.75">Used 3 times this year<br>Average estimate turnaround 6 hours<br>This one is at 44 and counting</div>
+<div style="margin-top:14px;padding:12px 14px;background:var(--clg-smoke);border-radius:4px;font-size:12.5px;color:var(--clg-granite);line-height:1.6">Slowest estimate they've sent you. Worth a call rather than another email.</div>
+<div style="display:flex;gap:9px;margin-top:14px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="outline" size="sm" hint-size="88px,32px"><span>Call</span></x-import>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="quiet" size="sm" hint-size="132px,32px"><span>Vendor profile</span></x-import>
+</div>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:20px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">SPEND ON 3307 THIS YEAR</div>
+<div style="display:flex;flex-direction:column;gap:10px;margin-top:13px;font-size:13px">
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Repairs (3)</span><span style="color:var(--clg-navy);font-weight:600">$3,505</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Towing (1)</span><span style="color:var(--clg-navy);font-weight:600">$685</span></div>
+<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--clg-smoke)"><span style="color:var(--clg-navy)">Open, unpriced</span><span style="color:var(--clg-mercury);font-weight:600">1 item</span></div>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isUnits }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:32px 26px 34px">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
+<div>
+<div style="font-family:var(--clg-font-heading);font-weight:400;font-size:34px;color:var(--clg-navy);letter-spacing:-.015em;line-height:1.15">Units</div>
+<div style="font-size:13.5px;color:var(--clg-pewter);margin-top:10px;line-height:1.6">Two tractors in service. Both currently have open work.</div>
+</div>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="secondary" size="md" hint-size="128px,40px"><span>Add a unit</span></x-import>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px;margin-top:26px">
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06),0 6px 20px rgba(34,59,98,.06);padding:22px;cursor:pointer" onClick="{{ goUnitDetail }}">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:28px;color:var(--clg-navy);letter-spacing:-.01em">3307</span>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="critical" hint-size="72px,22px"><span>Down</span></x-import>
+</div>
+<div style="font-size:13.5px;color:var(--clg-granite);margin-top:12px;line-height:1.6">Winched out of the parking area. At Suburban Towing, waiting on an estimate.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--clg-smoke);font-size:13px">
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">ODOMETER</div><div style="color:var(--clg-navy);margin-top:3px">412,880 mi</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">LAST PM</div><div style="color:var(--clg-navy);margin-top:3px">Jul 30</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">SPEND YTD</div><div style="color:var(--clg-navy);margin-top:3px">$4,190</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">IDLE</div><div style="color:var(--clg-ruby);font-weight:600;margin-top:3px">2d 4h</div></div>
+</div>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06),0 6px 20px rgba(34,59,98,.06);padding:22px">
+<div style="display:flex;align-items:baseline;justify-content:space-between">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:28px;color:var(--clg-navy);letter-spacing:-.01em">4212</span>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="critical" hint-size="72px,22px"><span>Down</span></x-import>
+</div>
+<div style="font-size:13.5px;color:var(--clg-granite);margin-top:12px;line-height:1.6">Leaking transmission fluid. At River City Truck Center, waiting on an estimate.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--clg-smoke);font-size:13px">
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">ODOMETER</div><div style="color:var(--clg-navy);margin-top:3px">288,140 mi</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">LAST PM</div><div style="color:var(--clg-navy);margin-top:3px">Aug 11</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">SPEND YTD</div><div style="color:var(--clg-navy);margin-top:3px">$420</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">IDLE</div><div style="color:var(--clg-ruby);font-weight:600;margin-top:3px">3d</div></div>
+</div>
+</div>
+
+</div>
+
+<div style="margin-top:20px;background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:20px 22px;max-width:640px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">BOTH UNITS ARE DOWN</div>
+<div style="font-size:13px;color:var(--clg-granite);margin-top:11px;line-height:1.65">With a two-truck fleet that's 100% out of service, so availability isn't a useful number yet. Once the roster grows, this page gets an availability figure and a PM-due column.</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isUnitDetail }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column">
+
+<div style="padding:24px 26px 0;font-size:13px;color:var(--clg-pewter)"><span style="cursor:pointer" onClick="{{ goUnits }}">Units</span> · <span style="color:var(--clg-navy);font-weight:600">3307</span></div>
+
+<div style="padding:22px 26px 26px;display:flex;align-items:flex-end;gap:52px;flex-wrap:wrap">
+<div>
+<div style="display:flex;align-items:center;gap:12px">
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Badge" tone="critical" hint-size="150px,22px"><span>Can't move a load</span></x-import>
+<span style="font-size:12.5px;color:var(--clg-cool)">At Suburban Towing · Jacksonville, FL</span>
+</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:52px;color:var(--clg-navy);margin-top:14px;line-height:1;letter-spacing:-.02em">3307</div>
+<div style="font-size:13.5px;color:var(--clg-pewter);margin-top:9px">412,880 mi · domicile Jacksonville · last PM Jul 30</div>
+</div>
+<div>
+<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clg-cool)">Idle</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:44px;color:var(--clg-ruby);margin-top:11px;line-height:1;letter-spacing:-.02em">2d 4h</div>
+</div>
+<div>
+<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clg-cool)">Spend YTD</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:44px;color:var(--clg-navy);margin-top:11px;line-height:1;letter-spacing:-.02em">$4,190</div>
+</div>
+</div>
+
+<div style="flex:1;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;padding:0 26px 34px">
+
+<div style="display:flex;flex-direction:column;gap:20px">
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.07),0 8px 26px rgba(34,59,98,.09);border-top:3px solid var(--clg-scarlet);padding:22px 24px;cursor:pointer" onClick="{{ goWorkOrderDetail }}">
+<div style="font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--clg-ruby)">Open work</div>
+<div style="font-family:var(--clg-font-heading);font-weight:400;font-size:23px;color:var(--clg-navy);margin-top:11px;line-height:1.3">WO-1041 — winched out of the parking area</div>
+<div style="font-size:13.5px;color:var(--clg-granite);margin-top:11px;line-height:1.6">Waiting on Suburban Towing's estimate for 44 hours. Tow of $685 already billed and approved.</div>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06)">
+<div style="padding:20px 24px 4px;font-family:var(--clg-font-heading);font-weight:700;font-size:12px;letter-spacing:.14em;color:var(--clg-navy)">REPAIR HISTORY</div>
+<div style="padding:14px 24px 22px">
+<div style="display:grid;grid-template-columns:96px minmax(0,1fr) 190px 96px;gap:14px;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--clg-smoke)"><span style="font-size:13px;color:var(--clg-pewter)">Aug 18</span><div><div style="font-size:14px;color:var(--clg-navy);font-weight:600">Air dryer replacement</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:3px">WO-1034 · closed in 3 days</div></div><span style="font-size:13px;color:var(--clg-pewter)">River City Truck Center</span><span style="font-size:13.5px;color:var(--clg-navy);font-weight:600;text-align:right">$1,180</span></div>
+<div style="display:grid;grid-template-columns:96px minmax(0,1fr) 190px 96px;gap:14px;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--clg-smoke)"><span style="font-size:13px;color:var(--clg-pewter)">Aug 4</span><div><div style="font-size:14px;color:var(--clg-navy);font-weight:600">Steer tire replacement, pair</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:3px">WO-1024 · closed in 2 days</div></div><span style="font-size:13px;color:var(--clg-pewter)">Suburban Towing</span><span style="font-size:13.5px;color:var(--clg-navy);font-weight:600;text-align:right">$1,640</span></div>
+<div style="display:grid;grid-template-columns:96px minmax(0,1fr) 190px 96px;gap:14px;align-items:baseline;padding:14px 0"><span style="font-size:13px;color:var(--clg-pewter)">Jul 30</span><div><div style="font-size:14px;color:var(--clg-navy);font-weight:600">PM service</div><div style="font-size:12.5px;color:var(--clg-cool);margin-top:3px">WO-1019 · closed same day</div></div><span style="font-size:13px;color:var(--clg-pewter)">In-house</span><span style="font-size:13.5px;color:var(--clg-navy);font-weight:600;text-align:right">$685</span></div>
+</div>
+</div>
+
+</div>
+
+<div style="display:flex;flex-direction:column;gap:18px">
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:20px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">PM STATUS</div>
+<div style="display:flex;align-items:flex-end;gap:13px;margin-top:13px"><span style="font-family:var(--clg-font-heading);font-weight:700;font-size:34px;color:var(--clg-navy);line-height:1;letter-spacing:-.02em">4,120</span><span style="font-size:12.5px;color:var(--clg-pewter);padding-bottom:4px;line-height:1.45">miles to next<br>25k interval</span></div>
+<div style="height:5px;background:var(--clg-reflection);border-radius:999px;margin-top:15px"><div style="width:84%;height:5px;background:var(--clg-royal);border-radius:999px"></div></div>
+<div style="margin-top:14px;font-size:12.5px;color:var(--clg-pewter);line-height:1.6">It's already in a shop. Worth asking Suburban to do the PM while it's on their lot.</div>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:20px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">FROM ALVYS</div>
+<div style="font-size:13px;color:var(--clg-granite);margin-top:12px;line-height:1.7">Driver, trip, current location, VIN, trailer, and warranty status land here once the API is connected. Until then they're blank rather than guessed.</div>
+</div>
+
+<div style="background:var(--clg-navy);border-radius:4px;padding:20px;position:relative;overflow:hidden">
+<img src="_ds/capital-logistics-group-design-system-68c6c9af-5ea1-4358-ba4e-96086f190d38/assets/mark-star-white.svg" alt="" style="position:absolute;right:-34px;bottom:-58px;width:158px;opacity:.07">
+<div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--clg-mercury)">Cost per mile, this unit</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:34px;color:#fff;margin-top:10px;line-height:1">$0.101</div>
+<div style="font-size:12.5px;color:var(--clg-moon);margin-top:8px;line-height:1.55">Based on 41,400 miles run this year. The open item will move this once it's priced.</div>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isVendors }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:32px 26px 34px">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
+<div>
+<div style="font-family:var(--clg-font-heading);font-weight:400;font-size:34px;color:var(--clg-navy);letter-spacing:-.015em;line-height:1.15">Vendors</div>
+<div style="font-size:13.5px;color:var(--clg-pewter);margin-top:10px;line-height:1.6">Two vendors in use. Both currently hold a truck of yours and owe you an estimate.</div>
+</div>
+<x-import component-from-global-scope="CapitalLogisticsGroupDesignSystem_68c6c9.Button" variant="secondary" size="md" hint-size="146px,40px"><span>Add a vendor</span></x-import>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px;margin-top:26px">
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06),0 6px 20px rgba(34,59,98,.06);border-top:3px solid var(--clg-scarlet);padding:22px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:19px;color:var(--clg-navy)">Suburban Towing</span>
+<span style="font-size:12.5px;color:var(--clg-ruby);font-weight:600">Owes an estimate</span>
+</div>
+<div style="font-size:13.5px;color:var(--clg-granite);margin-top:12px;line-height:1.6">Holding 3307 since Aug 27. Estimate requested 44 hours ago against a 6-hour average.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--clg-smoke);font-size:13px">
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">JOBS YTD</div><div style="color:var(--clg-navy);margin-top:3px">3</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">SPEND YTD</div><div style="color:var(--clg-navy);margin-top:3px">$2,325</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">AVG ESTIMATE</div><div style="color:var(--clg-navy);margin-top:3px">6h</div></div>
+</div>
+<div style="margin-top:16px;padding:12px 14px;background:var(--clg-smoke);border-radius:4px;font-size:12.5px;color:var(--clg-granite);line-height:1.6">Good on towing, slow on repair quotes. Consider using them for recovery and sending the repair elsewhere.</div>
+</div>
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06),0 6px 20px rgba(34,59,98,.06);padding:22px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px">
+<span style="font-family:var(--clg-font-heading);font-weight:700;font-size:19px;color:var(--clg-navy)">River City Truck Center</span>
+<span style="font-size:12.5px;color:var(--clg-pewter)">Owes an estimate</span>
+</div>
+<div style="font-size:13.5px;color:var(--clg-granite);margin-top:12px;line-height:1.6">Holding 4212 since Aug 26. Turned the air dryer job around in 3 days in August.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--clg-smoke);font-size:13px">
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">JOBS YTD</div><div style="color:var(--clg-navy);margin-top:3px">2</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">SPEND YTD</div><div style="color:var(--clg-navy);margin-top:3px">$1,180</div></div>
+<div><div style="font-size:11px;letter-spacing:.1em;color:var(--clg-cool)">AVG TURN</div><div style="color:var(--clg-navy);margin-top:3px">3d</div></div>
+</div>
+<div style="margin-top:16px;padding:12px 14px;background:var(--clg-smoke);border-radius:4px;font-size:12.5px;color:var(--clg-granite);line-height:1.6">Only two jobs on record — not enough history to judge yet.</div>
+</div>
+
+</div>
+
+<div style="margin-top:20px;background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:20px 22px;max-width:680px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">WHAT THIS PAGE IS FOR</div>
+<div style="font-size:13px;color:var(--clg-granite);margin-top:11px;line-height:1.65">Not a directory — a scoreboard. The two numbers that decide where a truck goes next are how fast a vendor quotes and whether they hit their promised time. Everything else is contact detail.</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSpend }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:32px 26px 34px">
+<div>
+<div style="font-family:var(--clg-font-heading);font-weight:400;font-size:34px;color:var(--clg-navy);letter-spacing:-.015em;line-height:1.15">Spend</div>
+<div style="font-size:13.5px;color:var(--clg-pewter);margin-top:10px;line-height:1.6">$4,610 committed this year across six work orders. One open item is still unpriced.</div>
+</div>
+
+<div style="display:flex;gap:56px;margin-top:28px;flex-wrap:wrap">
+<div>
+<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clg-cool)">Committed YTD</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:52px;color:var(--clg-navy);margin-top:11px;line-height:1;letter-spacing:-.02em">$4,610</div>
+</div>
+<div>
+<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clg-cool)">Cost per mile</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:52px;color:var(--clg-navy);margin-top:11px;line-height:1;letter-spacing:-.02em">$0.087</div>
+</div>
+<div>
+<div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--clg-cool)">Unpriced</div>
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:52px;color:var(--clg-mercury);margin-top:11px;line-height:1;letter-spacing:-.02em">2</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;margin-top:30px">
+
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:22px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">WHERE IT WENT</div>
+<div style="display:flex;flex-direction:column;gap:16px;margin-top:20px">
+<div><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:7px"><span style="color:var(--clg-navy)">Suburban Towing</span><span style="color:var(--clg-navy);font-weight:600">$2,325</span></div><div style="height:8px;background:var(--clg-smoke);border-radius:999px"><div style="width:50%;height:8px;background:var(--clg-royal);border-radius:999px"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:7px"><span style="color:var(--clg-navy)">River City Truck Center</span><span style="color:var(--clg-navy);font-weight:600">$1,180</span></div><div style="height:8px;background:var(--clg-smoke);border-radius:999px"><div style="width:26%;height:8px;background:var(--clg-navy);border-radius:999px"></div></div></div>
+<div><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:7px"><span style="color:var(--clg-navy)">In-house</span><span style="color:var(--clg-navy);font-weight:600">$1,105</span></div><div style="height:8px;background:var(--clg-smoke);border-radius:999px"><div style="width:24%;height:8px;background:var(--clg-pewter);border-radius:999px"></div></div></div>
+</div>
+<div style="margin-top:22px;padding:14px 16px;background:var(--clg-smoke);border-radius:4px;font-size:13px;color:var(--clg-granite);line-height:1.65">Half your maintenance dollars go to a towing company. That's normal for a two-truck fleet with no shop of its own — but it's the first thing to change if the fleet grows.</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:20px">
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:22px">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">BY CATEGORY</div>
+<div style="display:flex;flex-direction:column;gap:12px;margin-top:16px;font-size:13.5px">
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Repair</span><span style="color:var(--clg-navy);font-weight:600">$2,820</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Tires</span><span style="color:var(--clg-navy);font-weight:600">$1,640</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">Towing &amp; recovery</span><span style="color:var(--clg-navy);font-weight:600">$685</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">PM &amp; inspection</span><span style="color:var(--clg-navy);font-weight:600">$1,105</span></div>
+</div>
+</div>
+<div style="background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06);padding:22px;flex:1">
+<div style="font-family:var(--clg-font-heading);font-weight:700;font-size:11.5px;letter-spacing:.14em;color:var(--clg-navy)">BY UNIT</div>
+<div style="display:flex;flex-direction:column;gap:12px;margin-top:16px;font-size:13.5px">
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">3307 · 41,400 mi run</span><span style="color:var(--clg-navy);font-weight:600">$4,190</span></div>
+<div style="display:flex;justify-content:space-between"><span style="color:var(--clg-pewter)">4212 · 12,600 mi run</span><span style="color:var(--clg-navy);font-weight:600">$420</span></div>
+</div>
+<div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--clg-smoke);font-size:12.5px;color:var(--clg-pewter);line-height:1.6">3307 costs $0.101 a mile against 4212's $0.033 — but 4212 has only been on the road since June, so the comparison isn't fair yet.</div>
+</div>
+</div>
+
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isUndesigned }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;align-items:flex-start;padding:56px 26px">
+<div style="max-width:560px;background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(34,59,98,.06),0 6px 20px rgba(34,59,98,.06);padding:28px 30px">
+<div style="font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--clg-cool)">Not designed yet</div>
+<div style="font-family:var(--clg-font-heading);font-weight:400;font-size:27px;color:var(--clg-navy);margin-top:11px;line-height:1.25">{{ undesignedName }}</div>
+<div style="font-size:13.5px;color:var(--clg-granite);margin-top:13px;line-height:1.65">This section exists in your nav but I don't know what belongs on it — so rather than invent a screen, it's blank on purpose. Tell me what this page needs to answer and it gets built in this same style.</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { screen: 'board' };
+  go(s) { return () => this.setState({ screen: s }); }
+  renderVals() {
+    const s = this.state.screen;
+    const on = 'color:var(--clg-navy);font-weight:600;box-shadow:inset 0 -2px 0 var(--clg-navy);padding:22px 0;cursor:pointer';
+    const off = 'color:var(--clg-pewter);padding:22px 0;cursor:pointer';
+    const names = { tracking: 'Tracking', operations: 'Operations', roster: 'Roster', hometime: 'Home time' };
+    return {
+      isBoard: s === 'board',
+      isWorkOrders: s === 'workorders',
+      isWorkOrderDetail: s === 'wodetail',
+      isUnits: s === 'units',
+      isUnitDetail: s === 'unitdetail',
+      isVendors: s === 'vendors',
+      isSpend: s === 'spend',
+      isUndesigned: !!names[s],
+      undesignedName: names[s] || '',
+      navBoard: s === 'board' ? on : off,
+      navTracking: s === 'tracking' ? on : off,
+      navOperations: s === 'operations' ? on : off,
+      navWorkOrders: (s === 'workorders' || s === 'wodetail') ? on : off,
+      navSpend: s === 'spend' ? on : off,
+      navUnits: (s === 'units' || s === 'unitdetail') ? on : off,
+      navVendors: s === 'vendors' ? on : off,
+      navRoster: s === 'roster' ? on : off,
+      navHomeTime: s === 'hometime' ? on : off,
+      goBoard: this.go('board'),
+      goTracking: this.go('tracking'),
+      goOperations: this.go('operations'),
+      goWorkOrders: this.go('workorders'),
+      goWorkOrderDetail: this.go('wodetail'),
+      goSpend: this.go('spend'),
+      goUnits: this.go('units'),
+      goUnitDetail: this.go('unitdetail'),
+      goVendors: this.go('vendors'),
+      goRoster: this.go('roster'),
+      goHomeTime: this.go('hometime')
+    };
+  }
+}
+</script>
+</body>
+</html>
