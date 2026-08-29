@@ -96,6 +96,13 @@
   --clg-shadow-inset: inset 0 -2px 0 rgb(var(--clg-navy-rgb) / .10);
   --clg-focus-ring: 0 0 0 3px rgb(var(--clg-royal-rgb) / .35);
 
+  /* Elevation system — cards separated by shadow and gap, not hairlines.
+     Hairlines survive only *inside* a card, as row/divider borders. */
+  --clg-shadow-resting: 0 1px 2px rgb(var(--clg-navy-rgb) / .06);
+  --clg-shadow-raised: 0 1px 2px rgb(var(--clg-navy-rgb) / .06), 0 6px 20px rgb(var(--clg-navy-rgb) / .07);
+  --clg-shadow-focus: 0 1px 2px rgb(var(--clg-navy-rgb) / .07), 0 8px 26px rgb(var(--clg-navy-rgb) / .09);
+  --clg-shadow-appbar: 0 1px 0 rgb(var(--clg-navy-rgb) / .08);
+
   /* Motion */
   --clg-dur-fast: 120ms;
   --clg-dur-base: 180ms;
