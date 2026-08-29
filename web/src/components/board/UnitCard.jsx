@@ -45,54 +45,76 @@ export default function UnitCard({ card, lead, onChanged }) {
     onChanged?.();
   };
 
-  return (
-    <div style={{
-      background: "var(--clg-surface-card)", border: "1px solid var(--clg-moon)",
-      padding: lead ? "15px 16px" : "14px 16px",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-        <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: lead ? 19 : 17, color: "var(--clg-navy)" }}>
+  // Collapsed (non-lead) rows are a single compact line, not a stacked
+  // mini-card — matches the design package's "remaining items collapse to
+  // a single grid row" treatment for everything below the one expanded item.
+  if (!lead) {
+    const description = wo.system_component || wo.complaint || wo.description || wo.category;
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 14, background: "var(--clg-surface-card)",
+        boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)", padding: "12px 16px",
+      }}>
+        <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", flexShrink: 0 }}>
           {unit.number}
         </span>
         <span style={{
-          fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: lead ? 17 : 14,
+          flex: 1, minWidth: 0, fontSize: 13, color: "var(--clg-granite)",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {description}{openCount > 1 && <span style={{ color: "var(--clg-cool)" }}> +{openCount - 1} more</span>}
+        </span>
+        <span style={{
+          fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 13, flexShrink: 0,
+          color: overDay ? "var(--clg-ruby)" : "var(--clg-pewter)",
+        }}>
+          {fmtHours(idleHours)}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-focus)",
+      borderRadius: "var(--clg-radius-md)", borderTop: "3px solid var(--clg-scarlet)", padding: "18px 20px",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 26, color: "var(--clg-navy)" }}>
+          {unit.number}
+        </span>
+        <span style={{
+          fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 17,
           color: overDay ? "var(--clg-ruby)" : "var(--clg-pewter)",
         }}>
           {fmtHours(idleHours)}
         </span>
       </div>
 
-      <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--clg-navy)", marginBottom: 2 }}>
-        {wo.system_component || wo.complaint || wo.description || wo.category}
+      <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 400, fontSize: 21, color: "var(--clg-navy)", marginBottom: 4 }}>
+        {blockerSentence}
       </div>
       {(unit.current_location || unit.driver_name) && (
-        <div style={{ fontSize: 11.5, color: "var(--clg-cool)" }}>
+        <div style={{ fontSize: 12.5, color: "var(--clg-cool)" }}>
           {[unit.current_location, unit.driver_name].filter(Boolean).join(" · ")}
         </div>
       )}
 
-      {lead && (
-        <>
-          <div style={{ borderTop: "1px solid var(--clg-smoke)", margin: "10px 0" }} />
-          <div style={{ fontSize: 12, color: "var(--clg-granite)", marginBottom: 10 }}>
-            {blockerSentence} {costOfWaiting > 0 && <strong style={{ color: "var(--clg-navy)" }}>{money(costOfWaiting)}</strong>}
-          </div>
-          {action && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <Button size="sm" variant={action.variant} onClick={lane === "waiting_on_you" ? authorize : undefined}>
-                {action.label}
-              </Button>
-            </div>
-          )}
-          {hourlyRate > 0 && (
-            <div style={{ fontSize: 11, color: "var(--clg-cool)", marginTop: 8 }}>
-              ${Math.round(hourlyRate)}/hr to keep thinking about it
-            </div>
-          )}
-        </>
+      <div style={{ borderTop: "1px solid var(--clg-smoke)", margin: "14px 0 12px" }} />
+      <div style={{ fontSize: 13, color: "var(--clg-granite)", marginBottom: 12 }}>
+        {costOfWaiting > 0 && <strong style={{ color: "var(--clg-navy)" }}>{money(costOfWaiting)}</strong>}
+      </div>
+      {action && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Button size="sm" variant={action.variant} onClick={lane === "waiting_on_you" ? authorize : undefined}>
+            {action.label}
+          </Button>
+        </div>
       )}
-      {!lead && openCount > 1 && (
-        <div style={{ fontSize: 11, color: "var(--clg-cool)", marginTop: 4 }}>+{openCount - 1} more open</div>
+      {hourlyRate > 0 && (
+        <div style={{ fontSize: 11, color: "var(--clg-cool)", marginTop: 8 }}>
+          ${Math.round(hourlyRate)}/hr to keep thinking about it
+        </div>
       )}
     </div>
   );
