@@ -42,7 +42,12 @@ function computeEta(unit, trip, hos) {
     ? Math.round((driveRemainingHours - driveHoursNeeded) * 60)
     : null;
 
+  // A window (FCFS) and an exact appointment (APPT) read differently to a
+  // dispatcher — label which one this is rather than presenting both the
+  // same way. Window takes precedence when both exist (matches the same
+  // StopWindow-over-AppointmentDate precedence alvys-trips-report uses).
   const deadline = trip?.delivery_window_end || trip?.delivery_appointment_at || null;
+  const deadlineType = trip?.delivery_window_end ? "window" : trip?.delivery_appointment_at ? "appointment" : null;
   const lateMarginMinutes = etaAt && deadline
     ? Math.round((new Date(deadline).getTime() - etaAt.getTime()) / 60000)
     : null;
@@ -76,7 +81,7 @@ function computeEta(unit, trip, hos) {
 
   return {
     distanceRemainingMiles, driveHoursNeeded, etaAt, driveRemainingHours,
-    hosMarginMinutes, lateMarginMinutes, deadline, severity, reason,
+    hosMarginMinutes, lateMarginMinutes, deadline, deadlineType, severity, reason,
   };
 }
 

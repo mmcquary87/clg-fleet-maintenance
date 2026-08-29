@@ -43,7 +43,7 @@ function Section({ sectionKey, rows }) {
           {meta.empty}
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
           {rows.map((row) => <TrackingCard key={row.unit.id} row={row} />)}
         </div>
       )}
