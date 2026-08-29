@@ -3,7 +3,8 @@
 // Pulls from Samsara and updates our tables:
 //   1. Vehicle roster -> matches units by VIN, sets units.samsara_vehicle_id
 //   2. Fault codes (last 7 days) -> fault_events (OBD-II + J1939)
-//   3. Fuel/odometer/location (last 24h, latest reading per vehicle) -> units
+//   3. Fuel/odometer/GPS (last 24h, latest reading per vehicle) -> units
+//      (current_lat/current_lng feed the Tracking page's ETA math)
 //   4. DVIR defects (last 30 days) -> dvir_defects
 //
 // Read-only against Samsara — no writes back (Phase 1 scope; the design
@@ -170,6 +171,8 @@ Deno.serve(async (req) => {
       if (lastOdo) fields.odometer = Math.round(lastOdo.value * 0.000621371); // meters -> miles
       const lastGps = v.gps?.at(-1);
       if (lastGps?.address?.name) fields.current_location = lastGps.address.name;
+      if (typeof lastGps?.latitude === "number") fields.current_lat = lastGps.latitude;
+      if (typeof lastGps?.longitude === "number") fields.current_lng = lastGps.longitude;
       // Per-row update (not a bulk upsert) so only the fields this vehicle
       // actually reported get touched — a bulk upsert across rows with
       // different key sets would null out fields missing on some rows.
