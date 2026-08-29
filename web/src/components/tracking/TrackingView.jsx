@@ -1,8 +1,8 @@
 import { Loader2, Navigation } from "lucide-react";
 import { Alert } from "../../ds";
 import { useTracking, ASSUMED_MPH } from "../../hooks/useTracking";
-import TrackingCard from "./TrackingCard";
 import LateLoadExposureTable from "./LateLoadExposureTable";
+import SimpleTrackingTable from "./SimpleTrackingTable";
 
 const SECTION_META = {
   onTrack: {
@@ -40,9 +40,7 @@ function Section({ sectionKey, rows }) {
           {meta.empty}
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
-          {rows.map((row) => <TrackingCard key={row.unit.id} row={row} />)}
-        </div>
+        <SimpleTrackingTable rows={rows} variant={sectionKey} />
       )}
     </div>
   );
