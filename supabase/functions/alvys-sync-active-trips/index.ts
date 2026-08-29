@@ -16,7 +16,9 @@
 //    StopWindow.End (FCFS) or AppointmentDate (APPT) — matching the same
 //    isOnTime() precedence alvys-trips-report already uses. An open-ended
 //    StopWindow.End (year 9999 — "no real close time") is treated as no
-//    deadline rather than a literal date 8000 years out.
+//    deadline rather than a literal date 8000 years out. StopWindow.Begin
+//    (delivery_window_start) feeds the Late Load Exposure calc's
+//    leadTimeHours — null for APPT-type stops, which have no separate window.
 //
 // unit_current_trip is a full snapshot, not an append log: any unit no
 // longer on an active trip gets its row deleted so the Tracking page
@@ -151,6 +153,7 @@ Deno.serve(async (req) => {
         destination_lat: toNumber(delivery?.Coordinates?.Latitude),
         destination_lng: toNumber(delivery?.Coordinates?.Longitude),
         delivery_appointment_at: delivery?.AppointmentDate ?? null,
+        delivery_window_start: delivery?.StopWindow?.Begin ?? null,
         delivery_window_end: realDeadline(delivery?.StopWindow?.End),
         status: t.Status,
         synced_at: new Date().toISOString(),

@@ -2,12 +2,9 @@ import { Loader2, Navigation } from "lucide-react";
 import { Alert } from "../../ds";
 import { useTracking, ASSUMED_MPH } from "../../hooks/useTracking";
 import TrackingCard from "./TrackingCard";
+import LateLoadExposureTable from "./LateLoadExposureTable";
 
 const SECTION_META = {
-  attention: {
-    title: "Needs attention", accent: true,
-    empty: "Nothing here — no active load is at risk of missing its window or running short on HOS.",
-  },
   onTrack: {
     title: "On track", accent: false,
     empty: "Nothing currently on pace with complete data.",
@@ -24,11 +21,11 @@ function Section({ sectionKey, rows }) {
     <div style={{ marginBottom: 28 }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
-        borderTop: `3px solid ${meta.accent ? "var(--clg-scarlet)" : "var(--clg-smoke)"}`, paddingTop: 10,
+        borderTop: "3px solid var(--clg-smoke)", paddingTop: 10,
       }}>
         <span style={{
           fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em",
-          textTransform: "uppercase", color: meta.accent ? "var(--clg-ruby)" : "var(--clg-navy)",
+          textTransform: "uppercase", color: "var(--clg-navy)",
         }}>
           {meta.title}
         </span>
@@ -76,9 +73,9 @@ export default function TrackingView() {
           </div>
         </div>
         <div style={{ marginLeft: "auto", maxWidth: 420, fontSize: 12.5, color: "var(--clg-reflection)" }}>
-          Position refreshes every 15 minutes from Samsara. ETA assumes {ASSUMED_MPH} mph over the
-          straight-line distance remaining — a floor, not a promise, until Google Maps traffic-aware
-          routing is connected.
+          Position refreshes every 15 minutes from Samsara. Drive time still needed assumes {ASSUMED_MPH} mph
+          straight-line until Google Maps traffic-aware routing is connected — but the projected arrival
+          now factors in any mandatory HOS reset the driver's remaining drive-clock requires.
         </div>
       </div>
 
@@ -95,7 +92,32 @@ export default function TrackingView() {
           </div>
         ) : (
           <>
-            <Section sectionKey="attention" rows={groups.attention} />
+            <div style={{ marginBottom: 28 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+                borderTop: "3px solid var(--clg-scarlet)", paddingTop: 10,
+              }}>
+                <span style={{
+                  fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em",
+                  textTransform: "uppercase", color: "var(--clg-ruby)",
+                }}>
+                  Needs attention
+                </span>
+                <span style={{ fontSize: 12, color: "var(--clg-cool)" }}>· {groups.attention.length}</span>
+              </div>
+
+              {groups.attention.length === 0 ? (
+                <div style={{
+                  border: "1px dashed var(--clg-mercury)", padding: "16px 12px", fontSize: 12,
+                  color: "var(--clg-pewter)", textAlign: "center", background: "var(--clg-surface-subtle)",
+                }}>
+                  Nothing here — no active load is projected short of its deadline.
+                </div>
+              ) : (
+                <LateLoadExposureTable rows={groups.attention} />
+              )}
+            </div>
+
             <Section sectionKey="onTrack" rows={groups.onTrack} />
             <Section sectionKey="noData" rows={groups.noData} />
           </>

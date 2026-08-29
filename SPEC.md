@@ -251,11 +251,21 @@ Statistics** (Vehicles category).
 * `GET /driver-efficiency/drivers` — driver-level eco-driving/efficiency
 scoring, grouped by vehicle if useful later for a driver-behavior view.
 Scope: **Read Driver Efficiency** (Fuel \& Energy category).
+* `GET /fleet/hos/clocks` — per-driver current duty status plus remaining
+time on each Hours of Service clock (drive, shift/on-duty 14-hour window,
+cycle, 30-minute break). Confirmed the `vehicleIds`/`driverIds` query params
+are silently ignored — this returns the whole fleet's clocks every call,
+filtered client-side by matching `currentVehicle.id` against known units.
+Powers the Tracking page's HOS-aware ETA (see
+`late-load-exposure-calc-spec.md`) — without this, the board can't tell a
+driver with 8 hours of drive time left from one with 8 minutes. Scope:
+**Read Hours of Service** (Safety category, presumably — confirm in the
+Samsara dashboard's scope picker).
 
 **Token scope checklist for the "complete feed"** (all read-only): Vehicles,
-Read Vehicle Statistics, Read Fuel \& Energy, Read Driver Efficiency, DVIRs/
-Defects. One token, one generation step in the Samsara dashboard, all scopes
-selected at once.
+Read Vehicle Statistics, Read Fuel \& Energy, Read Driver Efficiency, Read
+Hours of Service, DVIRs/Defects. One token, one generation step in the
+Samsara dashboard, all scopes selected at once.
 
 **Where this shows up in the dashboard**: a natural fit is a third view
 alongside Company and By-Unit — a **Performance** view per unit (fuel
