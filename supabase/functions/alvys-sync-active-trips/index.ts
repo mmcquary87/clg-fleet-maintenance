@@ -8,6 +8,9 @@
 //    track); "Completed"/"Delivered"/"Released"/"Cancelled" are terminal.
 //  - Truck.Id matches units.alvys_asset_id (same id space alvys-sync-
 //    equipment already populates units with).
+//  - LoadNumber is the stable reference number to look a load up in Alvys
+//    itself — TripNumber can carry a leg suffix (e.g. "1012475-1") for a
+//    multi-stop load's individual legs, LoadNumber doesn't.
 //  - Driver1.Id matches drivers.id directly — no separate lookup/mapping
 //    needed, but still guarded against an unsynced driver id (FK would
 //    reject it otherwise).
@@ -146,6 +149,7 @@ Deno.serve(async (req) => {
       rowByUnitId.set(unitId, {
         unit_id: unitId,
         alvys_trip_id: t.Id,
+        load_number: t.LoadNumber ?? null,
         driver_id: driverId,
         destination_name: delivery?.CompanyName
           ? `${delivery.CompanyName} (${delivery?.Address?.City ?? ""}, ${delivery?.Address?.State ?? ""})`

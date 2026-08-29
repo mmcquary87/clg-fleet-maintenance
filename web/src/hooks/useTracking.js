@@ -144,7 +144,7 @@ export function useTracking() {
     const { data, error: err } = await supabase
       .from("unit_current_trip")
       .select(
-        "alvys_trip_id, destination_name, destination_lat, destination_lng, " +
+        "alvys_trip_id, load_number, destination_name, destination_lat, destination_lng, " +
         "delivery_appointment_at, delivery_window_start, delivery_window_end, status, synced_at, " +
         "unit:units(id, number, current_lat, current_lng, current_location, samsara_synced_at, driver_name), " +
         "driver:drivers(id, name)"
