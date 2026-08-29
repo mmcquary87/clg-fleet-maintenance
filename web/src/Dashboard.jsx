@@ -117,7 +117,7 @@ export default function Dashboard({ session }) {
         </div>
       </div>
 
-      {tab === "board" && <Board />}
+      {tab === "board" && <Board onGoToUnits={() => setTab("units")} />}
       {tab === "tracking" && <TrackingView />}
       {tab === "workorders" && <WorkOrdersView />}
       {tab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
