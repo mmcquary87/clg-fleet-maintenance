@@ -4,7 +4,7 @@ import { Button, Card, Badge, Eyebrow, Alert, Input } from "../../ds";
 import { useUnits } from "../../hooks/useUnits";
 import { worstStatus } from "../../lib/maintenanceSchedule";
 import UnitForm from "./UnitForm";
-import UnitDetailModal from "./UnitDetailModal";
+import UnitDrawer from "../shared/UnitDrawer";
 
 function maintenanceTone(status) {
   if (status === "overdue") return "critical";
@@ -127,7 +127,7 @@ export default function UnitsView() {
         )}
       </Card>
 
-      {openUnitId && <UnitDetailModal unitId={openUnitId} onClose={() => setOpenUnitId(null)} />}
+      {openUnitId && <UnitDrawer unitId={openUnitId} onClose={() => setOpenUnitId(null)} />}
     </div>
   );
 }
