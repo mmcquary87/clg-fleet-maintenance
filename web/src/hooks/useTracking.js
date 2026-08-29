@@ -96,6 +96,13 @@ function computeEta(unit, trip, hos) {
   const bufferHours = projectedArrival && deadline
     ? Math.max(0, (new Date(deadline).getTime() - projectedArrival.getTime()) / 3600000)
     : null;
+  // Signed version of the same read (ui-improvement-punch-list.md's "ETA
+  // Cushion" column) — positive means ahead of the deadline, negative means
+  // short of it. hoursShort/bufferHours stay as-is (each clamped to >= 0)
+  // since severityTierFor and the sort order above already depend on them.
+  const cushionHours = projectedArrival && deadline
+    ? (new Date(deadline).getTime() - projectedArrival.getTime()) / 3600000
+    : null;
   const leadTimeHours = windowStart ? (new Date(windowStart).getTime() - Date.now()) / 3600000 : null;
   const severityTier = hoursShort != null ? severityTierFor(hoursShort) : null;
 
@@ -121,9 +128,14 @@ function computeEta(unit, trip, hos) {
   }
 
   return {
+    // Explicit per-field availability, not just inferred from nulls
+    // downstream — the "No GPS" / "No appointment" / "HOS risk" Tracking
+    // filters (ui-improvement-punch-list.md) each need to isolate one of
+    // these independent of whether an ETA could be computed overall.
+    hasPosition, hasDestination, hasHos: driveRemainingHours != null, hasAppointment: deadline != null,
     distanceRemainingMiles, driveHoursNeeded, driveRemainingHours,
     projectedArrival, resetsNeeded, deadline, deadlineType, windowStart,
-    hoursShort, bufferHours, leadTimeHours, severityTier,
+    hoursShort, bufferHours, cushionHours, leadTimeHours, severityTier,
     severity, reason, assumptions: ASSUMPTIONS,
   };
 }
@@ -202,7 +214,14 @@ export function useTracking() {
     .filter((r) => r.eta.severity === "no_data")
     .sort((a, b) => (a.eta.deadline ? new Date(a.eta.deadline).getTime() : Infinity) - (b.eta.deadline ? new Date(b.eta.deadline).getTime() : Infinity));
 
+  // Single worst-first ordering across all three groups (ui-improvement-
+  // punch-list.md's Tracking rebuild: one dense table, not three sections) —
+  // attention's negative cushion sorts before onTrack's positive cushion
+  // naturally; noData's null cushion has nothing to rank by, so it goes last.
+  const allSorted = [...attention, ...onTrack, ...noData];
+
   return {
+    rows: allSorted,
     groups: { attention, onTrack, noData },
     total: rows.length,
     loading, error, reload: load,
