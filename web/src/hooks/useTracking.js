@@ -8,6 +8,17 @@ import { haversineMiles } from "../lib/haversine";
 // with no traffic source connected, this constant is the only estimate.
 export const ASSUMED_MPH = 55;
 
+function fmtHM(minutes) {
+  const abs = Math.round(Math.abs(minutes));
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function fmtClock(date) {
+  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 function computeEta(unit, trip, hos) {
   const hasPosition = typeof unit.current_lat === "number" && typeof unit.current_lng === "number";
   const hasDestination = typeof trip?.destination_lat === "number" && typeof trip?.destination_lng === "number";
@@ -27,22 +38,51 @@ function computeEta(unit, trip, hos) {
   // 10-hour break / 34-hour restart rules) — just the one flag a
   // dispatcher actually needs at a glance: "does this driver have enough
   // drive-clock left to cover the remaining distance without a forced stop."
-  const hosShortfall = driveHoursNeeded != null && driveRemainingHours != null
-    ? driveHoursNeeded > driveRemainingHours
+  const hosMarginMinutes = driveHoursNeeded != null && driveRemainingHours != null
+    ? Math.round((driveRemainingHours - driveHoursNeeded) * 60)
     : null;
 
   const deadline = trip?.delivery_window_end || trip?.delivery_appointment_at || null;
-  const lateRisk = etaAt && deadline ? etaAt.getTime() > new Date(deadline).getTime() : null;
+  const lateMarginMinutes = etaAt && deadline
+    ? Math.round((new Date(deadline).getTime() - etaAt.getTime()) / 60000)
+    : null;
 
-  return { distanceRemainingMiles, driveHoursNeeded, etaAt, driveRemainingHours, hosShortfall, lateRisk, deadline };
+  const hasEnoughData = etaAt != null;
+  const hosShortfall = hosMarginMinutes != null && hosMarginMinutes < 0;
+  const lateRisk = lateMarginMinutes != null && lateMarginMinutes < 0;
+
+  // The layout groups on this, and each card leads with this sentence
+  // instead of making the dispatcher do the math across separate columns.
+  let severity = "no_data";
+  let reason = "Missing position, destination, or HOS data — can't compute an ETA read yet.";
+  if (hasEnoughData) {
+    if (hosShortfall && lateRisk) {
+      severity = "attention";
+      reason = `Only ${fmtHM(driveRemainingHours * 60)} of drive time left but the trip still needs ${fmtHM(driveHoursNeeded * 60)} — expect a mandatory break, arriving after the ${fmtClock(new Date(deadline))} deadline.`;
+    } else if (hosShortfall) {
+      severity = "attention";
+      reason = `Only ${fmtHM(driveRemainingHours * 60)} of drive time left, but the trip still needs ${fmtHM(driveHoursNeeded * 60)} — expect a mandatory break before arrival.`;
+    } else if (lateRisk) {
+      severity = "attention";
+      reason = `ETA ${fmtClock(etaAt)} is ${fmtHM(lateMarginMinutes)} after the ${fmtClock(new Date(deadline))} deadline.`;
+    } else if (lateMarginMinutes != null) {
+      severity = "ok";
+      reason = `On pace — ETA ${fmtClock(etaAt)}, ${fmtHM(lateMarginMinutes)} ahead of the ${fmtClock(new Date(deadline))} deadline.`;
+    } else {
+      severity = "ok";
+      reason = `ETA ${fmtClock(etaAt)}. No delivery deadline on file to check against.`;
+    }
+  }
+
+  return {
+    distanceRemainingMiles, driveHoursNeeded, etaAt, driveRemainingHours,
+    hosMarginMinutes, lateMarginMinutes, deadline, severity, reason,
+  };
 }
 
 // Powers the Tracking page: every unit currently on an active load, its
 // live position (from Samsara, refreshed every 15 min), its destination
-// (from Alvys, once alvys-sync-active-trips exists), and an HOS-aware ETA
-// computed client-side from both. unit_current_trip / unit_hos_status are
-// empty until those sync functions are built — see the migration comment
-// in 20260829000000_proactive_tracking.sql for why.
+// (from Alvys), and an HOS-aware risk read computed client-side from both.
 export function useTracking() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,8 +99,7 @@ export function useTracking() {
         "delivery_appointment_at, delivery_window_end, status, synced_at, " +
         "unit:units(id, number, current_lat, current_lng, current_location, samsara_synced_at, driver_name), " +
         "driver:drivers(id, name)"
-      )
-      .order("delivery_window_end", { ascending: true, nullsFirst: false });
+      );
 
     if (err) {
       setError(err.message);
@@ -94,5 +133,20 @@ export function useTracking() {
     load();
   }, [load]);
 
-  return { rows, loading, error, reload: load };
+  // Grouped and sorted here, not in the view — the layout is a direct
+  // reflection of this ordering, not a separate presentation decision.
+  const attention = rows
+    .filter((r) => r.eta.severity === "attention")
+    .sort((a, b) => Math.min(a.eta.lateMarginMinutes ?? Infinity, a.eta.hosMarginMinutes ?? Infinity)
+      - Math.min(b.eta.lateMarginMinutes ?? Infinity, b.eta.hosMarginMinutes ?? Infinity));
+  const onTrack = rows
+    .filter((r) => r.eta.severity === "ok")
+    .sort((a, b) => (a.eta.etaAt?.getTime() ?? Infinity) - (b.eta.etaAt?.getTime() ?? Infinity));
+  const noData = rows.filter((r) => r.eta.severity === "no_data");
+
+  return {
+    groups: { attention, onTrack, noData },
+    total: rows.length,
+    loading, error, reload: load,
+  };
 }
