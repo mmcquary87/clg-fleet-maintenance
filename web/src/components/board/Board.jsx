@@ -4,7 +4,7 @@ import UnitCard from "./UnitCard";
 
 const LANE_META = {
   waiting_on_you: { title: "Waiting on you", accent: true, hint: "you are the blocker", emptyLine: "Nothing waiting on you." },
-  waiting_on_vendor: { title: "Waiting on a vendor", accent: false, emptyLine: "Nothing at a vendor." },
+  waiting_on_vendor: { title: "At a vendor", accent: false, emptyLine: "Nothing at a vendor." },
   waiting_on_parts: { title: "Waiting on parts", accent: false, emptyLine: "No parts on order." },
   in_the_bay: { title: "In the bay", accent: false, hint: "nobody needs to do anything", emptyLine: "No unit in a bay." },
 };
@@ -30,67 +30,69 @@ function itemsPhrase(waitingOnYouCount) {
   return `all ${waitingOnYouCount} open items sitting`;
 }
 
-function Column({ laneKey, cards, onChanged, closedToday, emptyLanesCount, waitingOnYouCount }) {
-  const meta = LANE_META[laneKey];
-  const dollars = cards.reduce((s, c) => s + c.costOfWaiting, 0);
+function EmptyLaneCard({ text }) {
+  return (
+    <div style={{
+      background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)",
+      padding: "16px 12px", fontSize: 12, color: "var(--clg-pewter)", textAlign: "center",
+    }}>
+      {text}
+    </div>
+  );
+}
+
+// The primary lane (Waiting on you): full-width header, one expanded lead
+// card, remaining items as compact single-line rows.
+function PrimaryLane({ cards, onChanged }) {
+  const meta = LANE_META.waiting_on_you;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", background: "var(--clg-moon)", minWidth: 0 }}>
+    <div>
       <div style={{
-        background: "var(--clg-surface-card)", padding: "16px 18px",
-        borderTop: `4px solid ${meta.accent ? "var(--clg-scarlet)" : "var(--clg-smoke)"}`,
+        fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12, letterSpacing: "0.13em",
+        textTransform: "uppercase", color: "var(--clg-ruby)",
       }}>
-        <div style={{
-          fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11.5, letterSpacing: "0.13em",
-          textTransform: "uppercase", color: meta.accent ? "var(--clg-ruby)" : "var(--clg-navy)",
-        }}>
-          {meta.title}
-        </div>
-        <div style={{ fontSize: 12, color: "var(--clg-pewter)", marginTop: 3 }}>
-          {cards.length} unit{cards.length === 1 ? "" : "s"}
-          {dollars > 0 && ` · ${money(dollars)} accruing`}
-          {meta.hint && ` · ${meta.hint}`}
-        </div>
+        {meta.title}
+      </div>
+      <div style={{ fontSize: 12.5, color: "var(--clg-pewter)", marginTop: 3, marginBottom: 14 }}>
+        {cards.length} unit{cards.length === 1 ? "" : "s"}
+        {cards.length > 0 && ` · ${meta.hint}`}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 12, background: "var(--clg-moon)" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {cards.length === 0 ? (
-          <div style={{
-            border: "1px dashed var(--clg-mercury)", padding: "16px 12px", fontSize: 12,
-            color: "var(--clg-pewter)", textAlign: "center", background: "var(--clg-surface-card)",
-          }}>
-            {meta.emptyLine}
-          </div>
+          <EmptyLaneCard text={meta.emptyLine} />
         ) : (
           cards.map((c, i) => <UnitCard key={c.unit.id} card={c} lead={i === 0} onChanged={onChanged} />)
         )}
+      </div>
+    </div>
+  );
+}
 
-        {laneKey === "in_the_bay" && (
-          <div style={{ background: "var(--clg-navy)", color: "#fff", padding: "18px 16px", marginTop: 4 }}>
-            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.13em" }}>
-              BACK ON THE ROAD TODAY
-            </div>
-            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 30, marginTop: 6 }}>
-              {closedToday} unit{closedToday === 1 ? "" : "s"}
-            </div>
-          </div>
-        )}
+// A monitored lane (At a vendor / Waiting on parts / In the bay): plain
+// text header directly on the page background, every item a compact row —
+// there is no expanded "lead" item outside the lane you own.
+function MonitoredLane({ laneKey, cards, onChanged }) {
+  const meta = LANE_META[laneKey];
 
-        {laneKey === "in_the_bay" && emptyLanesCount > 0 && (
-          <div style={{ background: "var(--clg-surface-card)", border: "1px solid var(--clg-moon)", padding: "16px" }}>
-            <div style={{
-              fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.13em",
-              textTransform: "uppercase", color: "var(--clg-navy)",
-            }}>
-              {emptyLanesTitle(emptyLanesCount)}
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--clg-granite)", marginTop: 8, lineHeight: 1.5 }}>
-              An empty lane is good news — nothing is invented to fill it.
-              {waitingOnYouCount > 0 && (
-                <> But {itemsPhrase(waitingOnYouCount)} in <em>your</em> lane means the bottleneck is authorization, not shop capacity.</>
-              )}
-            </div>
-          </div>
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <span style={{
+          fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.13em",
+          textTransform: "uppercase", color: "var(--clg-navy)",
+        }}>
+          {meta.title}
+        </span>
+        <span style={{ fontSize: 11.5, color: "var(--clg-cool)" }}>{cards.length}</span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+        {cards.length === 0 ? (
+          <EmptyLaneCard text={meta.emptyLine} />
+        ) : (
+          cards.map((c) => <UnitCard key={c.unit.id} card={c} lead={false} onChanged={onChanged} />)
         )}
       </div>
     </div>
@@ -107,6 +109,9 @@ export default function Board({ onGoToUnits }) {
       </div>
     );
   }
+
+  const emptyLanesCount = MONITORED_LANE_KEYS.filter((k) => lanes[k].length === 0).length;
+  const waitingOnYouCount = lanes.waiting_on_you.length;
 
   return (
     <div style={{ fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)" }}>
@@ -151,9 +156,9 @@ export default function Board({ onGoToUnits }) {
             </>
           )}
         </div>
-        {lanes.waiting_on_you.length > 0 && (
+        {waitingOnYouCount > 0 && (
           <div style={{ marginLeft: "auto", borderLeft: "2px solid var(--clg-scarlet)", paddingLeft: 16, maxWidth: 320, fontSize: 12.5, color: "var(--clg-reflection)" }}>
-            {lanes.waiting_on_you.length} of {totals.idleCount} are waiting on a decision from someone inside this building.
+            {waitingOnYouCount} of {totals.idleCount} are waiting on a decision from someone inside this building.
             That is the cheapest downtime to eliminate.
           </div>
         )}
@@ -163,14 +168,53 @@ export default function Board({ onGoToUnits }) {
         <div style={{ padding: 16, background: "#FBEAEB", color: "var(--clg-ruby)", fontSize: 13 }}>{error}</div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1, background: "var(--clg-moon)", minHeight: 500 }}>
-        {Object.keys(LANE_META).map((laneKey) => (
-          <Column
-            key={laneKey} laneKey={laneKey} cards={lanes[laneKey]} onChanged={reload} closedToday={closedToday}
-            emptyLanesCount={MONITORED_LANE_KEYS.filter((k) => lanes[k].length === 0).length}
-            waitingOnYouCount={lanes.waiting_on_you.length}
-          />
-        ))}
+      {/* 46/54 split — the lane you own gets the wider, expanded-first-item
+          side; the three lanes you only monitor share the rest as compact
+          stacks. Attention comes from this layout, not from color. */}
+      <div style={{ display: "grid", gridTemplateColumns: "46fr 54fr", gap: 24, padding: "24px 28px" }}>
+        <PrimaryLane cards={lanes.waiting_on_you} onChanged={reload} />
+
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+            {MONITORED_LANE_KEYS.map((laneKey) => (
+              <MonitoredLane key={laneKey} laneKey={laneKey} cards={lanes[laneKey]} onChanged={reload} />
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 20 }}>
+            <div style={{
+              background: "var(--clg-navy)", color: "#fff", padding: "18px 16px", borderRadius: "var(--clg-radius-md)",
+              boxShadow: "var(--clg-shadow-resting)",
+            }}>
+              <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.13em" }}>
+                BACK ON THE ROAD TODAY
+              </div>
+              <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 30, marginTop: 6 }}>
+                {closedToday} unit{closedToday === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            {emptyLanesCount > 0 && (
+              <div style={{
+                background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-resting)",
+                borderRadius: "var(--clg-radius-md)", padding: "16px",
+              }}>
+                <div style={{
+                  fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.13em",
+                  textTransform: "uppercase", color: "var(--clg-navy)",
+                }}>
+                  {emptyLanesTitle(emptyLanesCount)}
+                </div>
+                <div style={{ fontSize: 12.5, color: "var(--clg-granite)", marginTop: 8, lineHeight: 1.5 }}>
+                  An empty lane is good news — nothing is invented to fill it.
+                  {waitingOnYouCount > 0 && (
+                    <> But {itemsPhrase(waitingOnYouCount)} in <em>your</em> lane means the bottleneck is authorization, not shop capacity.</>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
