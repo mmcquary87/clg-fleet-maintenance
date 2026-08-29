@@ -32,10 +32,11 @@ export default function TrackingCard({ row }) {
   const { unit, trip, hos, eta } = row;
   const driverName = trip.driver?.name || unit.driver_name || "Driver not on file";
   const appointmentLabel = eta.deadlineType === "window" ? "Window closes" : "Appointment";
+  const isLate = eta.hoursShort != null && eta.hoursShort > 0;
 
   return (
     <div style={{
-      background: "var(--clg-surface-card)", border: "1px solid var(--clg-moon)",
+      background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)",
       borderLeft: `4px solid ${BORDER_BY_SEVERITY[eta.severity]}`, padding: "14px 16px",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
@@ -49,15 +50,15 @@ export default function TrackingCard({ row }) {
         <Stat label="Current location" value={unit.current_location || "No GPS lock yet"} />
         <Stat label="Delivery location" value={trip.destination_name || "Not yet synced"} />
         <Stat
-          label="Projected ETA"
-          value={eta.etaAt ? fmtFull(eta.etaAt) : "—"}
-          accent={eta.lateRisk === true}
-          note={eta.hosMarginMinutes != null && eta.hosMarginMinutes < 0 ? "assumes no required rest" : null}
+          label="Projected arrival"
+          value={eta.projectedArrival ? fmtFull(eta.projectedArrival) : "—"}
+          accent={isLate}
+          note={eta.resetsNeeded > 0 ? `includes ${eta.resetsNeeded > 1 ? `${eta.resetsNeeded} resets` : "a required reset"}` : null}
         />
         <Stat
           label={eta.deadline ? appointmentLabel : "Appointment"}
           value={eta.deadline ? fmtFull(new Date(eta.deadline)) : "Not on file"}
-          accent={eta.lateRisk === true}
+          accent={isLate}
         />
       </div>
 
