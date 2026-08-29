@@ -87,7 +87,7 @@ export const KPIS = [
     no: "DE-01", module: "fleet", name: "Projected Late Load Exposure", classification: "Daily Exception Measure", type: "Leading",
     formula: "Active loads whose latest projected arrival falls outside the appointment window",
     threshold: { status: "pending", green: "Not applicable — daily exception view", yellow: "Not applicable", red: "Priority by exception-severity rules" },
-    dataStatus: "blocked", blockedReason: "Needs Alvys appointment data plus a validated Samsara ETA feed — not built yet.",
+    dataStatus: "live", unit: "loads",
   },
   {
     no: 11, module: "driver", name: "Driver Utilization", classification: "Primary Weekly KPI", type: "Lagging",
