@@ -94,11 +94,72 @@ function lastStopOf(stops: any[], type: string) {
   const matches = (stops ?? []).filter((s: any) => s.StopType === type);
   return matches[matches.length - 1];
 }
-function isOnTime(arrivedAt: string | undefined, windowEnd: string | undefined, appointmentAt: string | undefined) {
-  if (!arrivedAt) return null;
-  const deadline = windowEnd || appointmentAt;
-  if (!deadline) return null;
+function isOnTime(arrivedAt: string | undefined, deadline: string | undefined | null) {
+  if (!arrivedAt || !deadline) return null;
   return new Date(arrivedAt).getTime() <= new Date(deadline).getTime();
+}
+
+function addBusinessDays(iso: string, days: number): string {
+  const result = new Date(iso);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const day = result.getDay(); // 0 = Sunday, 6 = Saturday
+    if (day !== 0 && day !== 6) added += 1;
+  }
+  return result.toISOString();
+}
+
+// KBX Logistics' CustomerId, confirmed via alvys-explore-kbx-transfer-type
+// (2026-08-30) -- CustomerName "KBX Logistics", CustomerNumber "KBXLELTX".
+// Used to fetch just KBX's loads via loads/search's CustomerId filter
+// instead of scanning every customer's loads (Completed alone runs
+// 10,000+ company-wide, confirmed via the same probe).
+const KBX_CUSTOMER_ID = "5a3c2a3baca846b0b788d1f926235244";
+
+// CLG's on-time delivery scoring for KBX gives some loads a grace period
+// plain StopWindow/AppointmentDate can't capture: a load noted "DEMAND
+// TRANSFER" is due on the stated date, but one noted "RELIEF TRANSFER"
+// gets up to 2 business days after that date before it counts against the
+// scorecard. This designation lives as free text in the load's Notes, not
+// a structured field (confirmed via the probe) -- so this matches whatever
+// note text contains "relief transfer" / "demand transfer",
+// case-insensitively. A KBX load with neither phrase in its notes defaults
+// to strict/demand (no grace) -- the conservative read, since there's no
+// positive signal a grace period applies.
+async function fetchKbxTransferTypes(token: string): Promise<Map<string, "relief" | "demand">> {
+  // Looped one status at a time, matching the shape alvys-sync-loads and
+  // alvys-explore-kbx-transfer-type already confirmed works against
+  // loads/search -- Alvys silently ignores an unsupported param shape
+  // instead of rejecting it (same trap PickupDateRange's {Start,End} vs
+  // {Begin,End} hit elsewhere in this file), so a multi-status array here
+  // is an untested assumption not worth risking on a real KPI.
+  const MAX_KBX_PAGES_PER_STATUS = 15;
+  const items: any[] = [];
+  for (const status of RELEVANT_STATUSES) {
+    let page = 0;
+    while (page < MAX_KBX_PAGES_PER_STATUS) {
+      const res = await fetch(`${ALVYS_API_BASE}/loads/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ Page: page, PageSize: PAGE_SIZE, Status: [status], CustomerId: KBX_CUSTOMER_ID }),
+      });
+      const text = await res.text();
+      if (!res.ok) throw new Error(`loads/search (KBX, ${status}) page ${page} failed (${res.status}): ${text.slice(0, 500)}`);
+      let json: any;
+      try { json = JSON.parse(text); } catch { throw new Error(`loads/search (KBX, ${status}) page ${page} returned non-JSON: ${text.slice(0, 500)}`); }
+      items.push(...(json.Items ?? []));
+      if ((json.Items ?? []).length === 0 || items.length >= json.Total) break;
+      page += 1;
+    }
+  }
+  const byLoadNumber = new Map<string, "relief" | "demand">();
+  for (const l of items) {
+    const notesText = (l.Notes ?? []).map((n: any) => String(n.Description ?? "")).join(" \n ").toLowerCase();
+    if (notesText.includes("relief transfer")) byLoadNumber.set(l.LoadNumber, "relief");
+    else if (notesText.includes("demand transfer")) byLoadNumber.set(l.LoadNumber, "demand");
+  }
+  return byLoadNumber;
 }
 
 Deno.serve(async (req) => {
@@ -126,10 +187,11 @@ Deno.serve(async (req) => {
     // returns every status when it's omitted, confirmed via
     // alvys-explore-active-trips), then Cancelled is excluded client-side
     // since a cancelled load was never actually planned to run.
-    const [pickedUp, delivered, plannedPickups] = await Promise.all([
+    const [pickedUp, delivered, plannedPickups, kbxTransferByLoadNumber] = await Promise.all([
       fetchAllTrips(token, "PickupDateRange", startDate, endDate),
       fetchAllTrips(token, "DeliveryDateRange", startDate, endDate),
       fetchAllTrips(token, "PickupDateRange", startDate, endDate, null),
+      fetchKbxTransferTypes(token),
     ]);
 
     const byId = new Map<string, any>();
@@ -142,6 +204,10 @@ Deno.serve(async (req) => {
 
     const pickupOnTime: boolean[] = [];
     const deliveryOnTime: boolean[] = [];
+    let dropHookPickupsExcluded = 0;
+    let kbxReliefTransfersApplied = 0;
+    let kbxReliefTransfersFlippedToOnTime = 0;
+    let kbxDemandTransfers = 0;
 
     let totalStopHours = 0;
     let totalDetentionHours = 0;
@@ -161,9 +227,33 @@ Deno.serve(async (req) => {
       const stops = t.Stops ?? [];
       const pickup = firstStopOf(stops, "Pickup");
       const delivery = lastStopOf(stops, "Delivery");
-      const pickupOk = isOnTime(pickup?.ArrivedAt, pickup?.StopWindow?.End, pickup?.AppointmentDate);
-      const deliveryOk = isOnTime(delivery?.ArrivedAt, delivery?.StopWindow?.End, delivery?.AppointmentDate);
-      if (pickupOk !== null) pickupOnTime.push(pickupOk);
+      const pickupOk = isOnTime(pickup?.ArrivedAt, pickup?.StopWindow?.End || pickup?.AppointmentDate);
+
+      // KBX relief-transfer loads get their delivery deadline pushed 2
+      // business days out before judging on-time — see
+      // fetchKbxTransferTypes' comment for why. A demand-transfer or
+      // untagged KBX load, and every non-KBX load, uses the deadline as-is.
+      let deliveryDeadline = delivery?.StopWindow?.End || delivery?.AppointmentDate;
+      const kbxTransferType = t.LoadNumber ? kbxTransferByLoadNumber.get(t.LoadNumber) : undefined;
+      if (kbxTransferType === "relief" && deliveryDeadline && !deliveryDeadline.startsWith("9999")) {
+        const extendedDeadline = addBusinessDays(deliveryDeadline, 2);
+        if (isOnTime(delivery?.ArrivedAt, deliveryDeadline) === false && isOnTime(delivery?.ArrivedAt, extendedDeadline) === true) {
+          kbxReliefTransfersFlippedToOnTime += 1;
+        }
+        deliveryDeadline = extendedDeadline;
+        kbxReliefTransfersApplied += 1;
+      } else if (kbxTransferType === "demand") {
+        kbxDemandTransfers += 1;
+      }
+      const deliveryOk = isOnTime(delivery?.ArrivedAt, deliveryDeadline);
+      // A missed Drop&Hook pickup window isn't actually judged against CLG
+      // in practice (confirmed by CLG 2026-08-30) — as long as delivery is
+      // on time, a late drop&hook pickup doesn't cost anything. Excluded
+      // from the eligible-pickup set entirely rather than force-counted as
+      // "on time," since it isn't a real on-time judgment either way —
+      // counting it as on-time would inflate the score dishonestly.
+      if (pickupOk !== null && pickup?.LoadingType !== "Drop&Hook") pickupOnTime.push(pickupOk);
+      else if (pickupOk !== null) dropHookPickupsExcluded += 1;
       if (deliveryOk !== null) deliveryOnTime.push(deliveryOk);
 
       // Waiting + detention: every Pickup/Delivery stop's chargeable dwell
@@ -293,9 +383,20 @@ Deno.serve(async (req) => {
       plannedTotalMiles: Math.round(plannedTotalMiles),
       plannedEmptyMilePct: plannedTotalMiles > 0 ? Math.round((plannedEmptyMiles / plannedTotalMiles) * 1000) / 10 : null,
       eligiblePickups: pickupOnTime.length,
+      dropHookPickupsExcluded,
       onTimePickupPct: pickupOnTime.length > 0 ? Math.round((pickupOnTime.filter(Boolean).length / pickupOnTime.length) * 1000) / 10 : null,
       eligibleDeliveries: deliveryOnTime.length,
       onTimeDeliveryPct: deliveryOnTime.length > 0 ? Math.round((deliveryOnTime.filter(Boolean).length / deliveryOnTime.length) * 1000) / 10 : null,
+      // KBX relief/demand transfer designation, pulled from Notes text on
+      // KBX's own loads (see fetchKbxTransferTypes) -- kbxReliefTransfersApplied
+      // is how many delivery judgments used the extended (+2 business day)
+      // deadline; kbxReliefTransfersFlippedToOnTime is how many of those
+      // would have shown late under the original deadline but are on-time
+      // under the real one.
+      kbxLoadsWithTransferTypeFound: kbxTransferByLoadNumber.size,
+      kbxReliefTransfersApplied,
+      kbxReliefTransfersFlippedToOnTime,
+      kbxDemandTransfers,
       revenuePerActiveTractorPerWeek: truckCount > 0 ? Math.round((totalRevenue / truckCount / weeks) * 100) / 100 : null,
       activeTractors: truckCount,
       // Supporting figure alongside Revenue per Active Tractor, not a
