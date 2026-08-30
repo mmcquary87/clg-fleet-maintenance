@@ -1,13 +1,19 @@
 // Fleet Maintenance System — 72-Hour Load Assignment Stability (KPI 2)
 //
-// Uses the user's own 4-hour Alvys backup (a Google Sheet published as
-// CSV, tracking LoadNumber/TripDriverId/ScheduledPickupAt snapshots over
-// time) to detect driver-assignment churn before execution — data the
-// live Alvys API can't give us, since it only shows current state.
+// Uses CLG's own hourly Alvys backup (a Google Sheet tab published as
+// CSV, tracking LoadNumber/Status/TripStatus/TripDriverId/TripAssignedAt/
+// ScheduledPickupAt snapshots over time) to detect driver-assignment
+// churn before execution — data the live Alvys API can't give us, since
+// it only shows current state.
 //
 // Definition (framework): eligible assignments unchanged from the
 // 72-hour checkpoint through final release ÷ eligible assignments active
 // at the 72-hour checkpoint × 100.
+//
+// Switched 2026-08-30 from an earlier 4-hour-refresh tab (which only
+// tracked LoadNumber/TripDriverId/ScheduledPickupAt and was returning 0
+// eligible assignments against a 3-month test range) to this richer,
+// hourly tab CLG pointed to — same spreadsheet, different tab.
 //
 // Approximations, stated plainly rather than hidden:
 //  - SnapshotTime now includes time-of-day ("8/26/2026 21:54:55") after
@@ -20,8 +26,8 @@
 //  - Driver-only. The sheet doesn't track TruckId, so tractor
 //    reassignment isn't part of this calculation.
 //
-// Requires ALVYS_LOADS_SHEET_CSV_URLASSIGNMENTS secret (the published
-// CSV link for the driver-assignment-history backup sheet).
+// Requires ALVYS_LOADS_SHEET_CSV_URLTRIPS secret (the published CSV link
+// for the trips/loads backup tab).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,8 +81,8 @@ Deno.serve(async (req) => {
     const rangeStartMs = new Date(startDate + "T00:00:00Z").getTime();
     const rangeEndMs = new Date(endDate + "T23:59:59Z").getTime();
 
-    const csvUrl = Deno.env.get("ALVYS_LOADS_SHEET_CSV_URLASSIGNMENTS");
-    if (!csvUrl) throw new Error("ALVYS_LOADS_SHEET_CSV_URLASSIGNMENTS secret not set");
+    const csvUrl = Deno.env.get("ALVYS_LOADS_SHEET_CSV_URLTRIPS");
+    if (!csvUrl) throw new Error("ALVYS_LOADS_SHEET_CSV_URLTRIPS secret not set");
 
     const res = await fetch(csvUrl);
     const text = await res.text();
