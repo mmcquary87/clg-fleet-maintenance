@@ -102,7 +102,10 @@ Deno.serve(async (req) => {
       });
     }
     const startTime = new Date(startDate + "T00:00:00Z").toISOString();
-    const endTime = new Date(endDate + "T23:59:59Z").toISOString();
+    const requestedEndTime = new Date(endDate + "T23:59:59Z").getTime();
+    // Samsara rejects a future endTime — clamp to now when the range's end
+    // date is today (or, defensively, later).
+    const endTime = new Date(Math.min(requestedEndTime, Date.now())).toISOString();
 
     const driverIds = await fetchActiveDriverIds();
 
