@@ -140,6 +140,7 @@ export default function OperationsView() {
   const { groups: trackingGroups, loading: trackingLoading, error: trackingError } = useTracking();
 
   const LIVE = {
+    3: { value: tripsData?.plannedEmptyMilePct ?? null, loading: tripsLoading, error: tripsError },
     6: { value: tripsData?.revenuePerActiveTractorPerWeek ?? null, loading: tripsLoading, error: tripsError },
     7: { value: tripsData?.emptyMilePct ?? null, loading: tripsLoading, error: tripsError },
     8: { value: mpgData?.fleetMpg ?? null, loading: mpgLoading, error: mpgError },

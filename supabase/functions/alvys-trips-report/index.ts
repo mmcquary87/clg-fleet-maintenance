@@ -58,7 +58,7 @@ async function getAlvysToken(): Promise<string> {
   return (await res.json()).access_token;
 }
 
-async function fetchAllTrips(token: string, dateRangeField: "PickupDateRange" | "DeliveryDateRange", begin: string, end: string) {
+async function fetchAllTrips(token: string, dateRangeField: "PickupDateRange" | "DeliveryDateRange", begin: string, end: string, statuses: string[] | null = RELEVANT_STATUSES) {
   const items: any[] = [];
   let page = 0;
   let reportedTotal = 0;
@@ -68,7 +68,7 @@ async function fetchAllTrips(token: string, dateRangeField: "PickupDateRange" | 
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         Page: page, PageSize: PAGE_SIZE,
-        Status: RELEVANT_STATUSES,
+        ...(statuses ? { Status: statuses } : {}),
         [dateRangeField]: { Start: begin, End: end },
       }),
     });
@@ -117,9 +117,19 @@ Deno.serve(async (req) => {
     // Trips active during the window from either end (picked up in-range
     // OR delivered in-range) — same basis Samsara's total-miles uses, and
     // matches how Alvys's own Summary report reads "trips this period".
-    const [pickedUp, delivered] = await Promise.all([
+    //
+    // Separately, KPI 3 (Planned Empty Mile %) is a LEADING indicator over
+    // the whole book of business planned for pickup this window — not just
+    // the terminal-status trips the other KPIs above use, since a load's
+    // PCMiler-routed EmptyMileage/TotalMileage is set at planning time and
+    // doesn't change whether the load has run yet. No Status filter (Alvys
+    // returns every status when it's omitted, confirmed via
+    // alvys-explore-active-trips), then Cancelled is excluded client-side
+    // since a cancelled load was never actually planned to run.
+    const [pickedUp, delivered, plannedPickups] = await Promise.all([
       fetchAllTrips(token, "PickupDateRange", startDate, endDate),
       fetchAllTrips(token, "DeliveryDateRange", startDate, endDate),
+      fetchAllTrips(token, "PickupDateRange", startDate, endDate, null),
     ]);
 
     const byId = new Map<string, any>();
@@ -191,6 +201,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    let plannedEmptyMiles = 0;
+    let plannedTotalMiles = 0;
+    let plannedTripsConsidered = 0;
+    for (const t of plannedPickups.items) {
+      if (t.Status === "Cancelled") continue;
+      plannedEmptyMiles += t.EmptyMileage?.Distance?.Value ?? 0;
+      plannedTotalMiles += t.TotalMileage?.Distance?.Value ?? 0;
+      plannedTripsConsidered += 1;
+    }
+
     const truckCount = perTruck.size;
     const driverCount = perDriver.size;
     const totalRevenue = [...perTruck.values()].reduce((s, v) => s + v.revenue, 0);
@@ -232,11 +252,21 @@ Deno.serve(async (req) => {
         deliverySearchReportedTotal: delivered.reportedTotal,
         deliverySearchFetched: delivered.items.length,
         deliverySearchHitSafetyCap: delivered.hitSafetyCap,
+        plannedPickupsSearchReportedTotal: plannedPickups.reportedTotal,
+        plannedPickupsSearchFetched: plannedPickups.items.length,
+        plannedPickupsSearchHitSafetyCap: plannedPickups.hitSafetyCap,
       },
       totalEmptyMiles: Math.round(totalEmptyMiles),
       totalLoadedMiles: Math.round(totalLoadedMiles),
       totalMiles: Math.round(totalMiles),
       emptyMilePct: totalMiles > 0 ? Math.round((totalEmptyMiles / totalMiles) * 1000) / 10 : null,
+      // KPI 3 — Planned Empty Mile % (leading), distinct from KPI 7 above
+      // (lagging, terminal-status trips only). See the plannedPickups
+      // comment above for why this covers a different trip set.
+      plannedTripsConsidered,
+      plannedEmptyMiles: Math.round(plannedEmptyMiles),
+      plannedTotalMiles: Math.round(plannedTotalMiles),
+      plannedEmptyMilePct: plannedTotalMiles > 0 ? Math.round((plannedEmptyMiles / plannedTotalMiles) * 1000) / 10 : null,
       eligiblePickups: pickupOnTime.length,
       onTimePickupPct: pickupOnTime.length > 0 ? Math.round((pickupOnTime.filter(Boolean).length / pickupOnTime.length) * 1000) / 10 : null,
       eligibleDeliveries: deliveryOnTime.length,

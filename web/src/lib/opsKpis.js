@@ -33,7 +33,7 @@ export const KPIS = [
     no: 3, module: "planning", name: "Planned Empty Mile Percentage", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Planned empty miles ÷ total planned miles × 100",
     threshold: { status: "pending", green: "At/below approved target", yellow: "Above target, within tolerance", red: "Above tolerance" },
-    dataStatus: "blocked", blockedReason: "Needs planned-route data from Alvys dispatch/loads — not pulled yet.",
+    dataStatus: "live", unit: "%",
   },
   {
     no: 4, module: "planning", name: "Planned Driver Capacity Utilization", classification: "Primary Weekly KPI", type: "Leading",
