@@ -4,17 +4,17 @@ function toISO(d) {
   return d.toISOString().slice(0, 10);
 }
 
-function startOfWeek(d) {
-  const day = d.getDay(); // 0 = Sunday
-  const diff = new Date(d);
-  diff.setDate(d.getDate() - day);
-  return diff;
-}
-
 const ALL_PRESETS = [
   { id: "all", label: "All time", range: () => null },
   { id: "today", label: "Today", range: () => { const t = new Date(); return { start: toISO(t), end: toISO(t) }; } },
-  { id: "week", label: "This week", range: () => { const t = new Date(); return { start: toISO(startOfWeek(t)), end: toISO(t) }; } },
+  // Rolling trailing 7 days, not calendar-week-to-date — the latter
+  // collapses to a single day whenever "today" falls on the week's first
+  // day (confirmed: 2026-08-30 is a Sunday, so a Sunday-start week-to-date
+  // range was just today alone, thin enough for a single bad vehicle
+  // reading to blow up KPI 8's fleet MPG to 73.87). A full trailing week
+  // also matches the KPI framework's own "per week" targets better than a
+  // range that can be as short as one day.
+  { id: "week", label: "This week", range: () => { const t = new Date(); const start = new Date(t); start.setDate(t.getDate() - 6); return { start: toISO(start), end: toISO(t) }; } },
   { id: "month", label: "This month", range: () => { const t = new Date(); return { start: toISO(new Date(t.getFullYear(), t.getMonth(), 1)), end: toISO(t) }; } },
   { id: "quarter", label: "This quarter", range: () => { const t = new Date(); const q = Math.floor(t.getMonth() / 3); return { start: toISO(new Date(t.getFullYear(), q * 3, 1)), end: toISO(t) }; } },
   { id: "ytd", label: "YTD", range: () => { const t = new Date(); return { start: toISO(new Date(t.getFullYear(), 0, 1)), end: toISO(t) }; } },
