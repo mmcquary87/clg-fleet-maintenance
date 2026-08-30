@@ -8,6 +8,30 @@
 // else is "pending" per the framework's own governance rules, regardless
 // of whether we have real data for it.
 
+// Targets CLG approved 2026-08-30 (mmcquary@clgdelivers.com), activating
+// three previously-Pending KPIs. Tolerance bands (10% below/above for $ and
+// mi-style targets, 5% for MPG) match the "Up to X% below/above target"
+// language the framework doc already used for these KPIs while they were
+// still Pending — only the target number itself was missing before.
+export const APPROVED_TARGETS = {
+  3: { target: 17.0, toleranceMode: "relative", tolerancePct: 10, direction: "lowerIsBetter" },
+  6: { target: 4850, toleranceMode: "relative", tolerancePct: 10, direction: "higherIsBetter" },
+  8: { target: 6.5, toleranceMode: "relative", tolerancePct: 5, direction: "higherIsBetter" },
+};
+
+// KPI 12 is judged per fleet segment, not as one blended fleet-wide number
+// — CLG's explicit call (2026-08-30): a local truck's shorter weekly miles
+// shouldn't drag down or prop up an OTR truck's number, and vice versa.
+// Keyed by Alvys's driver.Fleet.Name, lowercased. Segments not listed here
+// (e.g. "local", "flatbed", "Unassigned") have no approved target yet and
+// stay ungoverned in the breakdown.
+export const FLEET_MILE_TARGETS = {
+  "long haul": { target: 2500, tolerancePct: 10 },
+  "otr": { target: 2500, tolerancePct: 10 },
+  "super regional": { target: 2000, tolerancePct: 10 },
+  "regional": { target: 2000, tolerancePct: 10 },
+};
+
 export const MODULES = [
   { id: "planning", name: "Network Planning & Order Management", tagline: "Build the plan." },
   { id: "fleet", name: "Fleet Utilization", tagline: "Protect and optimize the released plan." },
@@ -32,7 +56,7 @@ export const KPIS = [
   {
     no: 3, module: "planning", name: "Planned Empty Mile Percentage", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Planned empty miles ÷ total planned miles × 100",
-    threshold: { status: "pending", green: "At/below approved target", yellow: "Above target, within tolerance", red: "Above tolerance" },
+    threshold: { status: "active", green: "≤17.0%", yellow: "17.1–18.7% (up to 10% above target)", red: ">18.7%" },
     dataStatus: "live", unit: "%",
   },
   {
@@ -56,7 +80,7 @@ export const KPIS = [
   {
     no: 6, module: "fleet", name: "Revenue per Active Tractor per Week", classification: "Primary Weekly KPI — Departmental Variant", type: "Lagging",
     formula: "Total weekly operating revenue ÷ average active tractors",
-    threshold: { status: "pending", green: "At/above approved budget", yellow: "Up to 10.0% below budget", red: ">10.0% below budget" },
+    threshold: { status: "active", green: "≥$4,850", yellow: "$4,365–$4,849 (up to 10% below)", red: "<$4,365" },
     dataStatus: "live", unit: "$",
   },
   {
@@ -68,7 +92,7 @@ export const KPIS = [
   {
     no: 8, module: "fleet", name: "Fleet Miles per Gallon", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Total governed fleet miles ÷ total governed gallons",
-    threshold: { status: "pending", green: "At/above approved MPG target", yellow: "Up to 5.0% below target", red: ">5.0% below target" },
+    threshold: { status: "active", green: "≥6.5 MPG", yellow: "6.18–6.49 MPG (up to 5% below)", red: "<6.18 MPG" },
     dataStatus: "live", unit: "MPG",
   },
   {
@@ -98,7 +122,15 @@ export const KPIS = [
   {
     no: 12, module: "driver", name: "Revenue Miles per Active Driver per Week", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Total revenue-producing miles ÷ average active drivers",
-    threshold: { status: "pending", green: "At/above approved target", yellow: "Up to 10.0% below target", red: ">10.0% below target" },
+    threshold: {
+      status: "active",
+      green: "At/above the applicable fleet-segment target (OTR/Long haul ≥2,500 mi; Regional/Super Regional ≥2,000 mi)",
+      yellow: "Up to 10% below that segment's target",
+      red: ">10% below that segment's target",
+    },
+    // The headline figure above stays an unjudged fleet-wide blend (no
+    // single number is meaningful across segments) — see the "BY FLEET"
+    // breakdown for the actual per-segment Green/Yellow/Red reads.
     dataStatus: "live", unit: "mi",
   },
   {
