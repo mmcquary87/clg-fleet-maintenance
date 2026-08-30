@@ -6,6 +6,7 @@ import { useFleetMpg } from "../hooks/useFleetMpg";
 import { useAlvysTripsReport } from "../hooks/useAlvysTripsReport";
 import { useTracking } from "../hooks/useTracking";
 import { useHomeTimeAdherence } from "../hooks/useHomeTimeAdherence";
+import { useDriveHourUtilization } from "../hooks/useDriveHourUtilization";
 import { thisMonthRange } from "../lib/dateRangePresets";
 import DateRangeFilter from "./DateRangeFilter";
 
@@ -185,6 +186,7 @@ export default function OperationsView() {
   // active loads regardless of the date range picked above.
   const { groups: trackingGroups, loading: trackingLoading, error: trackingError } = useTracking();
   const { data: homeTimeData, loading: homeTimeLoading, error: homeTimeError } = useHomeTimeAdherence(range);
+  const { data: driveHourData, loading: driveHourLoading, error: driveHourError } = useDriveHourUtilization(range);
 
   const LIVE = {
     3: { value: tripsData?.plannedEmptyMilePct ?? null, loading: tripsLoading, error: tripsError },
@@ -197,6 +199,7 @@ export default function OperationsView() {
     16: { value: tripsData?.waitingDetentionHoursPerActiveDriverPerWeek ?? null, loading: tripsLoading, error: tripsError },
     "DE-01": { value: trackingLoading ? null : trackingGroups.attention.length, loading: trackingLoading, error: trackingError },
     17: { value: homeTimeData?.adherencePct ?? null, loading: homeTimeLoading, error: homeTimeError },
+    13: { value: driveHourData?.utilizationPct ?? null, loading: driveHourLoading, error: driveHourError },
   };
 
   function breakdownFor(kpi) {
@@ -274,6 +277,8 @@ export default function OperationsView() {
                   caveat={
                     kpi.no === 17
                       ? `Covers ${homeTimeData?.totalPlannedEvents ?? 0} recurring home-time occurrences checked against Alvys trip activity — not yet planned-day-off exceptions or approval-status filtering.${homeTimeData?.unlinkedSchedules ? ` ${homeTimeData.unlinkedSchedules} schedule(s) excluded (not linked to an Alvys driver).` : ""}`
+                      : kpi.no === 13
+                      ? `${driveHourData?.driversWithActivity ?? 0} of ${driveHourData?.driversConsidered ?? 0} active drivers had HOS activity this window, across ${driveHourData?.totalWorkingDays ?? 0} working-days. "Available capacity" = 11 legal drive hrs × working days, not a roster schedule.`
                       : null
                   }
                 />
