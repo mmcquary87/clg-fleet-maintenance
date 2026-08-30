@@ -4,6 +4,7 @@ import { Card, Badge, Eyebrow } from "../ds";
 import { MODULES, KPIS } from "../lib/opsKpis";
 import { useFleetMpg } from "../hooks/useFleetMpg";
 import { useAlvysTripsReport } from "../hooks/useAlvysTripsReport";
+import { useTracking } from "../hooks/useTracking";
 import { thisMonthRange } from "../lib/dateRangePresets";
 import DateRangeFilter from "./DateRangeFilter";
 
@@ -11,6 +12,7 @@ function formatLiveValue(kpi, value) {
   if (kpi.unit === "$") return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   if (kpi.unit === "mi") return `${Math.round(value).toLocaleString()} mi`;
   if (kpi.unit === "hrs") return `${value.toFixed(1)} hrs`;
+  if (kpi.unit === "loads") return `${Math.round(value)} ${value === 1 ? "load" : "loads"}`;
   return `${value.toFixed(kpi.unit === "%" ? 1 : 2)} ${kpi.unit}`;
 }
 
@@ -131,6 +133,11 @@ export default function OperationsView() {
   const [range, setRange] = useState(thisMonthRange());
   const { data: mpgData, loading: mpgLoading, error: mpgError } = useFleetMpg(range);
   const { data: tripsData, loading: tripsLoading, error: tripsError } = useAlvysTripsReport(range);
+  // Daily exception measure, not a range-windowed report like the others —
+  // reuses the same reset-aware ETA projection the Tracking page already
+  // computes rather than a separate rollup, so it always reflects live
+  // active loads regardless of the date range picked above.
+  const { groups: trackingGroups, loading: trackingLoading, error: trackingError } = useTracking();
 
   const LIVE = {
     6: { value: tripsData?.revenuePerActiveTractorPerWeek ?? null, loading: tripsLoading, error: tripsError },
@@ -140,6 +147,7 @@ export default function OperationsView() {
     12: { value: tripsData?.revenueMilesPerActiveDriverPerWeek ?? null, loading: tripsLoading, error: tripsError },
     15: { value: tripsData?.onTimeDeliveryPct ?? null, loading: tripsLoading, error: tripsError },
     16: { value: tripsData?.waitingDetentionHoursPerActiveDriverPerWeek ?? null, loading: tripsLoading, error: tripsError },
+    "DE-01": { value: trackingLoading ? null : trackingGroups.attention.length, loading: trackingLoading, error: trackingError },
   };
 
   return (
