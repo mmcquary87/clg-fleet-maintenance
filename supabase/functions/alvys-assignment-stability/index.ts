@@ -123,10 +123,18 @@ Deno.serve(async (req) => {
     if (!currentUrl) throw new Error("ALVYS_LOADS_SHEET_CSV_URLTRIPS secret not set");
     const legacyUrl = Deno.env.get("ALVYS_LOADS_SHEET_CSV_URLASSIGNMENTS");
 
-    const [currentRows, legacyRows] = await Promise.all([
-      fetchRows(currentUrl),
-      legacyUrl ? fetchRows(legacyUrl) : Promise.resolve<Row[]>([]),
-    ]);
+    const currentRows = await fetchRows(currentUrl);
+    // Truly optional: a bad/revoked legacy link shouldn't take down the
+    // whole KPI when the current tab alone would have been fine.
+    let legacyRows: Row[] = [];
+    let legacyFetchError: string | null = null;
+    if (legacyUrl) {
+      try {
+        legacyRows = await fetchRows(legacyUrl);
+      } catch (err) {
+        legacyFetchError = err instanceof Error ? err.message : String(err);
+      }
+    }
     const rows = [...legacyRows, ...currentRows];
 
     const byLoad = new Map<string, Row[]>();
@@ -184,6 +192,7 @@ Deno.serve(async (req) => {
       totalSnapshotRows: rows.length,
       legacySnapshotRows: legacyRows.length,
       currentSnapshotRows: currentRows.length,
+      legacyFetchError,
       loadsTracked: byLoad.size,
       loadsInRange,
       loadsWithNoLeadTime,
