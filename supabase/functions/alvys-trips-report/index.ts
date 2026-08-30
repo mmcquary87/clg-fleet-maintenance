@@ -142,6 +142,7 @@ Deno.serve(async (req) => {
 
     const pickupOnTime: boolean[] = [];
     const deliveryOnTime: boolean[] = [];
+    let dropHookPickupsExcluded = 0;
 
     let totalStopHours = 0;
     let totalDetentionHours = 0;
@@ -163,7 +164,14 @@ Deno.serve(async (req) => {
       const delivery = lastStopOf(stops, "Delivery");
       const pickupOk = isOnTime(pickup?.ArrivedAt, pickup?.StopWindow?.End, pickup?.AppointmentDate);
       const deliveryOk = isOnTime(delivery?.ArrivedAt, delivery?.StopWindow?.End, delivery?.AppointmentDate);
-      if (pickupOk !== null) pickupOnTime.push(pickupOk);
+      // A missed Drop&Hook pickup window isn't actually judged against CLG
+      // in practice (confirmed by CLG 2026-08-30) — as long as delivery is
+      // on time, a late drop&hook pickup doesn't cost anything. Excluded
+      // from the eligible-pickup set entirely rather than force-counted as
+      // "on time," since it isn't a real on-time judgment either way —
+      // counting it as on-time would inflate the score dishonestly.
+      if (pickupOk !== null && pickup?.LoadingType !== "Drop&Hook") pickupOnTime.push(pickupOk);
+      else if (pickupOk !== null) dropHookPickupsExcluded += 1;
       if (deliveryOk !== null) deliveryOnTime.push(deliveryOk);
 
       // Waiting + detention: every Pickup/Delivery stop's chargeable dwell
@@ -293,6 +301,7 @@ Deno.serve(async (req) => {
       plannedTotalMiles: Math.round(plannedTotalMiles),
       plannedEmptyMilePct: plannedTotalMiles > 0 ? Math.round((plannedEmptyMiles / plannedTotalMiles) * 1000) / 10 : null,
       eligiblePickups: pickupOnTime.length,
+      dropHookPickupsExcluded,
       onTimePickupPct: pickupOnTime.length > 0 ? Math.round((pickupOnTime.filter(Boolean).length / pickupOnTime.length) * 1000) / 10 : null,
       eligibleDeliveries: deliveryOnTime.length,
       onTimeDeliveryPct: deliveryOnTime.length > 0 ? Math.round((deliveryOnTime.filter(Boolean).length / deliveryOnTime.length) * 1000) / 10 : null,
