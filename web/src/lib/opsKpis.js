@@ -137,7 +137,12 @@ export const KPIS = [
     no: 13, module: "driver", name: "Average Daily Drive-Hour Utilization Percentage", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Productive driving hours ÷ realistically available productive driving capacity × 100",
     threshold: { status: "pending", green: "≥85.0%", yellow: "75.0–84.9%", red: "<75.0%" },
-    dataStatus: "blocked", blockedReason: "Samsara HOS data is reachable, but the “realistically available capacity” denominator requires a CLG-approved methodology that doesn't exist yet.",
+    // Methodology confirmed by CLG (2026-08-30): "realistically available
+    // capacity" = legal max drive hours (11/day), not a roster-scheduled
+    // concept -- see samsara-drive-hour-utilization for the full reasoning
+    // and the "working day" heuristic (a day with real driving/on-duty
+    // Samsara activity, not a calendar day off).
+    dataStatus: "live", unit: "%",
   },
   {
     no: 14, module: "driver", name: "Released HOS-Infeasible Plan Percentage", classification: "Primary Weekly KPI", type: "Leading",
@@ -161,7 +166,13 @@ export const KPIS = [
     no: 17, module: "driver", name: "Driver Schedule Adherence", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Approved home-time events and planned days off honored ÷ total approved home-time events and planned days off × 100",
     threshold: { status: "pending", green: "≥95.0% after activation", yellow: "90.0–94.9% after activation", red: "<90.0% after activation" },
-    dataStatus: "blocked", blockedReason: "Needs a governed schedule-of-record — doesn't exist yet.",
+    // Covers recurring home-time schedules (planned_home_time) checked
+    // against real Alvys trip activity -- not yet the "planned days off"
+    // half of the formula (driver_roster's Vacation/Personal Leave
+    // exceptions have no per-occurrence honored/violated tracking), and
+    // approval status isn't filtered on (the field is free text, not an
+    // enforced state). Partial, not the full governed formula yet.
+    dataStatus: "live", unit: "%",
   },
   {
     no: "SC-02", module: "driver", name: "Detention Identification and Submission Timeliness", classification: "Supporting Control", type: "Leading",

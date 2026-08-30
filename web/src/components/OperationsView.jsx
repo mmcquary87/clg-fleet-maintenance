@@ -5,6 +5,8 @@ import { MODULES, KPIS, APPROVED_TARGETS, FLEET_MILE_TARGETS } from "../lib/opsK
 import { useFleetMpg } from "../hooks/useFleetMpg";
 import { useAlvysTripsReport } from "../hooks/useAlvysTripsReport";
 import { useTracking } from "../hooks/useTracking";
+import { useHomeTimeAdherence } from "../hooks/useHomeTimeAdherence";
+import { useDriveHourUtilization } from "../hooks/useDriveHourUtilization";
 import { thisMonthRange } from "../lib/dateRangePresets";
 import DateRangeFilter from "./DateRangeFilter";
 
@@ -21,6 +23,15 @@ const STATUS_COLOR = {
   yellow: "#E8C13D",
   red: "var(--clg-scarlet)",
   pending: "var(--clg-cool)",
+};
+
+// The badge should read as a verdict, not a color name — "RED" on a red
+// pill is redundant with the color itself and doesn't say what's wrong.
+const STATUS_LABEL = {
+  green: "On target",
+  yellow: "Caution",
+  red: "Off target",
+  pending: "Pending",
 };
 
 function toleranceStatus(value, target, tolerancePct, direction) {
@@ -60,7 +71,7 @@ function fleetRowStatus(fleetName, value) {
   return toleranceStatus(value, approved.target, approved.tolerancePct, "higherIsBetter");
 }
 
-function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, breakdownTitle, breakdownNote, secondaryStat }) {
+function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, breakdownTitle, breakdownNote, secondaryStat, caveat }) {
   const [open, setOpen] = useState(false);
   const hasLive = kpi.dataStatus === "live";
   const status = hasLive ? statusFor(kpi, liveValue) : "pending";
@@ -76,7 +87,7 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, 
           <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 14.5, marginTop: 2 }}>{kpi.name}</div>
         </div>
         <Badge tone={status === "pending" ? "neutral" : "outline"} style={status !== "pending" ? { background: color, color: "#fff", border: "none" } : {}}>
-          {status === "pending" ? "Pending" : status}
+          {STATUS_LABEL[status]}
         </Badge>
       </div>
 
@@ -107,6 +118,10 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, 
           </>
         )}
       </div>
+
+      {caveat && hasLive && (
+        <div style={{ marginTop: 8, fontSize: 10.5, color: "var(--clg-text-muted)", lineHeight: 1.5 }}>{caveat}</div>
+      )}
 
       {breakdown && breakdown.length > 0 && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--clg-border-subtle)" }}>
@@ -170,6 +185,8 @@ export default function OperationsView() {
   // computes rather than a separate rollup, so it always reflects live
   // active loads regardless of the date range picked above.
   const { groups: trackingGroups, loading: trackingLoading, error: trackingError } = useTracking();
+  const { data: homeTimeData, loading: homeTimeLoading, error: homeTimeError } = useHomeTimeAdherence(range);
+  const { data: driveHourData, loading: driveHourLoading, error: driveHourError } = useDriveHourUtilization(range);
 
   const LIVE = {
     3: { value: tripsData?.plannedEmptyMilePct ?? null, loading: tripsLoading, error: tripsError },
@@ -181,6 +198,8 @@ export default function OperationsView() {
     15: { value: tripsData?.onTimeDeliveryPct ?? null, loading: tripsLoading, error: tripsError },
     16: { value: tripsData?.waitingDetentionHoursPerActiveDriverPerWeek ?? null, loading: tripsLoading, error: tripsError },
     "DE-01": { value: trackingLoading ? null : trackingGroups.attention.length, loading: trackingLoading, error: trackingError },
+    17: { value: homeTimeData?.adherencePct ?? null, loading: homeTimeLoading, error: homeTimeError },
+    13: { value: driveHourData?.utilizationPct ?? null, loading: driveHourLoading, error: driveHourError },
   };
 
   function breakdownFor(kpi) {
@@ -254,6 +273,13 @@ export default function OperationsView() {
                     kpi.no === 6 ? { label: "per driver:", value: tripsData?.revenuePerActiveDriverPerWeek, unit: "$" }
                     : kpi.no === 16 ? { label: "of which detention:", value: tripsData?.detentionHoursPerActiveDriverPerWeek, unit: "hrs" }
                     : null
+                  }
+                  caveat={
+                    kpi.no === 17
+                      ? `Covers ${homeTimeData?.totalPlannedEvents ?? 0} recurring home-time occurrences checked against Alvys trip activity — not yet planned-day-off exceptions or approval-status filtering.${homeTimeData?.unlinkedSchedules ? ` ${homeTimeData.unlinkedSchedules} schedule(s) excluded (not linked to an Alvys driver).` : ""}`
+                      : kpi.no === 13
+                      ? `${driveHourData?.driversWithActivity ?? 0} of ${driveHourData?.driversConsidered ?? 0} active drivers had HOS activity this window, across ${driveHourData?.totalWorkingDays ?? 0} working-days. "Available capacity" = 11 legal drive hrs × working days, not a roster schedule.`
+                      : null
                   }
                 />
               );
