@@ -57,12 +57,43 @@ Deno.serve(async (req) => {
     const header = lines[0] ? splitCsvLine(lines[0]) : [];
     const sampleRows = lines.slice(1, 6).map(splitCsvLine);
 
+    const iStatus = header.indexOf("Status");
+    const iTripStatus = header.indexOf("TripStatus");
+    const iTripAssignedAt = header.indexOf("TripAssignedAt");
+    const iLoadNumber = header.indexOf("LoadNumber");
+    const iTripDriverId = header.indexOf("TripDriverId");
+
+    const statusCounts: Record<string, number> = {};
+    const tripStatusCounts: Record<string, number> = {};
+    const loadNumbers = new Set<string>();
+    let rowsWithTripAssignedAt = 0;
+    let rowsWithTripDriverId = 0;
+    const sampleNonOpenRows: string[][] = [];
+
+    for (const line of lines.slice(1)) {
+      const cells = splitCsvLine(line);
+      const status = (cells[iStatus] ?? "").trim();
+      const tripStatus = (cells[iTripStatus] ?? "").trim();
+      if (status) statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+      if (tripStatus) tripStatusCounts[tripStatus] = (tripStatusCounts[tripStatus] ?? 0) + 1;
+      if ((cells[iTripAssignedAt] ?? "").trim()) rowsWithTripAssignedAt += 1;
+      if ((cells[iTripDriverId] ?? "").trim()) rowsWithTripDriverId += 1;
+      if (iLoadNumber >= 0 && cells[iLoadNumber]) loadNumbers.add(cells[iLoadNumber].trim());
+      if (status && status !== "Open" && sampleNonOpenRows.length < 10) sampleNonOpenRows.push(cells);
+    }
+
     return new Response(JSON.stringify({
       status: res.status,
       contentType: res.headers.get("content-type"),
       totalLines: lines.length,
       header,
       sampleRows,
+      distinctLoadNumbers: loadNumbers.size,
+      statusCounts,
+      tripStatusCounts,
+      rowsWithTripAssignedAt,
+      rowsWithTripDriverId,
+      sampleNonOpenRows,
       rawFirst500Chars: text.slice(0, 500),
     }, null, 2), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
