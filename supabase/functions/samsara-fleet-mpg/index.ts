@@ -65,8 +65,18 @@ Deno.serve(async (req) => {
     const vehicleIdToUnit = new Map(units.map((u: any) => [u.samsara_vehicle_id, u]));
     const vehicleIds = units.map((u: any) => u.samsara_vehicle_id).join(",");
 
+    // A vehicle can't drive real miles on ~0 recorded fuel -- that's a
+    // broken fuel reading for this window, not genuine 70+ MPG. On a full
+    // month this washes out in the noise; on a thin window (a single day,
+    // or a short custom range) one such reading can single-handedly blow
+    // up the fleet-wide ratio -- confirmed: a Sunday "This week" range
+    // that resolved to just that one day produced 73.87 MPG this way.
+    const MIN_MILES_TO_REQUIRE_FUEL = 10;
+    const MIN_GALLONS_FOR_REAL_MILES = 1;
+
     let totalMiles = 0;
     let totalGallons = 0;
+    let vehiclesExcludedForImplausibleFuel = 0;
     const perVehicle: { unitId: string; unitNumber: string; miles: number; gallons: number; mpg: number | null }[] = [];
     let after: string | undefined;
 
@@ -88,6 +98,10 @@ Deno.serve(async (req) => {
         if (!unit) continue;
         const miles = metersToMiles(r.distanceTraveledMeters ?? 0);
         const gallons = mlToGallons(r.fuelConsumedMl ?? 0);
+        if (miles > MIN_MILES_TO_REQUIRE_FUEL && gallons < MIN_GALLONS_FOR_REAL_MILES) {
+          vehiclesExcludedForImplausibleFuel += 1;
+          continue;
+        }
         totalMiles += miles;
         totalGallons += gallons;
         perVehicle.push({
@@ -107,6 +121,7 @@ Deno.serve(async (req) => {
       totalGallons: Math.round(totalGallons * 10) / 10,
       perVehicle,
       unitsWithSamsara: units.length,
+      vehiclesExcludedForImplausibleFuel,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error
