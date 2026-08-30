@@ -161,7 +161,13 @@ export const KPIS = [
     no: 17, module: "driver", name: "Driver Schedule Adherence", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Approved home-time events and planned days off honored ÷ total approved home-time events and planned days off × 100",
     threshold: { status: "pending", green: "≥95.0% after activation", yellow: "90.0–94.9% after activation", red: "<90.0% after activation" },
-    dataStatus: "blocked", blockedReason: "Needs a governed schedule-of-record — doesn't exist yet.",
+    // Covers recurring home-time schedules (planned_home_time) checked
+    // against real Alvys trip activity -- not yet the "planned days off"
+    // half of the formula (driver_roster's Vacation/Personal Leave
+    // exceptions have no per-occurrence honored/violated tracking), and
+    // approval status isn't filtered on (the field is free text, not an
+    // enforced state). Partial, not the full governed formula yet.
+    dataStatus: "live", unit: "%",
   },
   {
     no: "SC-02", module: "driver", name: "Detention Identification and Submission Timeliness", classification: "Supporting Control", type: "Leading",
