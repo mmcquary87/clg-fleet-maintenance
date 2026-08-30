@@ -60,7 +60,7 @@ function fleetRowStatus(fleetName, value) {
   return toleranceStatus(value, approved.target, approved.tolerancePct, "higherIsBetter");
 }
 
-function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, secondaryStat }) {
+function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, breakdownTitle, breakdownNote, secondaryStat }) {
   const [open, setOpen] = useState(false);
   const hasLive = kpi.dataStatus === "live";
   const status = hasLive ? statusFor(kpi, liveValue) : "pending";
@@ -111,30 +111,26 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, 
       {breakdown && breakdown.length > 0 && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--clg-border-subtle)" }}>
           <div style={{ fontSize: 9.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 6 }}>
-            BY FLEET
+            {breakdownTitle}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {breakdown.map((b) => {
-              const rowStatus = fleetRowStatus(b.fleetName, b.revenueMilesPerActiveDriverPerWeek);
-              return (
-                <div key={b.fleetName} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
-                  <span style={{ color: "var(--clg-text-body)", display: "flex", alignItems: "center", gap: 6 }}>
-                    {rowStatus && (
-                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS_COLOR[rowStatus], flexShrink: 0 }} />
-                    )}
-                    {b.fleetName}
-                  </span>
-                  <span style={{ fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-navy)" }}>
-                    {b.revenueMilesPerActiveDriverPerWeek.toLocaleString()} mi
-                    <span style={{ color: "var(--clg-text-muted)", fontFamily: "var(--clg-font-body)" }}> ({b.activeDrivers} drivers)</span>
-                  </span>
-                </div>
-              );
-            })}
+            {breakdown.map((b) => (
+              <div key={b.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+                <span style={{ color: "var(--clg-text-body)", display: "flex", alignItems: "center", gap: 6 }}>
+                  {b.status && (
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS_COLOR[b.status], flexShrink: 0 }} />
+                  )}
+                  {b.label}
+                </span>
+                <span style={{ fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-navy)" }}>
+                  {b.valueText}
+                </span>
+              </div>
+            ))}
           </div>
-          <div style={{ fontSize: 10, color: "var(--clg-text-muted)", marginTop: 6 }}>
-            Colored against each segment's approved target (OTR/Long haul ≥2,500 mi; Regional/Super Regional ≥2,000 mi) — segments without an approved target show no dot.
-          </div>
+          {breakdownNote && (
+            <div style={{ fontSize: 10, color: "var(--clg-text-muted)", marginTop: 6 }}>{breakdownNote}</div>
+          )}
         </div>
       )}
 
@@ -187,6 +183,35 @@ export default function OperationsView() {
     "DE-01": { value: trackingLoading ? null : trackingGroups.attention.length, loading: trackingLoading, error: trackingError },
   };
 
+  function breakdownFor(kpi) {
+    if (kpi.no === 12) {
+      if (!tripsData?.revenueMilesByFleet) return null;
+      return {
+        title: "BY FLEET",
+        note: "Colored against each segment's approved target (OTR/Long haul ≥2,500 mi; Regional/Super Regional ≥2,000 mi) — segments without an approved target show no dot.",
+        items: tripsData.revenueMilesByFleet.map((b) => ({
+          key: b.fleetName,
+          label: b.fleetName,
+          valueText: `${b.revenueMilesPerActiveDriverPerWeek.toLocaleString()} mi (${b.activeDrivers} drivers)`,
+          status: fleetRowStatus(b.fleetName, b.revenueMilesPerActiveDriverPerWeek),
+        })),
+      };
+    }
+    if (kpi.no === 16) {
+      if (!tripsData) return null;
+      const fmtHrs = (v) => (v == null ? "—" : `${v.toFixed(1)} hrs`);
+      return {
+        title: "DETENTION BY LOADING TYPE",
+        note: "Detention no longer counts a driver's own early-arrival wait — only time past the stop's expected window/appointment.",
+        items: [
+          { key: "live", label: "Live loading", valueText: `${fmtHrs(tripsData.liveLoadDetentionHoursPerActiveDriverPerWeek)} (${tripsData.liveLoadDetentionEvents} events)`, status: null },
+          { key: "dropHook", label: "Drop & Hook", valueText: `${fmtHrs(tripsData.dropHookDetentionHoursPerActiveDriverPerWeek)} (${tripsData.dropHookDetentionEvents} events)`, status: null },
+        ],
+      };
+    }
+    return null;
+  }
+
   return (
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1200, margin: "0 auto" }}>
       <div style={{ marginBottom: 20 }}>
@@ -212,22 +237,27 @@ export default function OperationsView() {
             <div style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>{mod.tagline}</div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
-            {KPIS.filter((k) => k.module === mod.id).map((kpi) => (
-              <KpiCard
-                key={kpi.no}
-                kpi={kpi}
-                liveValue={LIVE[kpi.no]?.value ?? null}
-                liveLoading={LIVE[kpi.no]?.loading ?? false}
-                liveError={LIVE[kpi.no]?.error ?? null}
-                hasRange={!!(range?.start && range?.end)}
-                breakdown={kpi.no === 12 ? tripsData?.revenueMilesByFleet : null}
-                secondaryStat={
-                  kpi.no === 6 ? { label: "per driver:", value: tripsData?.revenuePerActiveDriverPerWeek, unit: "$" }
-                  : kpi.no === 16 ? { label: "of which detention:", value: tripsData?.detentionHoursPerActiveDriverPerWeek, unit: "hrs" }
-                  : null
-                }
-              />
-            ))}
+            {KPIS.filter((k) => k.module === mod.id).map((kpi) => {
+              const breakdown = breakdownFor(kpi);
+              return (
+                <KpiCard
+                  key={kpi.no}
+                  kpi={kpi}
+                  liveValue={LIVE[kpi.no]?.value ?? null}
+                  liveLoading={LIVE[kpi.no]?.loading ?? false}
+                  liveError={LIVE[kpi.no]?.error ?? null}
+                  hasRange={!!(range?.start && range?.end)}
+                  breakdown={breakdown?.items}
+                  breakdownTitle={breakdown?.title}
+                  breakdownNote={breakdown?.note}
+                  secondaryStat={
+                    kpi.no === 6 ? { label: "per driver:", value: tripsData?.revenuePerActiveDriverPerWeek, unit: "$" }
+                    : kpi.no === 16 ? { label: "of which detention:", value: tripsData?.detentionHoursPerActiveDriverPerWeek, unit: "hrs" }
+                    : null
+                  }
+                />
+              );
+            })}
           </div>
         </div>
       ))}

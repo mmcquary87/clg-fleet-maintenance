@@ -147,6 +147,8 @@ Deno.serve(async (req) => {
     let totalDetentionHours = 0;
     let stopsWithDwellTime = 0;
     let detentionEvents = 0;
+    const liveOrOtherStops = { hours: 0, detentionHours: 0, detentionEvents: 0 };
+    const dropHookStops = { hours: 0, detentionHours: 0, detentionEvents: 0 };
 
     const perTruck = new Map<string, { revenue: number; loadedMiles: number; trips: number }>();
     const perDriver = new Map<string, { revenue: number; loadedMiles: number; trips: number; fleetName: string }>();
@@ -164,19 +166,42 @@ Deno.serve(async (req) => {
       if (pickupOk !== null) pickupOnTime.push(pickupOk);
       if (deliveryOk !== null) deliveryOnTime.push(deliveryOk);
 
-      // Waiting + detention: every Pickup/Delivery stop's dwell time
-      // (ArrivedAt -> DepartedAt). Not just first-pickup/last-delivery
-      // here — a multi-stop load can accumulate detention at any stop.
+      // Waiting + detention: every Pickup/Delivery stop's chargeable dwell
+      // time. Not just first-pickup/last-delivery here — a multi-stop load
+      // can accumulate detention at any stop.
+      //
+      // Chargeable wait starts at the LATER of actual arrival and the
+      // stop's expected time (StopWindow.Begin for FCFS, AppointmentDate
+      // for APPT) — a driver who shows up early and waits for their own
+      // window/appointment isn't the facility's fault, so that portion no
+      // longer counts toward detention exposure (previously it did,
+      // inflating the number and misattributing it).
+      //
+      // Also split by LoadingType: Drop&Hook should genuinely run near-zero
+      // real wait (no live loading crew to wait on), so blending it with
+      // Live stops diluted where actual detention was concentrated.
       for (const s of stops) {
         if ((s.StopType !== "Pickup" && s.StopType !== "Delivery") || !s.ArrivedAt || !s.DepartedAt) continue;
-        const dwellHours = (new Date(s.DepartedAt).getTime() - new Date(s.ArrivedAt).getTime()) / 3600000;
+        const arrivedAt = new Date(s.ArrivedAt).getTime();
+        const departedAt = new Date(s.DepartedAt).getTime();
+        const expectedAt = s.StopWindow?.Begin ? new Date(s.StopWindow.Begin).getTime()
+          : s.AppointmentDate ? new Date(s.AppointmentDate).getTime()
+          : arrivedAt;
+        const chargeableStart = Math.max(arrivedAt, expectedAt);
+        const dwellHours = (departedAt - chargeableStart) / 3600000;
         if (!(dwellHours > 0) || dwellHours > 48) continue; // guard against bad/missing data
         totalStopHours += dwellHours;
         stopsWithDwellTime += 1;
+        let detentionForStop = 0;
         if (dwellHours > FREE_TIME_HOURS) {
-          totalDetentionHours += dwellHours - FREE_TIME_HOURS;
+          detentionForStop = dwellHours - FREE_TIME_HOURS;
+          totalDetentionHours += detentionForStop;
           detentionEvents += 1;
         }
+        const bucket = s.LoadingType === "Drop&Hook" ? dropHookStops : liveOrOtherStops;
+        bucket.hours += dwellHours;
+        bucket.detentionHours += detentionForStop;
+        if (detentionForStop > 0) bucket.detentionEvents += 1;
       }
 
       const revenue = t.TripValue?.Amount ?? 0;
@@ -291,6 +316,12 @@ Deno.serve(async (req) => {
       detentionHoursPerActiveDriverPerWeek: driverCount > 0 ? Math.round((totalDetentionHours / driverCount / weeks) * 10) / 10 : null,
       stopsWithDwellTime,
       detentionEvents,
+      // Detention split by LoadingType — Drop&Hook should read near-zero
+      // real wait; Live is where genuine facility-caused detention shows up.
+      liveLoadDetentionHoursPerActiveDriverPerWeek: driverCount > 0 ? Math.round((liveOrOtherStops.detentionHours / driverCount / weeks) * 10) / 10 : null,
+      liveLoadDetentionEvents: liveOrOtherStops.detentionEvents,
+      dropHookDetentionHoursPerActiveDriverPerWeek: driverCount > 0 ? Math.round((dropHookStops.detentionHours / driverCount / weeks) * 10) / 10 : null,
+      dropHookDetentionEvents: dropHookStops.detentionEvents,
       freeTimeHoursAssumed: FREE_TIME_HOURS,
       periodWeeks: Math.round(weeks * 100) / 100,
       // Diagnostic for KPI 17 feasibility: does Alvys expose a driver NAME
