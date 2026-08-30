@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, Gauge } from "lucide-react";
 import { Card, Badge, Eyebrow } from "../ds";
-import { MODULES, KPIS } from "../lib/opsKpis";
+import { MODULES, KPIS, APPROVED_TARGETS, FLEET_MILE_TARGETS } from "../lib/opsKpis";
 import { useFleetMpg } from "../hooks/useFleetMpg";
 import { useAlvysTripsReport } from "../hooks/useAlvysTripsReport";
 import { useTracking } from "../hooks/useTracking";
@@ -23,16 +23,41 @@ const STATUS_COLOR = {
   pending: "var(--clg-cool)",
 };
 
+function toleranceStatus(value, target, tolerancePct, direction) {
+  if (direction === "lowerIsBetter") {
+    if (value <= target) return "green";
+    if (value <= target * (1 + tolerancePct / 100)) return "yellow";
+    return "red";
+  }
+  if (value >= target) return "green";
+  if (value >= target * (1 - tolerancePct / 100)) return "yellow";
+  return "red";
+}
+
 function statusFor(kpi, value) {
-  // Only Empty Mile % has a truly active threshold today; everything else
-  // is Pending per the framework's own governance rules, real data or not.
-  if (kpi.threshold.status !== "active" || value == null) return "pending";
+  // Per the framework's own governance rules, a KPI only gets a color
+  // judgment once CLG has actually approved a target for it — real data
+  // alone doesn't earn one. KPI 12's headline is deliberately excluded
+  // even though it's live: it's a fleet-wide blend, and CLG's call
+  // (2026-08-30) was that mixing segments (e.g. local with OTR) into one
+  // number isn't meaningful — see the per-fleet breakdown instead.
+  if (kpi.threshold.status !== "active" || value == null || kpi.no === 12) return "pending";
   if (kpi.no === 7) {
+    // Framework-defined exact cutoffs (<10/10-14.9/>=15), not the generic
+    // relative-tolerance shape the CLG-approved targets below use.
     if (value < 10.0) return "green";
     if (value < 15.0) return "yellow";
     return "red";
   }
+  const approved = APPROVED_TARGETS[kpi.no];
+  if (approved) return toleranceStatus(value, approved.target, approved.tolerancePct, approved.direction);
   return "pending";
+}
+
+function fleetRowStatus(fleetName, value) {
+  const approved = FLEET_MILE_TARGETS[fleetName?.toLowerCase()];
+  if (!approved || value == null) return null;
+  return toleranceStatus(value, approved.target, approved.tolerancePct, "higherIsBetter");
 }
 
 function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, secondaryStat }) {
@@ -89,15 +114,26 @@ function KpiCard({ kpi, liveValue, liveLoading, liveError, hasRange, breakdown, 
             BY FLEET
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {breakdown.map((b) => (
-              <div key={b.fleetName} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                <span style={{ color: "var(--clg-text-body)" }}>{b.fleetName}</span>
-                <span style={{ fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-navy)" }}>
-                  {b.revenueMilesPerActiveDriverPerWeek.toLocaleString()} mi
-                  <span style={{ color: "var(--clg-text-muted)", fontFamily: "var(--clg-font-body)" }}> ({b.activeDrivers} drivers)</span>
-                </span>
-              </div>
-            ))}
+            {breakdown.map((b) => {
+              const rowStatus = fleetRowStatus(b.fleetName, b.revenueMilesPerActiveDriverPerWeek);
+              return (
+                <div key={b.fleetName} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
+                  <span style={{ color: "var(--clg-text-body)", display: "flex", alignItems: "center", gap: 6 }}>
+                    {rowStatus && (
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS_COLOR[rowStatus], flexShrink: 0 }} />
+                    )}
+                    {b.fleetName}
+                  </span>
+                  <span style={{ fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-navy)" }}>
+                    {b.revenueMilesPerActiveDriverPerWeek.toLocaleString()} mi
+                    <span style={{ color: "var(--clg-text-muted)", fontFamily: "var(--clg-font-body)" }}> ({b.activeDrivers} drivers)</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--clg-text-muted)", marginTop: 6 }}>
+            Colored against each segment's approved target (OTR/Long haul ≥2,500 mi; Regional/Super Regional ≥2,000 mi) — segments without an approved target show no dot.
           </div>
         </div>
       )}

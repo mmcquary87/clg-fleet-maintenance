@@ -138,9 +138,48 @@ elsewhere." The closing card states the page's thesis: the two numbers that deci
 goes next are quote speed and promise-hit rate.
 
 ### 7. Spend — `screenshots/07-spend.png`
-Three headline figures (committed YTD, cost per mile, unpriced count in Mercury), then
-`1.3fr / 1fr`: horizontal bars by vendor with an interpretation ("Half your maintenance dollars
-go to a towing company…"), and stacked by-category / by-unit cards.
+**The most developed screen in the package, and the one with the most opinion in it.** Built
+against a real export: 174 units, 169 with spend, 1,000 invoices, $725,405 total.
+
+Structure, top to bottom:
+
+1. **Scope tabs** (Company / By unit / Vendors / Deductions) + `Log invoice`, then a period row
+   (Today · This week · This month · **This quarter** · YTD · All time · Custom) with a
+   `vs. prior quarter` comparison label. **Default to a bounded period, not All time** — the
+   manager's real question is "is this getting worse," which an all-time total cannot answer.
+2. **Three headline figures.** Cost per mile is the hero ($0.191) with a Ruby delta arrow and a
+   target; then total spend; then **unplanned share (79%)**. Deliberately *not* average spend per
+   unit — an average across 174 units hides every outlier that matters.
+3. **"Read this first" card** (the screen's one Scarlet rule). A third of spend — $240,182 across
+   331 invoices — is categorized `Other`, larger than the biggest real category. The card states
+   the consequence ("every number on this page is directional at best"), shows the percentage with
+   a Ruby bar and its trend ("was 11% two quarters ago"), and offers the actual fix:
+   `Code 331 invoices` (primary) and `Auto-code by vendor` (quiet), with the reason one rule is
+   enough — most are Speedco line items.
+4. **Spend by category** — horizontal bars in a `132px / 1fr / 92px` grid, so labels and dollars
+   can never collide. Planned categories (DOT inspection, PM/oil) render in Navy, reactive ones in
+   Royal, and `Other` in Mercury so it reads as absent data rather than a real category. Closes
+   with a judgment: tires at 28% of coded spend is high, and may be road-service calls at retail
+   rather than planned replacements at contract price.
+5. **Spend by vendor** — same bar treatment, with `road service` / `recovery` tags in Ruby on the
+   roadside vendors. Closing line does the arithmetic the manager cares about: **58% of spend
+   ($420,715) is road service and recovery bought at retail, versus 7% in-house.**
+6. **"The units costing you most"** — worst offenders by cost per mile, with a *what's driving it*
+   column (not just an amount) and a **call** column: Retire / Watch / Comeback. Two units cost
+   more per mile than a lease payment. Rows link to unit detail.
+7. **"Needs a human"** — the work queue: 331 uncategorized, 178 missing an odometer reading (their
+   CPM is a guess), 24 invoices over the authorized estimate, 12 off-list vendors, 9 possible
+   duplicates. Each row has a verb (Code / Fill in / Dispute / Review / Compare). Ends with the
+   navy card: **$27,600 recoverable** if the list is worked.
+
+**The principle to preserve:** this page is designed to be *worked*, not looked at. Every block
+ends in either a judgment or an action, and any figure that cannot be honestly computed says so
+instead of rendering a zero. If you reduce this to four KPI tiles and two charts, the design's
+value is gone.
+
+**Data requirements this screen exposes** (both currently missing — see Open questions): miles per
+unit per period, without which cost per mile is fiction; and a PM interval per unit, without which
+planned-vs-reactive cannot be computed.
 
 ### Tracking · Operations · Roster · Home time
 **Deliberately blank**, each showing a "Not designed yet" card that says so and invites a brief.
@@ -285,6 +324,10 @@ Show real identifiers — unit 3307, WO-1041, PO 4471. Never lorem.
    answer? They are blank on purpose until then.
 2. **Hourly revenue rate per unit** — cost of waiting can't compute without it. Does Alvys
    expose one, or is it a fleet-wide constant?
+2b. **Miles per unit per period** — the Spend page's cost-per-mile is the headline metric and
+   cannot be computed without it. 178 invoices currently carry no odometer reading.
+2c. **PM interval per unit** — needed for the planned-vs-unplanned split (79% unplanned) and for
+   PM compliance on unit detail.
 3. **The \$500 approval threshold** and auto-approve below it are my assumption. Confirm the
    number and whether it varies.
 4. **Alvys integration status** — driver, trip, location, VIN, trailer, and warranty are shown
