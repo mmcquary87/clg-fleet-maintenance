@@ -1,38 +1,31 @@
 // Fleet Maintenance System — 72-Hour Load Assignment Stability (KPI 2)
 //
-// Uses CLG's own Alvys backup sheets (Google Sheet tabs published as CSV,
-// tracking LoadNumber/TripDriverId/ScheduledPickupAt snapshots over time)
-// to detect driver-assignment churn before execution — data the live
-// Alvys API can't give us, since it only shows current state.
+// Uses CLG's own hourly Alvys backup (a Google Sheet tab published as
+// CSV, tracking LoadNumber/TripDriverId/ScheduledPickupAt snapshots over
+// time) to detect driver-assignment churn before execution — data the
+// live Alvys API can't give us, since it only shows current state.
 //
 // Definition (framework): eligible assignments unchanged from the
 // 72-hour checkpoint through final release ÷ eligible assignments active
 // at the 72-hour checkpoint × 100.
 //
-// Merges TWO tabs (2026-08-30, per CLG): the original 4-hour-refresh tab
-// (ALVYS_LOADS_SHEET_CSV_URLASSIGNMENTS — only LoadNumber/TripDriverId/
-// ScheduledPickupAt, but with a longer running history) and the newer,
-// richer hourly tab (ALVYS_LOADS_SHEET_CSV_URLTRIPS — adds Status/
-// TripStatus/TripAssignedAt, but only started snapshotting a few days
-// ago). Using the new tab alone meant almost no load had a genuine
-// 72-hour-before-pickup snapshot yet; combining both gives real lookback
-// depth immediately instead of waiting for the new tab to accumulate it.
-// The legacy tab is optional — if its secret isn't set, this still runs
-// on the current tab alone.
+// Single source: ALVYS_LOADS_SHEET_CSV_URLTRIPS. An earlier version of
+// this function also merged in a second "legacy" tab
+// (ALVYS_LOADS_SHEET_CSV_URLASSIGNMENTS) for extra lookback depth, but
+// that tab turned out to be a mirror of this one (same 11-column schema,
+// same first-snapshot timestamp, same row count) rather than a genuinely
+// older, separate history — so the merge added no real depth and was
+// removed (2026-08-31). Real 72-hour-before-pickup coverage just needs
+// this tab to keep accumulating hourly snapshots over the coming days.
 //
 // Approximations, stated plainly rather than hidden:
-//  - SnapshotTime includes time-of-day ("8/26/2026 21:54:55") on current
-//    rows, but older legacy-tab rows (written before that column was
-//    reformatted from Date to Date+time) are date-only and resolve to
-//    UTC midnight of that day.
 //  - "Final release" isn't a real timestamped event in this data — the
 //    last snapshot at or before ScheduledPickupAt is used as a proxy.
-//  - Driver-only. Neither sheet tracks TruckId, so tractor reassignment
-//    isn't part of this calculation.
+//  - Driver-only. The sheet doesn't track TruckId, so tractor
+//    reassignment isn't part of this calculation.
 //
 // Requires ALVYS_LOADS_SHEET_CSV_URLTRIPS secret (the published CSV link
-// for the current trips/loads tab). ALVYS_LOADS_SHEET_CSV_URLASSIGNMENTS
-// (the legacy tab) is optional but recommended for lookback depth.
+// for the trips/loads backup tab).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,9 +47,7 @@ function splitCsvLine(line: string): string[] {
   return cells;
 }
 
-// Handles both "8/26/2026" (older rows, pre date-time fix -> UTC
-// midnight) and "8/26/2026 21:54:55" (current rows, real precision).
-// The sheet's timestamps are wall-clock, not UTC — treated as UTC here
+// The sheet's SnapshotTime is wall-clock, not UTC -- treated as UTC here
 // since we only need consistent relative ordering, not true UTC time.
 function parseSnapshotDate(s: string): number | null {
   const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}):(\d{2}))?$/);
@@ -92,50 +83,32 @@ Deno.serve(async (req) => {
     const nowMs = Date.now();
     const rangeEndMs = Math.min(requestedEndMs, nowMs);
 
-    async function fetchRows(url: string): Promise<Row[]> {
-      const res = await fetch(url);
-      const text = await res.text();
-      if (!res.ok) throw new Error(`Sheet CSV fetch failed (${res.status}): ${text.slice(0, 500)}`);
+    const csvUrl = Deno.env.get("ALVYS_LOADS_SHEET_CSV_URLTRIPS");
+    if (!csvUrl) throw new Error("ALVYS_LOADS_SHEET_CSV_URLTRIPS secret not set");
 
-      const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
-      const header = splitCsvLine(lines[0] ?? "");
-      const idx = (name: string) => header.indexOf(name);
-      const iSnap = idx("SnapshotTime"), iLoad = idx("LoadNumber"), iSched = idx("ScheduledPickupAt"), iDriver = idx("TripDriverId");
-      if (iSnap < 0 || iLoad < 0 || iSched < 0 || iDriver < 0) {
-        throw new Error(`Expected columns not found. Header was: ${header.join(", ")}`);
-      }
+    const res = await fetch(csvUrl);
+    const text = await res.text();
+    if (!res.ok) throw new Error(`Sheet CSV fetch failed (${res.status}): ${text.slice(0, 500)}`);
 
-      const parsed: Row[] = [];
-      for (const line of lines.slice(1)) {
-        const cells = splitCsvLine(line);
-        const snapshotMs = parseSnapshotDate(cells[iSnap] ?? "");
-        const loadNumber = (cells[iLoad] ?? "").trim();
-        const scheduledPickupRaw = (cells[iSched] ?? "").trim();
-        const scheduledPickupMs = scheduledPickupRaw ? new Date(scheduledPickupRaw).getTime() : null;
-        const tripDriverId = (cells[iDriver] ?? "").trim();
-        if (snapshotMs == null || !loadNumber) continue;
-        parsed.push({ snapshotMs, loadNumber, scheduledPickupMs, tripDriverId });
-      }
-      return parsed;
+    const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
+    const header = splitCsvLine(lines[0] ?? "");
+    const idx = (name: string) => header.indexOf(name);
+    const iSnap = idx("SnapshotTime"), iLoad = idx("LoadNumber"), iSched = idx("ScheduledPickupAt"), iDriver = idx("TripDriverId");
+    if (iSnap < 0 || iLoad < 0 || iSched < 0 || iDriver < 0) {
+      throw new Error(`Expected columns not found. Header was: ${header.join(", ")}`);
     }
 
-    const currentUrl = Deno.env.get("ALVYS_LOADS_SHEET_CSV_URLTRIPS");
-    if (!currentUrl) throw new Error("ALVYS_LOADS_SHEET_CSV_URLTRIPS secret not set");
-    const legacyUrl = Deno.env.get("ALVYS_LOADS_SHEET_CSV_URLASSIGNMENTS");
-
-    const currentRows = await fetchRows(currentUrl);
-    // Truly optional: a bad/revoked legacy link shouldn't take down the
-    // whole KPI when the current tab alone would have been fine.
-    let legacyRows: Row[] = [];
-    let legacyFetchError: string | null = null;
-    if (legacyUrl) {
-      try {
-        legacyRows = await fetchRows(legacyUrl);
-      } catch (err) {
-        legacyFetchError = err instanceof Error ? err.message : String(err);
-      }
+    const rows: Row[] = [];
+    for (const line of lines.slice(1)) {
+      const cells = splitCsvLine(line);
+      const snapshotMs = parseSnapshotDate(cells[iSnap] ?? "");
+      const loadNumber = (cells[iLoad] ?? "").trim();
+      const scheduledPickupRaw = (cells[iSched] ?? "").trim();
+      const scheduledPickupMs = scheduledPickupRaw ? new Date(scheduledPickupRaw).getTime() : null;
+      const tripDriverId = (cells[iDriver] ?? "").trim();
+      if (snapshotMs == null || !loadNumber) continue;
+      rows.push({ snapshotMs, loadNumber, scheduledPickupMs, tripDriverId });
     }
-    const rows = [...legacyRows, ...currentRows];
 
     const byLoad = new Map<string, Row[]>();
     for (const r of rows) {
@@ -190,9 +163,6 @@ Deno.serve(async (req) => {
       // scored against a not-yet-final snapshot.
       cappedToNow: rangeEndMs < requestedEndMs,
       totalSnapshotRows: rows.length,
-      legacySnapshotRows: legacyRows.length,
-      currentSnapshotRows: currentRows.length,
-      legacyFetchError,
       loadsTracked: byLoad.size,
       loadsInRange,
       loadsWithNoLeadTime,

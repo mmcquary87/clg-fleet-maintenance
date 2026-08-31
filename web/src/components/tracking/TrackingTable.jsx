@@ -67,6 +67,21 @@ function Row({ row, zebra, onOpenUnit }) {
             {unit.number}
           </button>
         </td>
+        <td style={{ padding: "10px 8px", fontSize: 13 }}>
+          {trip.load_number ? (
+            <a
+              href={`https://app.alvys.com/#/loads/${trip.load_number}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{ color: "var(--clg-royal)", textDecoration: "underline" }}
+            >
+              {trip.load_number}
+            </a>
+          ) : (
+            <span style={{ color: "var(--clg-mercury)" }}>—</span>
+          )}
+        </td>
         <td style={{ padding: "10px 8px", fontSize: 13, color: "var(--clg-granite)" }}>{driverName}</td>
         <td style={{ padding: "10px 8px", fontSize: 12.5, color: "var(--clg-granite)", maxWidth: 160 }}>
           {unit.current_location || <span style={{ color: "var(--clg-mercury)" }}>No GPS lock</span>}
@@ -92,22 +107,9 @@ function Row({ row, zebra, onOpenUnit }) {
       </tr>
       {open && (
         <tr style={{ background: bg, borderBottom: "1px solid var(--clg-smoke)" }}>
-          <td colSpan={11} style={{ padding: "0 8px 14px", fontSize: 12.5, color: "var(--clg-granite)" }}>
+          <td colSpan={12} style={{ padding: "0 8px 14px", fontSize: 12.5, color: "var(--clg-granite)" }}>
             <div style={{ background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)", padding: "12px 14px", lineHeight: 1.6 }}>
-              <div>{eta.reason}</div>
-              {trip.load_number && (
-                <div style={{ marginTop: 6, color: "var(--clg-cool)" }}>
-                  Load{" "}
-                  <a
-                    href={`https://app.alvys.com/#/loads/${trip.load_number}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "var(--clg-royal)", textDecoration: "underline" }}
-                  >
-                    {trip.load_number}
-                  </a>
-                </div>
-              )}
+              {eta.reason}
             </div>
           </td>
         </tr>
@@ -117,7 +119,7 @@ function Row({ row, zebra, onOpenUnit }) {
 }
 
 const HEADERS = [
-  "Unit", "Driver", "Current location", "Destination", "ETA", "Appt", "ETA Cushion", "HOS", "Miles remaining", "Status", "",
+  "Unit", "Load #", "Driver", "Current location", "Destination", "ETA", "Appt", "ETA Cushion", "HOS", "Miles remaining", "Status", "",
 ];
 
 // One dense table for every unit on an active load (ui-improvement-punch-
@@ -134,7 +136,7 @@ export default function TrackingTable({ rows, onOpenUnit }) {
           <tr style={{ borderBottom: "2px solid var(--clg-border-default)" }}>
             {HEADERS.map((h, i) => (
               <th key={h || i} style={{
-                textAlign: i === 8 ? "right" : "left", padding: "0 8px 8px", fontFamily: "var(--clg-font-heading)",
+                textAlign: i === 9 ? "right" : "left", padding: "0 8px 8px", fontFamily: "var(--clg-font-heading)",
                 fontSize: 10.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--clg-text-brand)", whiteSpace: "nowrap",
               }}>
                 {h}
