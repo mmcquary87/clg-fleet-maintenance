@@ -175,6 +175,24 @@ Deno.serve(async (req) => {
       types: "fuelPercents,obdOdometerMeters,gps",
     });
 
+    // address.name is a match against Samsara's saved Address Book, not a
+    // live geocode of this specific reading -- a vehicle just has to pass
+    // within that saved place's configured radius to get labeled with its
+    // name, however unrelated to the vehicle's actual current trip.
+    // Confirmed wrong in practice: unit 3310 showed "US Sugar Savannah
+    // Refinery" (Savannah, GA) while its coordinates -- and the Tracking
+    // page's own distance math -- put it 11 miles from a Louisville, KY
+    // pickup. reverseGeo.formattedLocation, when present, is a plain
+    // street address computed directly from THIS reading's own lat/lng, so
+    // it can't disagree with the coordinates the way a saved-place match
+    // can. Preferred when available; address.name is a fallback for
+    // vehicles/plans where a live reverse-geocode isn't returned.
+    // NOT YET CONFIRMED against Samsara's docs (network access to
+    // developers.samsara.com is blocked from this environment) -- the
+    // rawGpsLogged block below prints one full reading to this function's
+    // logs so the exact field name can be verified/corrected after the
+    // first live run.
+    let rawGpsLogged = false;
     const syncedAt = new Date().toISOString();
     const unitUpdateTasks: Promise<{ error: unknown }>[] = [];
     for (const v of statVehicles) {
@@ -186,7 +204,16 @@ Deno.serve(async (req) => {
       const lastOdo = latestOf(v.obdOdometerMeters);
       if (lastOdo) fields.odometer = Math.round(lastOdo.value * 0.000621371); // meters -> miles
       const lastGps = latestOf(v.gps);
-      if (lastGps?.address?.name) fields.current_location = lastGps.address.name;
+      if (lastGps && !rawGpsLogged) {
+        console.log("[samsara-sync] sample gps reading (verify field names):", JSON.stringify(lastGps));
+        rawGpsLogged = true;
+      }
+      const liveLocation = lastGps?.reverseGeo?.formattedLocation ?? null;
+      if (liveLocation) {
+        fields.current_location = liveLocation;
+      } else if (lastGps?.address?.name) {
+        fields.current_location = lastGps.address.name;
+      }
       if (typeof lastGps?.latitude === "number") fields.current_lat = lastGps.latitude;
       if (typeof lastGps?.longitude === "number") fields.current_lng = lastGps.longitude;
       // Per-row update (not a bulk upsert) so only the fields this vehicle
