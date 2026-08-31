@@ -35,7 +35,13 @@ function initialsFor(email) {
 
 export default function Dashboard({ session }) {
   const [tab, setTab] = useState("board");
+  const [woInitialCategory, setWoInitialCategory] = useState(null);
   const { isAdmin } = useProfile(session.user.id);
+
+  const goToWorkOrders = (category) => {
+    setWoInitialCategory(category ?? null);
+    setTab("workorders");
+  };
 
   return (
     <div className="app" style={{ minHeight: "100vh", background: "var(--clg-surface-subtle)" }}>
@@ -129,9 +135,9 @@ export default function Dashboard({ session }) {
 
       {tab === "board" && <Board onGoToUnits={() => setTab("units")} />}
       {tab === "tracking" && <TrackingView />}
-      {tab === "workorders" && <WorkOrdersView />}
+      {tab === "workorders" && <WorkOrdersView initialCategory={woInitialCategory} />}
       {tab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
-      {tab === "spend" && <SpendView />}
+      {tab === "spend" && <SpendView onGoToWorkOrders={goToWorkOrders} onGoToUnits={() => setTab("units")} />}
       {tab === "operations" && <OperationsView />}
       {tab === "units" && <UnitsView />}
       {tab === "vendors" && <VendorsView />}
