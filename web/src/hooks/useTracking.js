@@ -57,12 +57,55 @@ function severityTierFor(hoursShort) {
   return "On pace";
 }
 
+// Pickup and Delivery are Alvys's internal stop-type vocabulary; a
+// dispatcher thinks in Shipper/Consignee, so that's what the UI shows.
+export function stopLabelFor(stopType) {
+  if (stopType === "Pickup") return "Shipper";
+  if (stopType === "Delivery") return "Consignee";
+  return null;
+}
+
 function computeEta(unit, trip, hos) {
+  const stopType = trip?.stop_type ?? null;
+  const stopLabel = stopLabelFor(stopType);
+
+  // A window (FCFS) and an exact appointment (APPT) read differently to a
+  // dispatcher — label which one this is rather than presenting both the
+  // same way. Window takes precedence when both exist (matches the same
+  // StopWindow-over-AppointmentDate precedence alvys-trips-report uses).
+  const deadline = trip?.stop_window_end || trip?.stop_appointment_at || null;
+  const deadlineType = trip?.stop_window_end ? "window" : trip?.stop_appointment_at ? "appointment" : null;
+  // A point-in-time appointment has no separate window to run up to — the
+  // "runway to react" is just the time until that one instant.
+  const windowStart = trip?.stop_window_start || deadline;
+
+  // Ground truth beats a projection: once the driver's mobile check-in has
+  // marked this stop arrived, there's nothing left to project — stop
+  // reading Samsara's last (possibly stale) GPS ping as if they're still
+  // en route. This is what keeps an already-arrived truck from getting
+  // flagged Late Risk off a few stale miles and an exhausted HOS clock.
+  if (trip?.stop_arrived_at) {
+    const arrivedAt = new Date(trip.stop_arrived_at);
+    const sameDay = arrivedAt.toDateString() === new Date().toDateString();
+    return {
+      hasPosition: true, hasDestination: true,
+      hasHos: typeof hos?.drive_remaining_minutes === "number", hasAppointment: deadline != null,
+      distanceRemainingMiles: 0, driveHoursNeeded: 0,
+      driveRemainingHours: typeof hos?.drive_remaining_minutes === "number" ? hos.drive_remaining_minutes / 60 : null,
+      projectedArrival: arrivedAt, resetsNeeded: 0,
+      deadline, deadlineType, windowStart,
+      hoursShort: 0, bufferHours: null, cushionHours: null, leadTimeHours: null, severityTier: "Arrived",
+      severity: "arrived",
+      reason: `Already arrived at the ${stopLabel || "stop"} — checked in ${fmtClock(arrivedAt)}${sameDay ? "" : ` on ${arrivedAt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}.`,
+      stopType, stopLabel, assumptions: ASSUMPTIONS,
+    };
+  }
+
   const hasPosition = typeof unit.current_lat === "number" && typeof unit.current_lng === "number";
-  const hasDestination = typeof trip?.destination_lat === "number" && typeof trip?.destination_lng === "number";
+  const hasDestination = typeof trip?.stop_lat === "number" && typeof trip?.stop_lng === "number";
 
   const distanceRemainingMiles = hasPosition && hasDestination
-    ? haversineMiles(unit.current_lat, unit.current_lng, trip.destination_lat, trip.destination_lng)
+    ? haversineMiles(unit.current_lat, unit.current_lng, trip.stop_lat, trip.stop_lng)
     : null;
 
   // D — drive time still needed (straight-line proxy, see ASSUMPTIONS above).
@@ -79,16 +122,6 @@ function computeEta(unit, trip, hos) {
     resetsNeeded = projection.resetsNeeded;
     projectedArrival = new Date(Date.now() + projection.totalHours * 3600000);
   }
-
-  // A window (FCFS) and an exact appointment (APPT) read differently to a
-  // dispatcher — label which one this is rather than presenting both the
-  // same way. Window takes precedence when both exist (matches the same
-  // StopWindow-over-AppointmentDate precedence alvys-trips-report uses).
-  const deadline = trip?.delivery_window_end || trip?.delivery_appointment_at || null;
-  const deadlineType = trip?.delivery_window_end ? "window" : trip?.delivery_appointment_at ? "appointment" : null;
-  // A point-in-time appointment has no separate window to run up to — the
-  // "runway to react" is just the time until that one instant.
-  const windowStart = trip?.delivery_window_start || deadline;
 
   const hoursShort = projectedArrival && deadline
     ? Math.max(0, (projectedArrival.getTime() - new Date(deadline).getTime()) / 3600000)
@@ -108,20 +141,21 @@ function computeEta(unit, trip, hos) {
 
   // The layout groups on this, and each card/row leads with this sentence
   // instead of making the dispatcher do the math across separate columns.
+  const deadlineLabel = stopLabel ? `${stopLabel} deadline` : "deadline";
   let severity = "no_data";
   let reason = "Missing position, destination, or HOS data — can't compute an ETA read yet.";
   if (projectedArrival) {
     if (hoursShort > 0) {
       severity = "attention";
       reason = resetsNeeded > 0
-        ? `Needs ${resetsNeeded > 1 ? `${resetsNeeded} required resets` : "a required 10-hour reset"} before it can finish the drive — projected ${fmtHM(hoursShort)} short of the ${fmtClock(new Date(deadline))} deadline.`
-        : `Projected ${fmtHM(hoursShort)} short of the ${fmtClock(new Date(deadline))} deadline.`;
+        ? `Needs ${resetsNeeded > 1 ? `${resetsNeeded} required resets` : "a required 10-hour reset"} before it can finish the drive — projected ${fmtHM(hoursShort)} short of the ${fmtClock(new Date(deadline))} ${deadlineLabel}.`
+        : `Projected ${fmtHM(hoursShort)} short of the ${fmtClock(new Date(deadline))} ${deadlineLabel}.`;
     } else if (deadline) {
       severity = "ok";
-      reason = `On pace — projected arrival ${fmtClock(projectedArrival)}, ${fmtHM(bufferHours)} ahead of the ${fmtClock(new Date(deadline))} deadline.`;
+      reason = `On pace — projected arrival ${fmtClock(projectedArrival)}, ${fmtHM(bufferHours)} ahead of the ${fmtClock(new Date(deadline))} ${deadlineLabel}.`;
     } else {
       severity = "ok";
-      reason = `Projected arrival ${fmtClock(projectedArrival)}. No delivery deadline on file to check against.`;
+      reason = `Projected arrival ${fmtClock(projectedArrival)}. No ${stopLabel ? `${stopLabel} ` : ""}deadline on file to check against.`;
     }
   } else if (driveHoursNeeded != null && driveRemainingHours == null) {
     reason = "Missing this driver's HOS clocks — can't rule out a mandatory reset before arrival.";
@@ -136,7 +170,7 @@ function computeEta(unit, trip, hos) {
     distanceRemainingMiles, driveHoursNeeded, driveRemainingHours,
     projectedArrival, resetsNeeded, deadline, deadlineType, windowStart,
     hoursShort, bufferHours, cushionHours, leadTimeHours, severityTier,
-    severity, reason, assumptions: ASSUMPTIONS,
+    severity, reason, stopType, stopLabel, assumptions: ASSUMPTIONS,
   };
 }
 
@@ -156,8 +190,8 @@ export function useTracking() {
     const { data, error: err } = await supabase
       .from("unit_current_trip")
       .select(
-        "alvys_trip_id, load_number, destination_name, destination_lat, destination_lng, " +
-        "delivery_appointment_at, delivery_window_start, delivery_window_end, status, synced_at, " +
+        "alvys_trip_id, load_number, stop_type, stop_name, stop_lat, stop_lng, " +
+        "stop_appointment_at, stop_window_start, stop_window_end, stop_arrived_at, status, synced_at, " +
         "unit:units(id, number, current_lat, current_lng, current_location, samsara_synced_at, driver_name), " +
         "driver:drivers(id, name)"
       );
@@ -204,9 +238,11 @@ export function useTracking() {
   // Tightest cushion first — this is a risk radar, not a dock schedule, so
   // it should read as a continuation of "Needs attention"'s worst-first
   // order rather than switching to arrival time. A load with no deadline on
-  // file has no buffer to rank by, so it sorts to the end.
+  // file has no buffer to rank by, so it sorts to the end — same for an
+  // already-arrived stop (severity "arrived"), which has nothing left to
+  // rank on and belongs here as resolved, not lost from the table entirely.
   const onTrack = rows
-    .filter((r) => r.eta.severity === "ok")
+    .filter((r) => r.eta.severity === "ok" || r.eta.severity === "arrived")
     .sort((a, b) => (a.eta.bufferHours ?? Infinity) - (b.eta.bufferHours ?? Infinity));
   // Nearest known deadline first — a missing-data load with an appointment
   // coming up is more urgent to chase down than one with nothing on file.
