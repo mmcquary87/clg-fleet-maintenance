@@ -9,6 +9,7 @@ import { useHomeTimeAdherence } from "../hooks/useHomeTimeAdherence";
 import { useDriveHourUtilization } from "../hooks/useDriveHourUtilization";
 import { useAssignmentStability } from "../hooks/useAssignmentStability";
 import { useFeasibilityReview } from "../hooks/useFeasibilityReview";
+import { usePlanAdherence } from "../hooks/usePlanAdherence";
 import { thisMonthRange } from "../lib/dateRangePresets";
 import DateRangeFilter from "./DateRangeFilter";
 
@@ -191,10 +192,12 @@ export default function OperationsView() {
   const { data: driveHourData, loading: driveHourLoading, error: driveHourError } = useDriveHourUtilization(range);
   const { data: stabilityData, loading: stabilityLoading, error: stabilityError } = useAssignmentStability(range);
   const { data: feasibilityData, loading: feasibilityLoading, error: feasibilityError } = useFeasibilityReview(range);
+  const { data: adherenceData, loading: adherenceLoading, error: adherenceError } = usePlanAdherence(range);
 
   const LIVE = {
     2: { value: stabilityData?.stabilityPct ?? null, loading: stabilityLoading, error: stabilityError },
     "SC-01": { value: feasibilityData?.reviewCompletionPct ?? null, loading: feasibilityLoading, error: feasibilityError },
+    10: { value: adherenceData?.adherencePct ?? null, loading: adherenceLoading, error: adherenceError },
     3: { value: tripsData?.plannedEmptyMilePct ?? null, loading: tripsLoading, error: tripsError },
     6: { value: tripsData?.revenuePerActiveTractorPerWeek ?? null, loading: tripsLoading, error: tripsError },
     7: { value: tripsData?.emptyMilePct ?? null, loading: tripsLoading, error: tripsError },
@@ -289,6 +292,8 @@ export default function OperationsView() {
                       ? `From CLG's hourly Alvys backup sheet, not a live Alvys pull. ${stabilityData?.eligibleAssignments ?? 0} of ${stabilityData?.loadsInRange ?? 0} loads in range had a driver assigned by the 72-hour checkpoint. Driver-only — tractor reassignment isn't tracked.`
                       : kpi.no === "SC-01"
                       ? `Proxy: an order reaching Dispatched status counts as "reviewed" (dispatch policy is not to dispatch infeasible loads) — no separate documented-review log exists. ${feasibilityData?.unreviewedOrders ?? 0} of ${feasibilityData?.totalOrders ?? 0} orders in range never reached Dispatched.`
+                      : kpi.no === 10
+                      ? `"Final approved plan" = schedule + driver as of the load's first Dispatched snapshot. ${adherenceData?.deviationsTotal ?? 0} of ${adherenceData?.eligibleCompletedLoads ?? 0} eligible completed loads changed after that point. Tractor/trailer reassignment isn't tracked.`
                       : null
                   }
                 />
