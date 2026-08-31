@@ -112,7 +112,13 @@ export const KPIS = [
     no: 10, module: "fleet", name: "Operating Plan Adherence", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Eligible completed loads executed per the final approved plan ÷ eligible completed loads × 100",
     threshold: { status: "pending", green: "≥90.0% (target 95.0%)", yellow: "80.0–89.9%", red: "<80.0%" },
-    dataStatus: "blocked", blockedReason: "Needs a governed final-plan snapshot from Alvys — not pulled yet.",
+    // Methodology (CLG, 2026-08-31): the "final approved plan" snapshot is
+    // the load's schedule + assigned driver as of the moment it first hit
+    // Dispatched status (consistent with SC-01's "don't dispatch if not
+    // feasible" logic) -- see alvys-plan-adherence for what counts as a
+    // deviation (schedule or driver changed after that point) and what
+    // isn't checked (tractor/trailer, not tracked in this sheet).
+    dataStatus: "live", unit: "%",
   },
   {
     no: "DE-01", module: "fleet", name: "Projected Late Load Exposure", classification: "Daily Exception Measure", type: "Leading",
