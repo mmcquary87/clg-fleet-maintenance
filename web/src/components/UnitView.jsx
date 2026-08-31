@@ -9,6 +9,19 @@ import { groupSum } from "../lib/groupSum";
 import EmptyState from "./EmptyState";
 
 const UNIT_TYPES = ["All", "Truck", "Trailer"];
+// Higher than the Company Spend page's fleet-wide 15% bar -- a single
+// unit's category mix is noisier, so it takes more to be worth a callout.
+const UNCATEGORIZED_FLAG_THRESHOLD_PCT = 40;
+
+// A unit number that isn't a short, mostly-numeric code (optionally with a
+// single letter prefix, e.g. "D3429") is worth a second look -- work orders
+// created via "Log Invoice" auto-create a unit for whatever's typed into
+// the unit-number field (see findOrCreateUnit in NewWorkOrderForm), so a
+// mistyped invoice/PO reference can end up filed as its own "unit." This is
+// a simple heuristic against this fleet's actual numbering, not a hard rule.
+function looksLikeUnitNumber(unit) {
+  return /^[A-Za-z]?\d{3,5}$/.test((unit || "").trim());
+}
 
 function fmtMoney(n) {
   return "$" + Math.round(n).toLocaleString();
@@ -104,6 +117,20 @@ export default function UnitView({ records }) {
     }).filter(Boolean);
   }, [filteredRecords]);
 
+  // Top 10 units' share of total fleet spend -- always against the highest
+  // spenders regardless of which sort direction is currently toggled, since
+  // the point is concentration ("how much rides on your worst units"), not
+  // whichever list is on screen.
+  const grandTotal = units.reduce((s, u) => s + u.total, 0);
+  const top10ByHighest = [...units].sort((a, b) => b.total - a.total).slice(0, 10);
+  const top10Total = top10ByHighest.reduce((s, u) => s + u.total, 0);
+  const top10SharePct = grandTotal > 0 ? (top10Total / grandTotal) * 100 : 0;
+
+  const suspiciousUnitIds = useMemo(
+    () => units.filter((u) => !looksLikeUnitNumber(u.unit)).map((u) => u.unit),
+    [units],
+  );
+
   useEffect(() => {
     if (selected && !units.find((u) => u.unit === selected)) setSelected(units[0]?.unit ?? null);
     if (!selected && units.length > 0) setSelected(units[0].unit);
@@ -123,6 +150,12 @@ export default function UnitView({ records }) {
   const selectedRecords = records.filter((r) => r.unit === selected);
   const selectedTotal = selectedRecords.reduce((s, r) => s + r.cost, 0);
   const selectedByCategory = groupSum(selectedRecords, "category");
+
+  // "What stands out" -- flagged only above a real threshold, so a unit
+  // with a stray Other item or two doesn't get an alarming callout.
+  const selectedOtherTotal = selectedRecords.filter((r) => r.category === "Other").reduce((s, r) => s + r.cost, 0);
+  const selectedOtherPct = selectedTotal > 0 ? (selectedOtherTotal / selectedTotal) * 100 : 0;
+  const selectedOtherCount = selectedRecords.filter((r) => r.category === "Other").length;
 
   return (
     <>
@@ -173,6 +206,11 @@ export default function UnitView({ records }) {
             ))}
           </div>
         </div>
+        {!query.trim() && top10ByHighest.length > 1 && (
+          <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginBottom: 8, lineHeight: 1.5 }}>
+            These {top10ByHighest.length} units carry <strong style={{ color: "var(--clg-navy)" }}>{fmtMoney(top10Total)}</strong> — {top10SharePct.toFixed(0)}% of {fmtMoney(grandTotal)} in fleet spend, from {top10ByHighest.length} of {units.length} units.
+          </div>
+        )}
         <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 8 }}>
           {query.trim()
             ? `${ownershipUnits.length} unit${ownershipUnits.length === 1 ? "" : "s"} matching "${query.trim()}", ${ownershipSort === "highest" ? "most expensive" : "least expensive"} first.`
@@ -199,33 +237,46 @@ export default function UnitView({ records }) {
         )}
       </SectionCard>
 
-      <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", marginBottom: 12 }}>
+      <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", marginBottom: 4 }}>
         Top units by category
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14, marginBottom: 22 }}>
-        {categoryLeaderboards.map(({ category, top, max }) => (
-          <SectionCard key={category} style={{ padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: CAT_COLORS[category] || "#888", flexShrink: 0 }} />
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--clg-text-heading)" }}>{category}</div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {top.map((u, i) => (
-                <LeaderboardRow
-                  key={u.unit}
-                  rank={i + 1}
-                  label={u.unit}
-                  value={u.total}
-                  max={max}
-                  color={CAT_COLORS[category] || "#888"}
-                  active={selected === u.unit}
-                  onClick={() => setSelected(u.unit)}
-                />
-              ))}
-            </div>
-          </SectionCard>
-        ))}
+      <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 14 }}>
+        Ordered by category total, largest first. Uncategorized spend is highlighted in red — it's the one category you can act on today.
       </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14, marginBottom: 14 }}>
+        {categoryLeaderboards.map(({ category, top, max }) => {
+          const isOther = category === "Other";
+          const color = isOther ? "var(--clg-scarlet)" : (CAT_COLORS[category] || "#888");
+          return (
+            <SectionCard key={category} style={isOther ? { padding: 16, borderTop: "3px solid var(--clg-scarlet)" } : { padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: isOther ? "var(--clg-scarlet)" : "var(--clg-text-heading)" }}>{category}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                {top.map((u, i) => (
+                  <LeaderboardRow
+                    key={u.unit}
+                    rank={i + 1}
+                    label={u.unit}
+                    value={u.total}
+                    max={max}
+                    color={color}
+                    active={selected === u.unit}
+                    onClick={() => setSelected(u.unit)}
+                  />
+                ))}
+              </div>
+            </SectionCard>
+          );
+        })}
+      </div>
+
+      {suspiciousUnitIds.length > 0 && (
+        <div style={{ background: "#fff", borderRadius: "var(--clg-radius-md)", borderTop: "3px solid var(--clg-mercury)", padding: "14px 18px", marginBottom: 22, fontSize: 12.5, color: "var(--clg-text-body)", lineHeight: 1.6 }}>
+          {suspiciousUnitIds.length} unit ID{suspiciousUnitIds.length === 1 ? "" : "s"} above — {suspiciousUnitIds.join(", ")} — {suspiciousUnitIds.length === 1 ? "doesn't" : "don't"} match a typical unit-number format and may be a misentered invoice or PO reference. Worth confirming before trusting rankings that include {suspiciousUnitIds.length === 1 ? "it" : "them"}.
+        </div>
+      )}
 
       {selectedUnit && (
         <SectionCard style={{ padding: 22 }}>
@@ -239,6 +290,15 @@ export default function UnitView({ records }) {
               <div style={{ fontSize: 11, color: "var(--clg-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Total spend</div>
             </div>
           </div>
+
+          {selectedOtherPct > UNCATEGORIZED_FLAG_THRESHOLD_PCT && (
+            <div style={{ background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-sm)", padding: "12px 14px", marginBottom: 18 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-scarlet)" }}>What stands out</div>
+              <div style={{ fontSize: 12.5, color: "var(--clg-text-body)", marginTop: 6, lineHeight: 1.55 }}>
+                {selectedOtherPct.toFixed(0)}% of this unit's spend has no category on it — {fmtMoney(selectedOtherTotal)} across {selectedOtherCount} item{selectedOtherCount === 1 ? "" : "s"}.
+              </div>
+            </div>
+          )}
 
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)", marginBottom: 8 }}>
             Categorized breakdown
