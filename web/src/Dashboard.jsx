@@ -13,13 +13,14 @@ import SettingsView from "./components/settings/SettingsView";
 import RosterView from "./components/roster/RosterView";
 import HomeTimeView from "./components/roster/HomeTimeView";
 import TrackingView from "./components/tracking/TrackingView";
+import ReloadsView from "./components/reloads/ReloadsView";
 import "./ds/tokens.css";
 
 // Grouped so related views sit together instead of one flat row — each
 // group renders with a visible divider between it and the next. Sentence
 // case (not tracked uppercase) per the CLG-OS-Design-Package nav spec.
 const NAV_GROUPS = [
-  { id: "overview", items: [{ id: "board", label: "Board" }, { id: "tracking", label: "Tracking" }, { id: "operations", label: "Operations" }] },
+  { id: "overview", items: [{ id: "board", label: "Board" }, { id: "tracking", label: "Tracking" }, { id: "reloads", label: "Reloads" }, { id: "operations", label: "Operations" }] },
   { id: "work", items: [{ id: "workorders", label: "Work orders" }] },
   { id: "fleet", items: [{ id: "spend", label: "Spend" }, { id: "units", label: "Units" }, { id: "vendors", label: "Vendors" }] },
   { id: "driver", items: [{ id: "roster", label: "Roster" }, { id: "hometime", label: "Home time" }] },
@@ -135,6 +136,7 @@ export default function Dashboard({ session }) {
 
       {tab === "board" && <Board onGoToUnits={() => setTab("units")} />}
       {tab === "tracking" && <TrackingView />}
+      {tab === "reloads" && <ReloadsView />}
       {tab === "workorders" && <WorkOrdersView initialCategory={woInitialCategory} />}
       {tab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
       {tab === "spend" && <SpendView onGoToWorkOrders={goToWorkOrders} onGoToUnits={() => setTab("units")} />}
