@@ -11,7 +11,7 @@ export function useVendors() {
     setError(null);
     const { data, error: err } = await supabase
       .from("vendors")
-      .select("id, name, specialty_category, contact, contact_name, contact_email, created_at")
+      .select("id, name, specialty_category, contact, contact_name, contact_email, phone, address, notes, created_at")
       .order("name", { ascending: true });
     if (err) {
       setError(err.message);

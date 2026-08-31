@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { X, Loader2, ExternalLink, FileWarning, Mail, Sparkles, Plus, Trash2 } from "lucide-react";
+import { X, Loader2, ExternalLink, FileWarning, Mail, Sparkles, Plus, Trash2, Pencil } from "lucide-react";
 import { Badge, Button, Input, Select } from "../../ds";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
+import { useVendors } from "../../hooks/useVendors";
 import { supabase } from "../../lib/supabaseClient";
 import { buildMailto } from "../../lib/mailto";
 import { uploadReceipt, fileToBase64 } from "../../lib/invoiceFiles";
 import { CATEGORIES } from "../../lib/categories";
 import FileDropzone from "../shared/FileDropzone";
+import ChargebackDriverPicker from "../shared/ChargebackDriverPicker";
+
+const SEVERITIES = ["Routine", "Urgent", "Unit down"];
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -72,8 +76,18 @@ function emptyCloseLineItem(overrides) {
   return { id: uid(), category: CATEGORIES[0], description: "", cost: "", inspectionType: "", ...overrides };
 }
 
+function emptyDetailsForm() {
+  return {
+    category: "", severity: "", vendorId: "", systemComponent: "", complaint: "",
+    assignedBay: "", assignedTech: "", promisedBack: "", poNumber: "",
+    waitingOnParts: false, partsEta: "",
+    isChargeback: false, chargebackDriver: "", chargebackDriverId: null,
+  };
+}
+
 export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }) {
   const { order, loading, error, receiptUrl, reload } = useWorkOrder(workOrderId);
+  const { vendors } = useVendors();
   const [pendingFile, setPendingFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
@@ -84,6 +98,10 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const [closeFile, setCloseFile] = useState(null);
   const [closeScanning, setCloseScanning] = useState(false);
   const [closeScanApplied, setCloseScanApplied] = useState(false);
+
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailsForm, setDetailsForm] = useState(emptyDetailsForm());
+
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState(null);
 
@@ -122,6 +140,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
 
   const openCloseForm = () => {
     setStatusError(null);
+    setEditingDetails(false);
     setCloseForm({
       invoiceRef: order.invoice_ref ?? "",
       poNumber: order.po_number ?? "",
@@ -133,6 +152,60 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setCloseFile(null);
     setCloseScanApplied(false);
     setClosing(true);
+  };
+
+  const openDetailsForm = () => {
+    setStatusError(null);
+    setClosing(false);
+    setDetailsForm({
+      category: order.category ?? "",
+      severity: order.severity ?? "",
+      vendorId: order.vendor?.id ?? "",
+      systemComponent: order.system_component ?? "",
+      complaint: order.complaint ?? "",
+      assignedBay: order.assigned_bay ?? "",
+      assignedTech: order.assigned_tech ?? "",
+      promisedBack: order.promised_back ? order.promised_back.slice(0, 10) : "",
+      poNumber: order.po_number ?? "",
+      waitingOnParts: !!order.waiting_on_parts,
+      partsEta: order.parts_eta ? order.parts_eta.slice(0, 10) : "",
+      isChargeback: !!order.is_chargeback,
+      chargebackDriver: order.chargeback_driver_name ?? "",
+      chargebackDriverId: order.chargeback_driver_id ?? null,
+    });
+    setEditingDetails(true);
+  };
+
+  const confirmDetails = async () => {
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      const { error: updateErr } = await supabase.from("work_orders").update({
+        category: detailsForm.category,
+        severity: detailsForm.severity || null,
+        vendor_id: detailsForm.vendorId || null,
+        system_component: detailsForm.systemComponent || null,
+        complaint: detailsForm.complaint || null,
+        assigned_bay: detailsForm.assignedBay || null,
+        assigned_tech: detailsForm.assignedTech || null,
+        promised_back: detailsForm.promisedBack || null,
+        po_number: detailsForm.poNumber || null,
+        waiting_on_parts: detailsForm.waitingOnParts,
+        parts_eta: detailsForm.waitingOnParts ? (detailsForm.partsEta || null) : null,
+        is_chargeback: detailsForm.isChargeback,
+        chargeback_driver_name: detailsForm.isChargeback ? (detailsForm.chargebackDriver.trim() || null) : null,
+        chargeback_driver_id: detailsForm.isChargeback ? detailsForm.chargebackDriverId : null,
+      }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+
+      setEditingDetails(false);
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setStatusError(err.message);
+    } finally {
+      setStatusBusy(false);
+    }
   };
 
   const onCloseScan = async () => {
@@ -280,8 +353,11 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                     <Badge tone="neutral">{order.status}</Badge>
                   )}
                 </div>
-                {!closing && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                {!closing && !editingDetails && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                    <Button size="sm" variant="outline" iconLeft={<Pencil size={12} />} onClick={openDetailsForm} disabled={statusBusy}>
+                      Edit details
+                    </Button>
                     {order.status === "Open" && (
                       <>
                         <Button size="sm" variant="outline" onClick={() => updateStatus("In Progress")} disabled={statusBusy}>
@@ -309,7 +385,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                     )}
                   </div>
                 )}
-                {statusError && !closing && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 8 }}>{statusError}</div>}
+                {statusError && !closing && !editingDetails && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 8 }}>{statusError}</div>}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {shopHeadsUpMailto(order) && (
@@ -414,6 +490,100 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                       Confirm &amp; close
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setClosing(false)} disabled={statusBusy}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {editingDetails && (
+                <div style={{ border: "1px solid var(--clg-navy)", borderRadius: "var(--clg-radius-md)", padding: 16, background: "var(--clg-surface-subtle)" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-navy)", marginBottom: 12 }}>
+                    Edit work order details
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <FormField label="Category">
+                      <Select value={detailsForm.category} onChange={(e) => setDetailsForm((f) => ({ ...f, category: e.target.value }))} options={CATEGORIES} />
+                    </FormField>
+                    <FormField label="Severity">
+                      <Select
+                        value={detailsForm.severity} onChange={(e) => setDetailsForm((f) => ({ ...f, severity: e.target.value }))}
+                        options={SEVERITIES} placeholder="No severity"
+                      />
+                    </FormField>
+                    <FormField label="Vendor">
+                      <Select
+                        value={detailsForm.vendorId} onChange={(e) => setDetailsForm((f) => ({ ...f, vendorId: e.target.value }))}
+                        options={vendors.map((v) => ({ value: v.id, label: v.name }))} placeholder="— none —"
+                      />
+                    </FormField>
+                    <FormField label="System / component">
+                      <Input value={detailsForm.systemComponent} onChange={(e) => setDetailsForm((f) => ({ ...f, systemComponent: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Assigned bay">
+                      <Input value={detailsForm.assignedBay} onChange={(e) => setDetailsForm((f) => ({ ...f, assignedBay: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Assigned tech">
+                      <Input value={detailsForm.assignedTech} onChange={(e) => setDetailsForm((f) => ({ ...f, assignedTech: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Promised back">
+                      <Input type="date" value={detailsForm.promisedBack} onChange={(e) => setDetailsForm((f) => ({ ...f, promisedBack: e.target.value }))} />
+                    </FormField>
+                    <FormField label="PO number">
+                      <Input value={detailsForm.poNumber} onChange={(e) => setDetailsForm((f) => ({ ...f, poNumber: e.target.value }))} placeholder="e.g. PO-10245" />
+                    </FormField>
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <FormField label="Complaint / notes">
+                      <textarea
+                        value={detailsForm.complaint} onChange={(e) => setDetailsForm((f) => ({ ...f, complaint: e.target.value }))} rows={2}
+                        style={{
+                          width: "100%", boxSizing: "border-box", fontFamily: "var(--clg-font-body)", fontSize: "var(--clg-size-body)",
+                          color: "var(--clg-text-body)", background: "var(--clg-surface-page)", border: "1px solid var(--clg-border-default)",
+                          borderRadius: "var(--clg-radius-sm)", padding: "11px 12px", resize: "vertical",
+                        }}
+                      />
+                    </FormField>
+                  </div>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, marginTop: 14 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-body)", cursor: "pointer" }}>
+                      <input
+                        type="checkbox" checked={detailsForm.waitingOnParts}
+                        onChange={(e) => setDetailsForm((f) => ({ ...f, waitingOnParts: e.target.checked }))}
+                      />
+                      Waiting on parts
+                    </label>
+                    {detailsForm.waitingOnParts && (
+                      <Input
+                        type="date" value={detailsForm.partsEta}
+                        onChange={(e) => setDetailsForm((f) => ({ ...f, partsEta: e.target.value }))}
+                        style={{ maxWidth: 180 }}
+                      />
+                    )}
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-body)", cursor: "pointer" }}>
+                      <input
+                        type="checkbox" checked={detailsForm.isChargeback}
+                        onChange={(e) => setDetailsForm((f) => ({ ...f, isChargeback: e.target.checked }))}
+                      />
+                      Charge back to driver
+                    </label>
+                    {detailsForm.isChargeback && (
+                      <ChargebackDriverPicker
+                        name={detailsForm.chargebackDriver}
+                        onChange={(name, driverId) => setDetailsForm((f) => ({ ...f, chargebackDriver: name, chargebackDriverId: driverId }))}
+                      />
+                    )}
+                  </div>
+
+                  {statusError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 10 }}>{statusError}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <Button size="sm" onClick={confirmDetails} disabled={statusBusy} iconLeft={statusBusy ? <Loader2 size={13} className="spin" /> : null}>
+                      Save changes
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingDetails(false)} disabled={statusBusy}>
                       Cancel
                     </Button>
                   </div>
