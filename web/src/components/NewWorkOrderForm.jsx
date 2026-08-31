@@ -4,6 +4,7 @@ import { Card, Field, Input, Select, Button, Alert, Eyebrow } from "../ds";
 import { supabase } from "../lib/supabaseClient";
 import { CATEGORIES } from "../lib/categories";
 import { useDriverNames } from "../hooks/useDriverNames";
+import { uploadReceipt, fileToBase64 } from "../lib/invoiceFiles";
 import FileDropzone from "./shared/FileDropzone";
 
 const STATUSES = ["Open", "In Progress", "Closed"];
@@ -69,22 +70,6 @@ async function findOrCreateVendor(name, category) {
   return created.id;
 }
 
-async function uploadReceipt(file) {
-  const path = `${crypto.randomUUID()}-${file.name}`;
-  const { error } = await supabase.storage.from("invoices").upload(path, file);
-  if (error) throw error;
-  return path;
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(",")[1]); // strip the data: URL prefix
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function NewWorkOrderForm({ onSaved, onCancel }) {
   const [f, setF] = useState({
     unitNumber: "", vendorName: "",
@@ -120,10 +105,11 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
         dateOpened: data.date || prev.dateOpened,
         dateClosed: data.date || prev.dateClosed,
       }));
-      setLineItems((prev) => {
-        const [first, ...rest] = prev;
-        return [{ ...first, category: data.category, description: data.description, cost: data.cost }, ...rest];
-      });
+      setLineItems(
+        data.lineItems?.length > 0
+          ? data.lineItems.map((li) => ({ ...emptyLineItem(), category: li.category, description: li.description, cost: li.cost }))
+          : [emptyLineItem()],
+      );
       setScanApplied(true);
     } catch (err) {
       setError(`AI scan failed: ${err.message}. You can still fill this out manually.`);

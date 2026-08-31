@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { X, Loader2, ExternalLink, FileWarning, Mail } from "lucide-react";
+import { X, Loader2, ExternalLink, FileWarning, Mail, Sparkles, Plus, Trash2 } from "lucide-react";
 import { Badge, Button, Input, Select } from "../../ds";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import { supabase } from "../../lib/supabaseClient";
 import { buildMailto } from "../../lib/mailto";
+import { uploadReceipt, fileToBase64 } from "../../lib/invoiceFiles";
+import { CATEGORIES } from "../../lib/categories";
 import FileDropzone from "../shared/FileDropzone";
 
 function money(n) {
@@ -18,6 +20,10 @@ function severityTone(s) {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
 }
 
 function shopHeadsUpMailto(order) {
@@ -43,13 +49,6 @@ function shopHeadsUpMailto(order) {
   });
 }
 
-async function uploadReceipt(file) {
-  const path = `${crypto.randomUUID()}-${file.name}`;
-  const { error } = await supabase.storage.from("invoices").upload(path, file);
-  if (error) throw error;
-  return path;
-}
-
 function Field({ label, value }) {
   if (!value) return null;
   return (
@@ -69,6 +68,10 @@ function FormField({ label, children }) {
   );
 }
 
+function emptyCloseLineItem(overrides) {
+  return { id: uid(), category: CATEGORIES[0], description: "", cost: "", inspectionType: "", ...overrides };
+}
+
 export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }) {
   const { order, loading, error, receiptUrl, reload } = useWorkOrder(workOrderId);
   const [pendingFile, setPendingFile] = useState(null);
@@ -76,7 +79,11 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const [uploadError, setUploadError] = useState(null);
 
   const [closing, setClosing] = useState(false);
-  const [closeForm, setCloseForm] = useState({ cost: "", invoiceRef: "", dateClosed: "", inspectionType: "Annual" });
+  const [closeForm, setCloseForm] = useState({ invoiceRef: "", poNumber: "", dateClosed: "" });
+  const [closeLineItems, setCloseLineItems] = useState([]);
+  const [closeFile, setCloseFile] = useState(null);
+  const [closeScanning, setCloseScanning] = useState(false);
+  const [closeScanApplied, setCloseScanApplied] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState(null);
 
@@ -116,33 +123,103 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const openCloseForm = () => {
     setStatusError(null);
     setCloseForm({
-      cost: order.cost ?? "",
       invoiceRef: order.invoice_ref ?? "",
+      poNumber: order.po_number ?? "",
       dateClosed: todayIso(),
-      inspectionType: "Annual",
     });
+    setCloseLineItems([
+      emptyCloseLineItem({ category: order.category, description: order.description || order.complaint || "", cost: order.cost ?? "" }),
+    ]);
+    setCloseFile(null);
+    setCloseScanApplied(false);
     setClosing(true);
   };
+
+  const onCloseScan = async () => {
+    if (!closeFile) return;
+    setCloseScanning(true);
+    setStatusError(null);
+    try {
+      const fileBase64 = await fileToBase64(closeFile);
+      const { data, error: fnError } = await supabase.functions.invoke("scan-invoice", {
+        body: { fileBase64, mediaType: closeFile.type },
+      });
+      if (fnError) throw fnError;
+      if (data?.error) throw new Error(data.error);
+
+      setCloseForm((prev) => ({
+        ...prev,
+        invoiceRef: data.invoiceRef || prev.invoiceRef,
+        dateClosed: data.date || prev.dateClosed,
+      }));
+      setCloseLineItems(
+        data.lineItems?.length > 0
+          ? data.lineItems.map((li) => emptyCloseLineItem({ category: li.category, description: li.description, cost: li.cost }))
+          : [emptyCloseLineItem({ category: order.category })],
+      );
+      setCloseScanApplied(true);
+    } catch (err) {
+      setStatusError(`AI scan failed: ${err.message}. You can still fill this out manually.`);
+    } finally {
+      setCloseScanning(false);
+    }
+  };
+
+  const setCloseLineItem = (id, k) => (e) => {
+    setCloseLineItems((items) => items.map((li) => (li.id === id ? { ...li, [k]: e.target.value } : li)));
+  };
+  const addCloseLineItem = () => setCloseLineItems((items) => [...items, emptyCloseLineItem()]);
+  const removeCloseLineItem = (id) => setCloseLineItems((items) => items.filter((li) => li.id !== id));
+
+  const closeTotal = closeLineItems.reduce((s, li) => s + (Number(li.cost) || 0), 0);
 
   const confirmClose = async () => {
     setStatusBusy(true);
     setStatusError(null);
     try {
       const dateClosed = closeForm.dateClosed || todayIso();
+      const receiptPath = closeFile ? await uploadReceipt(closeFile) : order.receipt_path || null;
+      const [first, ...extra] = closeLineItems;
+
       const { error: updateErr } = await supabase.from("work_orders").update({
         status: "Closed",
-        cost: Number(closeForm.cost) || 0,
+        category: first.category,
+        description: first.description || order.description,
+        cost: Number(first.cost) || 0,
         invoice_ref: closeForm.invoiceRef || null,
+        po_number: closeForm.poNumber || null,
         date_closed: dateClosed,
+        ...(closeFile ? { receipt_path: receiptPath } : {}),
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
 
+      if (extra.length > 0 && order.unit?.id) {
+        const rows = extra.map((li) => ({
+          unit_id: order.unit.id,
+          vendor_id: order.vendor?.id ?? null,
+          category: li.category,
+          description: li.description || null,
+          cost: Number(li.cost) || 0,
+          status: "Closed",
+          date_opened: order.date_opened || dateClosed,
+          date_closed: dateClosed,
+          invoice_ref: closeForm.invoiceRef || null,
+          po_number: closeForm.poNumber || null,
+          source: "manual",
+          receipt_path: receiptPath,
+        }));
+        const { error: insertErr } = await supabase.from("work_orders").insert(rows);
+        if (insertErr) throw insertErr;
+      }
+
       const unitUpdates = {};
-      if (order.category === "PM / Oil") {
-        unitUpdates.last_pm_date = dateClosed;
-      } else if (order.category === "DOT Inspection" && closeForm.inspectionType) {
-        const field = closeForm.inspectionType === "Annual" ? "last_annual_inspection_date" : "last_midtrip_date";
-        unitUpdates[field] = dateClosed;
+      for (const li of closeLineItems) {
+        if (li.category === "PM / Oil") {
+          unitUpdates.last_pm_date = dateClosed;
+        } else if (li.category === "DOT Inspection" && li.inspectionType) {
+          const field = li.inspectionType === "Annual" ? "last_annual_inspection_date" : "last_midtrip_date";
+          unitUpdates[field] = dateClosed;
+        }
       }
       if (Object.keys(unitUpdates).length > 0 && order.unit?.id) {
         const { error: unitErr } = await supabase.from("units").update(unitUpdates).eq("id", order.unit.id);
@@ -170,7 +247,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "var(--clg-surface-card)", borderRadius: "var(--clg-radius-md)", width: "100%", maxWidth: 680,
+          background: "var(--clg-surface-card)", borderRadius: "var(--clg-radius-md)", width: "100%", maxWidth: 720,
           boxShadow: "var(--clg-shadow-lg, 0 12px 40px rgba(0,0,0,.25))",
         }}
       >
@@ -250,35 +327,87 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                   <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-royal)", marginBottom: 12 }}>
                     Close work order
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <FormField label="Cost">
-                      <Input
-                        type="number" step="0.01" value={closeForm.cost}
-                        onChange={(e) => setCloseForm((f) => ({ ...f, cost: e.target.value }))}
-                      />
-                    </FormField>
+
+                  <FormField label="Invoice / receipt file">
+                    <FileDropzone
+                      file={closeFile}
+                      onFileChange={(f) => { setCloseFile(f); setCloseScanApplied(false); }}
+                      label="Drag & drop the invoice here, or click to browse"
+                    />
+                    {closeFile && (
+                      <Button
+                        type="button" variant="secondary" size="sm" onClick={onCloseScan} disabled={closeScanning}
+                        iconLeft={closeScanning ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+                        style={{ marginTop: 10, alignSelf: "flex-start" }}
+                      >
+                        {closeScanning ? "Scanning…" : "Scan with AI"}
+                      </Button>
+                    )}
+                    {closeScanApplied && (
+                      <div style={{ fontSize: 11.5, color: "var(--clg-royal)", marginTop: 6, fontWeight: 600 }}>
+                        AI filled in the services below from this invoice — review the categories and correct anything before saving.
+                      </div>
+                    )}
+                  </FormField>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 16 }}>
                     <FormField label="Invoice / ref #">
-                      <Input
-                        value={closeForm.invoiceRef}
-                        onChange={(e) => setCloseForm((f) => ({ ...f, invoiceRef: e.target.value }))}
-                      />
+                      <Input value={closeForm.invoiceRef} onChange={(e) => setCloseForm((f) => ({ ...f, invoiceRef: e.target.value }))} />
+                    </FormField>
+                    <FormField label="PO number">
+                      <Input value={closeForm.poNumber} onChange={(e) => setCloseForm((f) => ({ ...f, poNumber: e.target.value }))} placeholder="e.g. PO-10245" />
                     </FormField>
                     <FormField label="Date closed">
-                      <Input
-                        type="date" value={closeForm.dateClosed}
-                        onChange={(e) => setCloseForm((f) => ({ ...f, dateClosed: e.target.value }))}
-                      />
+                      <Input type="date" value={closeForm.dateClosed} onChange={(e) => setCloseForm((f) => ({ ...f, dateClosed: e.target.value }))} />
                     </FormField>
-                    {order.category === "DOT Inspection" && (
-                      <FormField label="Inspection type">
-                        <Select
-                          value={closeForm.inspectionType}
-                          onChange={(e) => setCloseForm((f) => ({ ...f, inspectionType: e.target.value }))}
-                          options={["Annual", "Midtrip"]}
-                        />
-                      </FormField>
-                    )}
                   </div>
+
+                  <div style={{ marginTop: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                      <span style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                        Services performed{closeLineItems.length > 1 ? ` (${closeLineItems.length})` : ""}
+                      </span>
+                      <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontSize: 13, color: "var(--clg-navy)", fontWeight: 700 }}>
+                        {money(closeTotal)} total
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {closeLineItems.map((li) => (
+                        <div key={li.id} style={{ border: "1px solid var(--clg-border-subtle)", borderRadius: "var(--clg-radius-sm)", padding: 10, background: "var(--clg-surface-page, #fff)" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "150px 1fr 110px auto", gap: 8, alignItems: "center" }}>
+                            <Select value={li.category} onChange={setCloseLineItem(li.id, "category")} options={CATEGORIES} />
+                            <Input value={li.description} onChange={setCloseLineItem(li.id, "description")} placeholder="What was done" />
+                            <Input
+                              type="number" min="0" step="0.01"
+                              value={li.cost} onChange={setCloseLineItem(li.id, "cost")} placeholder="0.00"
+                              style={{ fontFamily: "var(--clg-font-mono, monospace)" }}
+                            />
+                            <button
+                              type="button" onClick={() => removeCloseLineItem(li.id)} disabled={closeLineItems.length === 1}
+                              title="Remove this service"
+                              style={{
+                                background: "none", border: "none", cursor: closeLineItems.length === 1 ? "not-allowed" : "pointer",
+                                color: "var(--clg-text-muted)", opacity: closeLineItems.length === 1 ? 0.35 : 1, padding: 6, display: "inline-flex",
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          {li.category === "DOT Inspection" && (
+                            <Select
+                              value={li.inspectionType} onChange={setCloseLineItem(li.id, "inspectionType")}
+                              options={["Annual", "Midtrip"]} placeholder="Inspection type"
+                              style={{ marginTop: 8, maxWidth: 200 }}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <Button type="button" variant="quiet" size="sm" iconLeft={<Plus size={14} />} onClick={addCloseLineItem} style={{ marginTop: 8 }}>
+                      Add another service
+                    </Button>
+                  </div>
+
                   {statusError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 10 }}>{statusError}</div>}
                   <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                     <Button size="sm" onClick={confirmClose} disabled={statusBusy} iconLeft={statusBusy ? <Loader2 size={13} className="spin" /> : null}>
@@ -320,36 +449,38 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 <Field label="Approved at" value={order.approved_at ? new Date(order.approved_at).toLocaleString() : null} />
               </div>
 
-              <div>
-                <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
-                  Receipt / invoice
-                </div>
-                {receiptUrl ? (
-                  <a
-                    href={receiptUrl} target="_blank" rel="noreferrer"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--clg-royal)", textDecoration: "none" }}
-                  >
-                    <ExternalLink size={14} /> View attached invoice
-                  </a>
-                ) : (
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-muted)", marginBottom: 8 }}>
-                      <FileWarning size={13} /> No invoice attached yet.
-                    </div>
-                    <FileDropzone file={pendingFile} onFileChange={setPendingFile} label="Drag & drop an invoice here to attach it" />
-                    {pendingFile && (
-                      <button
-                        onClick={attachReceipt} disabled={uploading}
-                        className="btn-primary" style={{ marginTop: 10 }}
-                      >
-                        {uploading ? <Loader2 size={14} className="spin" /> : null}
-                        {uploading ? "Uploading…" : "Attach invoice"}
-                      </button>
-                    )}
-                    {uploadError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 6 }}>{uploadError}</div>}
+              {!closing && (
+                <div>
+                  <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+                    Receipt / invoice
                   </div>
-                )}
-              </div>
+                  {receiptUrl ? (
+                    <a
+                      href={receiptUrl} target="_blank" rel="noreferrer"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--clg-royal)", textDecoration: "none" }}
+                    >
+                      <ExternalLink size={14} /> View attached invoice
+                    </a>
+                  ) : (
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-muted)", marginBottom: 8 }}>
+                        <FileWarning size={13} /> No invoice attached yet.
+                      </div>
+                      <FileDropzone file={pendingFile} onFileChange={setPendingFile} label="Drag & drop an invoice here to attach it" />
+                      {pendingFile && (
+                        <button
+                          onClick={attachReceipt} disabled={uploading}
+                          className="btn-primary" style={{ marginTop: 10 }}
+                        >
+                          {uploading ? <Loader2 size={14} className="spin" /> : null}
+                          {uploading ? "Uploading…" : "Attach invoice"}
+                        </button>
+                      )}
+                      {uploadError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 6 }}>{uploadError}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 12 }}>
                 Created {new Date(order.created_at).toLocaleString()}
