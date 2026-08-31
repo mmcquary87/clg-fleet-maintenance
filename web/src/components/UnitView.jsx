@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { LayoutGrid } from "lucide-react";
+import { LayoutGrid, Search } from "lucide-react";
+import { Input } from "../ds";
 import { CATEGORIES, CAT_COLORS } from "../lib/categories";
 import { groupSum } from "../lib/groupSum";
 import EmptyState from "./EmptyState";
+
+const UNIT_TYPES = ["All", "Truck", "Trailer"];
 
 function fmtMoney(n) {
   return "$" + Math.round(n).toLocaleString();
@@ -67,21 +70,30 @@ function SectionCard({ children, style }) {
 }
 
 export default function UnitView({ records }) {
-  const units = useMemo(() => unitTotals(records).sort((a, b) => b.total - a.total), [records]);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("All");
   const [ownershipSort, setOwnershipSort] = useState("highest");
   const [selected, setSelected] = useState(null);
 
+  const filteredRecords = useMemo(
+    () => records.filter((r) => typeFilter === "All" || r.unitType === typeFilter),
+    [records, typeFilter],
+  );
+  const units = useMemo(() => unitTotals(filteredRecords).sort((a, b) => b.total - a.total), [filteredRecords]);
+
   const ownershipUnits = useMemo(() => {
-    return [...units]
+    const q = query.trim().toLowerCase();
+    const matched = q ? units.filter((u) => u.unit.toLowerCase().includes(q)) : units;
+    return [...matched]
       .sort((a, b) => (ownershipSort === "highest" ? b.total - a.total : a.total - b.total))
-      .slice(0, 10);
-  }, [units, ownershipSort]);
+      .slice(0, q ? 25 : 10);
+  }, [units, ownershipSort, query]);
   const ownershipMax = Math.max(...ownershipUnits.map((u) => u.total), 1);
 
   const categoryLeaderboards = useMemo(() => {
     return CATEGORIES.map((cat) => {
       const byUnit = {};
-      records.filter((r) => r.category === cat).forEach((r) => {
+      filteredRecords.filter((r) => r.category === cat).forEach((r) => {
         byUnit[r.unit] = (byUnit[r.unit] || 0) + r.cost;
       });
       const top = Object.entries(byUnit)
@@ -90,7 +102,7 @@ export default function UnitView({ records }) {
         .slice(0, 5);
       return top.length > 0 ? { category: cat, top, max: top[0].total } : null;
     }).filter(Boolean);
-  }, [records]);
+  }, [filteredRecords]);
 
   useEffect(() => {
     if (selected && !units.find((u) => u.unit === selected)) setSelected(units[0]?.unit ?? null);
@@ -114,6 +126,30 @@ export default function UnitView({ records }) {
 
   return (
     <>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", width: 260 }}>
+          <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-text-muted)" }} />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search unit number…" style={{ paddingLeft: 30 }} />
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {UNIT_TYPES.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              style={{
+                padding: "6px 13px", fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                border: "1px solid " + (typeFilter === t ? "var(--clg-royal)" : "var(--clg-border-default)"),
+                background: typeFilter === t ? "var(--clg-royal)" : "#fff",
+                color: typeFilter === t ? "#fff" : "var(--clg-text-muted)",
+                borderRadius: "var(--clg-radius-pill)",
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <SectionCard style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 10 }}>
           <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)" }}>
@@ -138,23 +174,29 @@ export default function UnitView({ records }) {
           </div>
         </div>
         <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 8 }}>
-          Top 10 units by total maintenance spend, {ownershipSort === "highest" ? "most expensive" : "least expensive"} first.
+          {query.trim()
+            ? `${ownershipUnits.length} unit${ownershipUnits.length === 1 ? "" : "s"} matching "${query.trim()}", ${ownershipSort === "highest" ? "most expensive" : "least expensive"} first.`
+            : `Top 10 units by total maintenance spend, ${ownershipSort === "highest" ? "most expensive" : "least expensive"} first.`}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 2 }}>
-          {ownershipUnits.map((u, i) => (
-            <LeaderboardRow
-              key={u.unit}
-              rank={i + 1}
-              label={u.unit}
-              sub={`${u.count} item${u.count > 1 ? "s" : ""} · ${u.categories.size} categor${u.categories.size > 1 ? "ies" : "y"}`}
-              value={u.total}
-              max={ownershipMax}
-              color={ownershipSort === "highest" ? "var(--clg-scarlet)" : "var(--clg-royal)"}
-              active={selected === u.unit}
-              onClick={() => setSelected(u.unit)}
-            />
-          ))}
-        </div>
+        {ownershipUnits.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", padding: "10px 8px" }}>No units match.</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 2 }}>
+            {ownershipUnits.map((u, i) => (
+              <LeaderboardRow
+                key={u.unit}
+                rank={i + 1}
+                label={u.unit}
+                sub={`${u.count} item${u.count > 1 ? "s" : ""} · ${u.categories.size} categor${u.categories.size > 1 ? "ies" : "y"}`}
+                value={u.total}
+                max={ownershipMax}
+                color={ownershipSort === "highest" ? "var(--clg-scarlet)" : "var(--clg-royal)"}
+                active={selected === u.unit}
+                onClick={() => setSelected(u.unit)}
+              />
+            ))}
+          </div>
+        )}
       </SectionCard>
 
       <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", marginBottom: 12 }}>
