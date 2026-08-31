@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
 const FULL_SELECT = `
-  id, category, severity, system_component, description, complaint, cost, status,
+  id, wo_number, category, severity, system_component, description, complaint, cost, status,
   approval_status, approved_by, approved_at, date_opened, date_closed, invoice_ref,
   po_number, intake_source, assigned_bay, assigned_tech, waiting_on_parts, parts_eta,
   promised_back, warranty_recovery_amount, receipt_path, source, samsara_reference_id,

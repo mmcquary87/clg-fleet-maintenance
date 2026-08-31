@@ -8,6 +8,7 @@ import DateRangeFilter from "../DateRangeFilter";
 import WorkOrderDetailModal from "./WorkOrderDetailModal";
 
 const EXPORT_COLUMNS = [
+  { label: "WO #", value: (o) => o.wo_number },
   { label: "Unit", value: (o) => o.unit?.number },
   { label: "Category", value: (o) => o.category },
   { label: "Severity", value: (o) => o.severity },
@@ -60,7 +61,7 @@ export default function WorkOrdersView() {
       .filter((o) => {
         if (!query.trim()) return true;
         const q = query.toLowerCase();
-        return [o.unit?.number, o.vendor?.name, o.category, o.description, o.complaint, o.invoice_ref]
+        return [o.wo_number, o.unit?.number, o.vendor?.name, o.category, o.description, o.complaint, o.invoice_ref]
           .filter(Boolean).some((v) => v.toLowerCase().includes(q));
       });
   }, [orders, tab, category, unit, query]);
@@ -148,7 +149,7 @@ export default function WorkOrdersView() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
               <thead>
                 <tr>
-                  {["Unit", "Category", "Issue", "Severity", "Vendor", "Status", "Opened", "Closed", "Cost"].map((h) => (
+                  {["WO #", "Unit", "Category", "Issue", "Severity", "Vendor", "Status", "Opened", "Closed", "Cost"].map((h) => (
                     <th key={h} style={{
                       textAlign: h === "Cost" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
@@ -164,6 +165,9 @@ export default function WorkOrdersView() {
                     onClick={() => setOpenId(o.id)}
                     style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer" }}
                   >
+                    <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)", whiteSpace: "nowrap" }}>
+                      {o.wo_number || "—"}
+                    </td>
                     <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
                       {o.unit?.number || "—"}
                     </td>
@@ -197,7 +201,7 @@ export default function WorkOrdersView() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={8} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>Total</td>
+                  <td colSpan={9} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>Total</td>
                   <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 700, color: "var(--clg-navy)" }}>
                     {money(totalCost)}
                   </td>
