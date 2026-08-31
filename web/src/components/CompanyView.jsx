@@ -1,9 +1,20 @@
 import { useMemo } from "react";
 import { TrendingUp } from "lucide-react";
+import { Button } from "../ds";
 import { CAT_COLORS } from "../lib/categories";
 import { groupSum, groupVendorStats } from "../lib/groupSum";
 import EmptyState from "./EmptyState";
 import { useMilesDriven } from "../hooks/useMilesDriven";
+import { useUnits } from "../hooks/useUnits";
+
+// Below this, "uncategorized spend" isn't worth an alarming callout --
+// some Other is normal. Above it, it's actively undermining every other
+// breakdown on this page, per the CLG OS mockup's "Read this first" panel.
+const UNCATEGORIZED_ALERT_THRESHOLD_PCT = 15;
+// A rounded-cost/unit/vendor match this close together is worth a human
+// glance -- not proof of a duplicate invoice, just a real, checkable flag
+// computed from data already on file (no new tracking required).
+const DUPLICATE_WINDOW_DAYS = 2;
 
 function fmtMoney(n) {
   return "$" + Math.round(n).toLocaleString();
@@ -33,11 +44,65 @@ function PendingCard({ label, reason }) {
   );
 }
 
-export default function CompanyView({ records, range }) {
+export default function CompanyView({ records, range, onGoToWorkOrders, onGoToUnits }) {
   const grandTotal = records.reduce((s, r) => s + r.cost, 0);
   const byCategory = useMemo(() => groupSum(records, "category"), [records]);
   const byVendor = useMemo(() => groupVendorStats(records), [records]);
   const { miles, loading: milesLoading, error: milesError } = useMilesDriven(range);
+  const { units } = useUnits();
+
+  // Uncategorized spend -- "Other" is a real, already-tracked category, so
+  // this needs no new schema. Flagged because a third of spend hiding
+  // behind "Other" makes every other breakdown on this page directional
+  // at best (per the CLG OS mockup's "Read this first" panel).
+  const otherRecords = useMemo(() => records.filter((r) => r.category === "Other"), [records]);
+  const otherTotal = otherRecords.reduce((s, r) => s + r.cost, 0);
+  const otherPct = grandTotal > 0 ? (otherTotal / grandTotal) * 100 : 0;
+  const topRealCategory = byCategory.find((c) => c.name !== "Other");
+
+  // The units costing you most -- same leaderboard concept as the By Unit
+  // page, with a one-line "what's driving it" summary: this unit's single
+  // largest category and how many items fall under it, so the leaderboard
+  // says something rather than just ranking dollars.
+  const unitLeaders = useMemo(() => {
+    const m = {};
+    for (const r of records) {
+      const u = (m[r.unit] ??= { unit: r.unit, total: 0, byCategory: {} });
+      u.total += r.cost;
+      u.byCategory[r.category] = (u.byCategory[r.category] || 0) + 1;
+    }
+    return Object.values(m)
+      .map((u) => {
+        const [topCatName, topCatCount] = Object.entries(u.byCategory).sort((a, b) => b[1] - a[1])[0] || [null, 0];
+        return { ...u, topCatName, topCatCount };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }, [records]);
+
+  // Possible duplicate invoices -- same unit, same vendor, same rounded
+  // cost, within DUPLICATE_WINDOW_DAYS of each other. A real, checkable
+  // flag from data already on file, not proof of an actual duplicate.
+  const duplicateCount = useMemo(() => {
+    const byKey = {};
+    for (const r of records) {
+      if (!r.date || !r.vendor || !r.cost) continue;
+      const key = `${r.unit}|${r.vendor}|${Math.round(r.cost)}`;
+      (byKey[key] ??= []).push(r);
+    }
+    let count = 0;
+    for (const list of Object.values(byKey)) {
+      if (list.length < 2) continue;
+      const sorted = [...list].sort((a, b) => new Date(a.date) - new Date(b.date));
+      for (let i = 1; i < sorted.length; i++) {
+        const diffDays = Math.abs(new Date(sorted[i].date) - new Date(sorted[i - 1].date)) / 86400000;
+        if (diffDays <= DUPLICATE_WINDOW_DAYS) { count += 1; break; }
+      }
+    }
+    return count;
+  }, [records]);
+
+  const noOdometerCount = units.filter((u) => u.is_active && !u.odometer).length;
 
   // Tractors/Trailers split -- real, from units.type (Truck/Trailer), not a
   // blended average across two assets with very different cost profiles.
@@ -141,6 +206,37 @@ export default function CompanyView({ records, range }) {
         <PendingCard label="Downtime Cost" reason="Needs an agreed $/day downtime rate — shop days are trackable, a dollar cost for them isn't defined." />
       </div>
 
+      {/* Read this first: uncategorized spend, only when it's bad enough to act on */}
+      {otherPct > UNCATEGORIZED_ALERT_THRESHOLD_PCT && (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 220px", gap: 0, background: "#fff", borderRadius: "var(--clg-radius-md)", borderTop: "4px solid var(--clg-scarlet)", boxShadow: "var(--clg-shadow-resting)", marginBottom: 18, overflow: "hidden" }}>
+          <div style={{ padding: 24 }}>
+            <div style={{ fontFamily: "var(--clg-font-heading)", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--clg-scarlet)" }}>
+              Read this first
+            </div>
+            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 20, color: "var(--clg-navy)", marginTop: 8 }}>
+              {fmtPct(otherPct)} of your maintenance spend has no category on it
+            </div>
+            <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginTop: 10, lineHeight: 1.6, maxWidth: 560 }}>
+              {fmtMoney(otherTotal)} across {otherRecords.length} invoice{otherRecords.length === 1 ? "" : "s"} is filed as <em>Other</em>
+              {topRealCategory && otherTotal > topRealCategory.value ? ` — more than ${topRealCategory.name}, your largest real category.` : "."}
+              {" "}Until those are coded, every breakdown on this page is directional at best.
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <Button size="sm" onClick={() => onGoToWorkOrders?.("Other")}>
+                Code {otherRecords.length} invoice{otherRecords.length === 1 ? "" : "s"}
+              </Button>
+            </div>
+          </div>
+          <div style={{ background: "var(--clg-surface-subtle)", padding: 24, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--clg-text-muted)" }}>Uncategorized</div>
+            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 32, color: "var(--clg-navy)", marginTop: 6 }}>{fmtPct(otherPct)}</div>
+            <div style={{ background: "var(--clg-moon)", borderRadius: "var(--clg-radius-pill)", height: 5, marginTop: 10, overflow: "hidden" }}>
+              <div style={{ width: `${Math.min(100, otherPct)}%`, background: "var(--clg-scarlet)", height: "100%" }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Spend by category: ranked leaderboard */}
       <div style={{ background: "#fff", borderRadius: "var(--clg-radius-md)", padding: 22, boxShadow: "var(--clg-shadow-resting)", marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 16 }}>
@@ -195,6 +291,73 @@ export default function CompanyView({ records, range }) {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Two-up: worst units + data-quality queue, per the CLG OS mockup */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 18, marginTop: 18 }}>
+        <div style={{ background: "#fff", borderRadius: "var(--clg-radius-md)", padding: 22, boxShadow: "var(--clg-shadow-resting)" }}>
+          <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", marginBottom: 4 }}>
+            The units costing you most
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>Top 5 by total spend this period</div>
+          {unitLeaders.map((u) => (
+            <div key={u.unit} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--clg-text-heading)" }}>Unit {u.unit}</div>
+                <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>
+                  {u.topCatName ? `Mostly ${u.topCatName} — ${u.topCatCount} item${u.topCatCount === 1 ? "" : "s"}` : "—"}
+                </div>
+              </div>
+              <div style={{ flexShrink: 0, fontSize: 14, fontWeight: 700, color: "var(--clg-navy)", fontVariantNumeric: "tabular-nums" }}>
+                {fmtMoney(u.total)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: "#fff", borderRadius: "var(--clg-radius-md)", padding: 22, boxShadow: "var(--clg-shadow-resting)" }}>
+          <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", marginBottom: 4 }}>
+            Needs a human
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>Data the system can't reconcile on its own</div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: otherRecords.length > 0 ? "var(--clg-scarlet)" : "var(--clg-text-heading)" }}>
+                {otherRecords.length} no category
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>{fmtMoney(otherTotal)} · blocks every breakdown above</div>
+            </div>
+            {otherRecords.length > 0 && (
+              <button onClick={() => onGoToWorkOrders?.("Other")} style={{ background: "none", border: "none", color: "var(--clg-scarlet)", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                Code
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: noOdometerCount > 0 ? "var(--clg-scarlet)" : "var(--clg-text-heading)" }}>
+                {noOdometerCount} no odometer reading
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>Cost per mile for these units is a guess</div>
+            </div>
+            {noOdometerCount > 0 && (
+              <button onClick={() => onGoToUnits?.()} style={{ background: "none", border: "none", color: "var(--clg-scarlet)", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                Fill in
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: duplicateCount > 0 ? "var(--clg-scarlet)" : "var(--clg-text-heading)" }}>
+                {duplicateCount} possible duplicate{duplicateCount === 1 ? "" : "s"}
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>Same unit, vendor, and amount within {DUPLICATE_WINDOW_DAYS} days</div>
+            </div>
+          </div>
+        </div>
       </div>
     </>
   );

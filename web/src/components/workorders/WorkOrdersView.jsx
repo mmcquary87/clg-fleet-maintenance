@@ -36,11 +36,11 @@ function severityTone(s) {
   return "neutral";
 }
 
-export default function WorkOrdersView() {
+export default function WorkOrdersView({ initialCategory }) {
   const [range, setRange] = useState(null);
   const { orders, loading, error, reload } = useAllWorkOrders(range);
   const [tab, setTab] = useState("All");
-  const [category, setCategory] = useState("All");
+  const [category, setCategory] = useState(initialCategory || "All");
   const [unit, setUnit] = useState("All");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
