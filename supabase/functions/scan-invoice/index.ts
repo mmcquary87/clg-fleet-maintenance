@@ -2,10 +2,16 @@
 //
 // Deno Edge Function. Receives a base64-encoded receipt image/PDF, sends it
 // to the Claude API for structured extraction, and returns
-// {vendor, category, cost, date, invoiceRef, description, unitNumberGuess}
-// so the frontend can pre-fill the New Work Order form for the user to
-// review before saving. Never returns anything that writes to the database
-// directly — extraction only.
+// {vendor, date, invoiceRef, unitNumberGuess, lineItems: [{category, description, cost}]}
+// so the frontend can pre-fill a work order form for the user to review
+// (and recategorize/adjust line items) before saving. Never returns
+// anything that writes to the database directly — extraction only.
+//
+// lineItems is an array rather than a single category because one shop
+// visit commonly covers more than one type of work (e.g. tires + brakes on
+// the same invoice) — the frontend needs each service split out with its
+// own category so the user can see exactly what will be logged and correct
+// any category before saving, rather than one bucket that hides the mix.
 //
 // Requires the ANTHROPIC_API_KEY secret (Edge Functions -> Secrets).
 // Requires a valid Supabase auth JWT on every request (default verify_jwt
@@ -31,14 +37,30 @@ const EXTRACT_TOOL = {
     type: "object",
     properties: {
       vendor: { type: "string", description: "Vendor/shop name as printed on the invoice, including location if shown" },
-      category: { type: "string", enum: CATEGORIES, description: "Best-fit maintenance category for the primary work described" },
-      cost: { type: "number", description: "Total amount due/charged on the invoice, in dollars" },
       date: { type: ["string", "null"], description: "Service or invoice date in YYYY-MM-DD format, or null if not legible" },
-      invoiceRef: { type: ["string", "null"], description: "Invoice number, PO number, or work order number printed on the document" },
-      description: { type: "string", description: "One or two sentence summary of the work performed" },
+      invoiceRef: { type: ["string", "null"], description: "Invoice number or work order number printed on the document (not a PO number)" },
       unitNumberGuess: { type: ["string", "null"], description: "Truck/trailer unit number if visible on the document, else null" },
+      lineItems: {
+        type: "array",
+        description:
+          "Every distinct service/repair on the invoice, each with its own category. Most invoices only cover " +
+          "one type of work — return a single item then. Split into multiple items only when the invoice clearly " +
+          "covers more than one distinct type of work (e.g. a tire replacement AND a separate brake job on the " +
+          "same ticket), each with its own share of the total cost.",
+        items: {
+          type: "object",
+          properties: {
+            category: { type: "string", enum: CATEGORIES, description: "Best-fit maintenance category for this line item" },
+            description: { type: "string", description: "One sentence summary of this specific service" },
+            cost: { type: "number", description: "Dollar amount for this line item (all line items should sum to the invoice total)" },
+          },
+          required: ["category", "description", "cost"],
+          additionalProperties: false,
+        },
+        minItems: 1,
+      },
     },
-    required: ["vendor", "category", "cost", "date", "invoiceRef", "description", "unitNumberGuess"],
+    required: ["vendor", "date", "invoiceRef", "unitNumberGuess", "lineItems"],
     additionalProperties: false,
   },
 } as const;
@@ -84,12 +106,10 @@ Deno.serve(async (req) => {
               type: "text",
               text: [
                 "This is a truck/trailer maintenance invoice or receipt for a fleet company (CLG Transportation).",
-                "Extract the structured fields via the extract_invoice tool. Fixed category list you must choose from:",
-                CATEGORIES.join(", ") + ".",
-                "If the invoice covers multiple line items across different categories, pick the category of the",
-                "single largest line item as the primary category, and mention the others in the description.",
+                "Extract the structured fields via the extract_invoice tool. Fixed category list each line item must",
+                "choose from:", CATEGORIES.join(", ") + ".",
                 "If a field truly isn't present on the document, use null rather than guessing a specific value —",
-                "except category and description, which are always required.",
+                "except lineItems fields, which are always required.",
               ].join(" "),
             },
           ],
