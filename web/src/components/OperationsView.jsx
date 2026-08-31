@@ -7,6 +7,8 @@ import { useAlvysTripsReport } from "../hooks/useAlvysTripsReport";
 import { useTracking } from "../hooks/useTracking";
 import { useHomeTimeAdherence } from "../hooks/useHomeTimeAdherence";
 import { useDriveHourUtilization } from "../hooks/useDriveHourUtilization";
+import { useAssignmentStability } from "../hooks/useAssignmentStability";
+import { useFeasibilityReview } from "../hooks/useFeasibilityReview";
 import { thisMonthRange } from "../lib/dateRangePresets";
 import DateRangeFilter from "./DateRangeFilter";
 
@@ -187,8 +189,12 @@ export default function OperationsView() {
   const { groups: trackingGroups, loading: trackingLoading, error: trackingError } = useTracking();
   const { data: homeTimeData, loading: homeTimeLoading, error: homeTimeError } = useHomeTimeAdherence(range);
   const { data: driveHourData, loading: driveHourLoading, error: driveHourError } = useDriveHourUtilization(range);
+  const { data: stabilityData, loading: stabilityLoading, error: stabilityError } = useAssignmentStability(range);
+  const { data: feasibilityData, loading: feasibilityLoading, error: feasibilityError } = useFeasibilityReview(range);
 
   const LIVE = {
+    2: { value: stabilityData?.stabilityPct ?? null, loading: stabilityLoading, error: stabilityError },
+    "SC-01": { value: feasibilityData?.reviewCompletionPct ?? null, loading: feasibilityLoading, error: feasibilityError },
     3: { value: tripsData?.plannedEmptyMilePct ?? null, loading: tripsLoading, error: tripsError },
     6: { value: tripsData?.revenuePerActiveTractorPerWeek ?? null, loading: tripsLoading, error: tripsError },
     7: { value: tripsData?.emptyMilePct ?? null, loading: tripsLoading, error: tripsError },
@@ -279,6 +285,10 @@ export default function OperationsView() {
                       ? `Covers ${homeTimeData?.totalPlannedEvents ?? 0} recurring home-time occurrences checked against Alvys trip activity — not yet planned-day-off exceptions or approval-status filtering.${homeTimeData?.unlinkedSchedules ? ` ${homeTimeData.unlinkedSchedules} schedule(s) excluded (not linked to an Alvys driver).` : ""}`
                       : kpi.no === 13
                       ? `${driveHourData?.driversWithActivity ?? 0} of ${driveHourData?.driversConsidered ?? 0} active drivers had HOS activity this window, across ${driveHourData?.totalWorkingDays ?? 0} working-days. "Available capacity" = 11 legal drive hrs × working days, not a roster schedule.`
+                      : kpi.no === 2
+                      ? `From CLG's hourly Alvys backup sheet, not a live Alvys pull. ${stabilityData?.eligibleAssignments ?? 0} of ${stabilityData?.loadsInRange ?? 0} loads in range had a driver assigned by the 72-hour checkpoint. Driver-only — tractor reassignment isn't tracked.`
+                      : kpi.no === "SC-01"
+                      ? `Proxy: an order reaching Dispatched status counts as "reviewed" (dispatch policy is not to dispatch infeasible loads) — no separate documented-review log exists. ${feasibilityData?.unreviewedOrders ?? 0} of ${feasibilityData?.totalOrders ?? 0} orders in range never reached Dispatched.`
                       : null
                   }
                 />

@@ -96,7 +96,17 @@ function Row({ row, zebra, onOpenUnit }) {
             <div style={{ background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)", padding: "12px 14px", lineHeight: 1.6 }}>
               <div>{eta.reason}</div>
               {trip.load_number && (
-                <div style={{ marginTop: 6, color: "var(--clg-cool)" }}>Load {trip.load_number}</div>
+                <div style={{ marginTop: 6, color: "var(--clg-cool)" }}>
+                  Load{" "}
+                  <a
+                    href={`https://app.alvys.com/#/loads/${trip.load_number}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "var(--clg-royal)", textDecoration: "underline" }}
+                  >
+                    {trip.load_number}
+                  </a>
+                </div>
               )}
             </div>
           </td>

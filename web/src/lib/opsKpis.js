@@ -51,7 +51,10 @@ export const KPIS = [
     no: 2, module: "planning", name: "72-Hour Load Assignment Stability", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Eligible assignments unchanged from the 72-hour checkpoint through final release ÷ eligible assignments at the 72-hour checkpoint × 100",
     threshold: { status: "pending", green: "≥90.0%", yellow: "80.0–89.9%", red: "<80.0%" },
-    dataStatus: "blocked", blockedReason: "Needs governed 72-hour assignment snapshots from Alvys — not pulled yet.",
+    // Computed from CLG's own hourly Alvys backup sheet (a Google Sheet
+    // tab, not a live Alvys API) -- see alvys-assignment-stability for the
+    // full methodology and stated approximations.
+    dataStatus: "live", unit: "%",
   },
   {
     no: 3, module: "planning", name: "Planned Empty Mile Percentage", classification: "Primary Weekly KPI", type: "Leading",
@@ -75,7 +78,11 @@ export const KPIS = [
     no: "SC-01", module: "planning", name: "Order Feasibility Review Completion", classification: "Supporting Control", type: "Leading",
     formula: "Accepted orders with a documented feasibility review ÷ total accepted orders × 100",
     threshold: { status: "pending", green: "100% after activation", yellow: "95.0–99.9% after activation", red: "<95.0% after activation" },
-    dataStatus: "blocked", blockedReason: "This is a manual review workflow CLG hasn't stood up yet — not a data-integration gap.",
+    // Methodology (CLG, 2026-08-30): no documented-review log exists, but
+    // dispatch policy is "don't dispatch if not feasible" -- an order
+    // reaching Dispatched or later is treated as reviewed-and-passed. See
+    // alvys-feasibility-review for what this proxy can't catch.
+    dataStatus: "live", unit: "%",
   },
   {
     no: 6, module: "fleet", name: "Revenue per Active Tractor per Week", classification: "Primary Weekly KPI — Departmental Variant", type: "Lagging",
