@@ -12,7 +12,7 @@ export function useUnits() {
     const { data, error: err } = await supabase
       .from("units")
       .select(
-        "id, number, type, vin, is_active, current_location, created_at, " +
+        "id, number, type, vin, is_active, current_location, created_at, odometer, can_move_load, idle_since, " +
         "last_pm_date, pm_interval_days, last_annual_inspection_date, last_midtrip_date, midtrip_interval_days"
       )
       .order("number", { ascending: true });
