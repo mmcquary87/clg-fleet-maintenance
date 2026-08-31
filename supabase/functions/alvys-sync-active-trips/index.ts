@@ -14,14 +14,26 @@
 //  - Driver1.Id matches drivers.id directly — no separate lookup/mapping
 //    needed, but still guarded against an unsynced driver id (FK would
 //    reject it otherwise).
-//  - The delivery stop's coordinates are Stops[].Coordinates.Latitude/
+//  - The tracked stop's coordinates are Stops[].Coordinates.Latitude/
 //    Longitude (strings — parseFloat them). The deadline is
 //    StopWindow.End (FCFS) or AppointmentDate (APPT) — matching the same
 //    isOnTime() precedence alvys-trips-report already uses. An open-ended
 //    StopWindow.End (year 9999 — "no real close time") is treated as no
 //    deadline rather than a literal date 8000 years out. StopWindow.Begin
-//    (delivery_window_start) feeds the Late Load Exposure calc's
-//    leadTimeHours — null for APPT-type stops, which have no separate window.
+//    (stop_window_start) feeds the Late Load Exposure calc's leadTimeHours
+//    — null for APPT-type stops, which have no separate window.
+//  - Which stop to track: the first one (in Stops[] order) without a
+//    DepartedAt — still upcoming if not yet ArrivedAt, or the stop the
+//    truck is currently sitting at if arrived-but-not-departed. This
+//    tracks the SHIPPER/pickup stop before pickup and the CONSIGNEE/
+//    delivery stop after, instead of always projecting against delivery —
+//    a shipper running late is exposure too, not just a late consignee.
+//  - ArrivedAt on that stop (Stops[].ArrivedAt) is the ground-truth "the
+//    driver already checked in here" signal — a driver's mobile check-in,
+//    independent of the trip's own Status (which stays "In Transit" until
+//    the whole load is closed out, not per stop). The frontend uses this
+//    to stop projecting an ETA/risk once a stop's actually been reached,
+//    rather than trusting a stale Samsara GPS ping past that point.
 //
 // unit_current_trip is a full snapshot, not an append log: any unit no
 // longer on an active trip gets its row deleted so the Tracking page
@@ -80,9 +92,14 @@ async function fetchActiveTrips(token: string, start: string, end: string) {
   return items;
 }
 
-function lastDeliveryStop(stops: any[]) {
-  const deliveries = (stops ?? []).filter((s: any) => s.StopType === "Delivery");
-  return deliveries[deliveries.length - 1] ?? null;
+// The stop to track: the first one Alvys hasn't marked departed yet. Still
+// upcoming if not yet arrived, or the stop the truck is currently sitting
+// at if arrived-but-not-departed. Falls back to the last stop if every
+// stop already shows a departure (shouldn't happen for a trip Alvys still
+// calls active, but avoids picking nothing).
+function currentStopOf(stops: any[]) {
+  const list = stops ?? [];
+  return list.find((s: any) => !s.DepartedAt) ?? list[list.length - 1] ?? null;
 }
 
 // StopWindow.End of "9999-12-31..." means "no real close time", not a
@@ -143,7 +160,7 @@ Deno.serve(async (req) => {
       const existing = rowByUnitId.get(unitId);
       if (existing && (STATUS_PRIORITY[existing.status] ?? 0) >= (STATUS_PRIORITY[t.Status] ?? 0)) continue;
 
-      const delivery = lastDeliveryStop(t.Stops);
+      const stop = currentStopOf(t.Stops);
       const driverId = t.Driver1?.Id && knownDriverIds.has(t.Driver1.Id) ? t.Driver1.Id : null;
 
       rowByUnitId.set(unitId, {
@@ -151,14 +168,16 @@ Deno.serve(async (req) => {
         alvys_trip_id: t.Id,
         load_number: t.LoadNumber ?? null,
         driver_id: driverId,
-        destination_name: delivery?.CompanyName
-          ? `${delivery.CompanyName} (${delivery?.Address?.City ?? ""}, ${delivery?.Address?.State ?? ""})`
-          : delivery?.Address ? `${delivery.Address.City ?? ""}, ${delivery.Address.State ?? ""}` : null,
-        destination_lat: toNumber(delivery?.Coordinates?.Latitude),
-        destination_lng: toNumber(delivery?.Coordinates?.Longitude),
-        delivery_appointment_at: delivery?.AppointmentDate ?? null,
-        delivery_window_start: delivery?.StopWindow?.Begin ?? null,
-        delivery_window_end: realDeadline(delivery?.StopWindow?.End),
+        stop_type: stop?.StopType ?? null,
+        stop_name: stop?.CompanyName
+          ? `${stop.CompanyName} (${stop?.Address?.City ?? ""}, ${stop?.Address?.State ?? ""})`
+          : stop?.Address ? `${stop.Address.City ?? ""}, ${stop.Address.State ?? ""}` : null,
+        stop_lat: toNumber(stop?.Coordinates?.Latitude),
+        stop_lng: toNumber(stop?.Coordinates?.Longitude),
+        stop_appointment_at: stop?.AppointmentDate ?? null,
+        stop_window_start: stop?.StopWindow?.Begin ?? null,
+        stop_window_end: realDeadline(stop?.StopWindow?.End),
+        stop_arrived_at: stop?.ArrivedAt ?? null,
         status: t.Status,
         synced_at: new Date().toISOString(),
       });

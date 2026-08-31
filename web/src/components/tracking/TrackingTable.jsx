@@ -30,6 +30,7 @@ function CushionPill({ eta }) {
 // so it gets Pending (no color judgment), not Green.
 function StatusCell({ eta }) {
   if (eta.severity === "attention") return <StatusPill tone="red">Late risk</StatusPill>;
+  if (eta.severity === "arrived") return <StatusPill tone="green">Arrived</StatusPill>;
   if (eta.severity === "ok" && eta.hasAppointment) return <StatusPill tone="green">On track</StatusPill>;
   if (eta.severity === "ok") return <StatusPill tone="pending">No appointment on file</StatusPill>;
   return <StatusPill tone="neutral">Missing data</StatusPill>;
@@ -87,7 +88,12 @@ function Row({ row, zebra, onOpenUnit }) {
           {unit.current_location || <span style={{ color: "var(--clg-mercury)" }}>No GPS lock</span>}
         </td>
         <td style={{ padding: "10px 8px", fontSize: 12.5, color: "var(--clg-granite)", maxWidth: 160 }}>
-          {trip.destination_name || "Not yet synced"}
+          {eta.stopLabel && (
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: eta.stopType === "Pickup" ? "var(--clg-royal)" : "var(--clg-navy)" }}>
+              {eta.stopLabel}
+            </div>
+          )}
+          {trip.stop_name || "Not yet synced"}
         </td>
         <td style={{ padding: "10px 8px", fontSize: 12.5, color: "var(--clg-navy)" }}>
           {eta.projectedArrival ? fmtFull(eta.projectedArrival) : "—"}
@@ -119,7 +125,7 @@ function Row({ row, zebra, onOpenUnit }) {
 }
 
 const HEADERS = [
-  "Unit", "Load #", "Driver", "Current location", "Destination", "ETA", "Appt", "ETA Cushion", "HOS", "Miles remaining", "Status", "",
+  "Unit", "Load #", "Driver", "Current location", "Stop", "ETA", "Appt", "ETA Cushion", "HOS", "Miles remaining", "Status", "",
 ];
 
 // One dense table for every unit on an active load (ui-improvement-punch-
