@@ -13,7 +13,7 @@ export function useAllWorkOrders(range) {
     let query = supabase
       .from("work_orders")
       .select(
-        "id, category, severity, description, complaint, cost, status, approval_status, " +
+        "id, wo_number, category, severity, description, complaint, cost, status, approval_status, " +
         "date_opened, date_closed, invoice_ref, po_number, is_chargeback, chargeback_driver_name, " +
         "unit:units(id, number), vendor:vendors(id, name)"
       )

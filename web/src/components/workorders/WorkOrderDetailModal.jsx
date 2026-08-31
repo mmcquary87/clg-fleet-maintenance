@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, Loader2, ExternalLink, FileWarning, Mail } from "lucide-react";
-import { Badge, Button } from "../../ds";
+import { Badge, Button, Input, Select } from "../../ds";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import { supabase } from "../../lib/supabaseClient";
 import { buildMailto } from "../../lib/mailto";
@@ -14,6 +14,10 @@ function severityTone(s) {
   if (s === "Unit down") return "critical";
   if (s === "Urgent") return "brand";
   return "neutral";
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function shopHeadsUpMailto(order) {
@@ -56,11 +60,25 @@ function Field({ label, value }) {
   );
 }
 
+function FormField({ label, children }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
 export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }) {
   const { order, loading, error, receiptUrl, reload } = useWorkOrder(workOrderId);
   const [pendingFile, setPendingFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+
+  const [closing, setClosing] = useState(false);
+  const [closeForm, setCloseForm] = useState({ cost: "", invoiceRef: "", dateClosed: "", inspectionType: "Annual" });
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState(null);
 
   const attachReceipt = async () => {
     if (!pendingFile || !order) return;
@@ -77,6 +95,67 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       setUploadError(err.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const updateStatus = async (newStatus) => {
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      const { error: updateErr } = await supabase.from("work_orders").update({ status: newStatus }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setStatusError(err.message);
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const openCloseForm = () => {
+    setStatusError(null);
+    setCloseForm({
+      cost: order.cost ?? "",
+      invoiceRef: order.invoice_ref ?? "",
+      dateClosed: todayIso(),
+      inspectionType: "Annual",
+    });
+    setClosing(true);
+  };
+
+  const confirmClose = async () => {
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      const dateClosed = closeForm.dateClosed || todayIso();
+      const { error: updateErr } = await supabase.from("work_orders").update({
+        status: "Closed",
+        cost: Number(closeForm.cost) || 0,
+        invoice_ref: closeForm.invoiceRef || null,
+        date_closed: dateClosed,
+      }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+
+      const unitUpdates = {};
+      if (order.category === "PM / Oil") {
+        unitUpdates.last_pm_date = dateClosed;
+      } else if (order.category === "DOT Inspection" && closeForm.inspectionType) {
+        const field = closeForm.inspectionType === "Annual" ? "last_annual_inspection_date" : "last_midtrip_date";
+        unitUpdates[field] = dateClosed;
+      }
+      if (Object.keys(unitUpdates).length > 0 && order.unit?.id) {
+        const { error: unitErr } = await supabase.from("units").update(unitUpdates).eq("id", order.unit.id);
+        if (unitErr) throw unitErr;
+      }
+
+      setClosing(false);
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setStatusError(err.message);
+    } finally {
+      setStatusBusy(false);
     }
   };
 
@@ -111,7 +190,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
             <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--clg-border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.08em" }}>
-                  UNIT {order.unit?.number || "—"}
+                  UNIT {order.unit?.number || "—"}{order.wo_number ? ` · ${order.wo_number}` : ""}
                 </div>
                 <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 18, color: "var(--clg-navy)", marginTop: 2 }}>
                   {order.category}
@@ -124,6 +203,36 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                     <Badge tone="neutral">{order.status}</Badge>
                   )}
                 </div>
+                {!closing && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    {order.status === "Open" && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => updateStatus("In Progress")} disabled={statusBusy}>
+                          Start progress
+                        </Button>
+                        <Button size="sm" onClick={openCloseForm} disabled={statusBusy}>
+                          Close work order
+                        </Button>
+                      </>
+                    )}
+                    {order.status === "In Progress" && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => updateStatus("Open")} disabled={statusBusy}>
+                          Reopen
+                        </Button>
+                        <Button size="sm" onClick={openCloseForm} disabled={statusBusy}>
+                          Close work order
+                        </Button>
+                      </>
+                    )}
+                    {order.status === "Closed" && (
+                      <Button size="sm" variant="outline" onClick={() => updateStatus("In Progress")} disabled={statusBusy}>
+                        Reopen
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {statusError && !closing && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 8 }}>{statusError}</div>}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {shopHeadsUpMailto(order) && (
@@ -136,6 +245,52 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
             </div>
 
             <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              {closing && (
+                <div style={{ border: "1px solid var(--clg-royal)", borderRadius: "var(--clg-radius-md)", padding: 16, background: "var(--clg-surface-subtle)" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-royal)", marginBottom: 12 }}>
+                    Close work order
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <FormField label="Cost">
+                      <Input
+                        type="number" step="0.01" value={closeForm.cost}
+                        onChange={(e) => setCloseForm((f) => ({ ...f, cost: e.target.value }))}
+                      />
+                    </FormField>
+                    <FormField label="Invoice / ref #">
+                      <Input
+                        value={closeForm.invoiceRef}
+                        onChange={(e) => setCloseForm((f) => ({ ...f, invoiceRef: e.target.value }))}
+                      />
+                    </FormField>
+                    <FormField label="Date closed">
+                      <Input
+                        type="date" value={closeForm.dateClosed}
+                        onChange={(e) => setCloseForm((f) => ({ ...f, dateClosed: e.target.value }))}
+                      />
+                    </FormField>
+                    {order.category === "DOT Inspection" && (
+                      <FormField label="Inspection type">
+                        <Select
+                          value={closeForm.inspectionType}
+                          onChange={(e) => setCloseForm((f) => ({ ...f, inspectionType: e.target.value }))}
+                          options={["Annual", "Midtrip"]}
+                        />
+                      </FormField>
+                    )}
+                  </div>
+                  {statusError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 10 }}>{statusError}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <Button size="sm" onClick={confirmClose} disabled={statusBusy} iconLeft={statusBusy ? <Loader2 size={13} className="spin" /> : null}>
+                      Confirm &amp; close
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setClosing(false)} disabled={statusBusy}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {(order.complaint || order.description) && (
                 <div>
                   {order.complaint && <div style={{ fontSize: 13, color: "var(--clg-text-body)" }}>{order.complaint}</div>}
@@ -146,6 +301,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
               )}
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+                <Field label="WO #" value={order.wo_number} />
                 <Field label="Vendor" value={order.vendor?.name} />
                 <Field label="Cost" value={money(order.cost)} />
                 <Field label="System / component" value={order.system_component} />
