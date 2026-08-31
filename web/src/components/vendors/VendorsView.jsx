@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Pencil } from "lucide-react";
 import { Button, Card, Table, Eyebrow, Alert } from "../../ds";
 import { useVendors } from "../../hooks/useVendors";
 import VendorForm from "./VendorForm";
@@ -7,14 +7,24 @@ import VendorForm from "./VendorForm";
 export default function VendorsView() {
   const { vendors, loading, error, reload } = useVendors();
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const rows = vendors.map((v) => ({
     name: v.name,
     specialty_category: v.specialty_category || "—",
     contact_name: v.contact_name || "—",
     contact_email: v.contact_email || "—",
-    contact: v.contact || "—",
+    phone: v.phone || v.contact || "—",
     created_at: new Date(v.created_at).toLocaleDateString(),
+    actions: (
+      <button
+        onClick={() => { setEditing(v); setShowForm(false); }}
+        title="Edit vendor"
+        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)", padding: 4, display: "inline-flex" }}
+      >
+        <Pencil size={14} />
+      </button>
+    ),
   }));
 
   return (
@@ -24,13 +34,21 @@ export default function VendorsView() {
           <Eyebrow tone="brand">Vendors</Eyebrow>
           <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>Approved repair shops</h2>
         </div>
-        <Button size="sm" iconLeft={<Plus size={16} />} onClick={() => setShowForm(true)}>New vendor</Button>
+        <Button size="sm" iconLeft={<Plus size={16} />} onClick={() => { setShowForm(true); setEditing(null); }}>New vendor</Button>
       </div>
 
-      {showForm && (
+      {showForm && !editing && (
         <VendorForm
           onCancel={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); reload(); }}
+        />
+      )}
+
+      {editing && (
+        <VendorForm
+          vendor={editing}
+          onCancel={() => setEditing(null)}
+          onSaved={() => { setEditing(null); reload(); }}
         />
       )}
 
@@ -54,8 +72,9 @@ export default function VendorsView() {
               { key: "specialty_category", label: "Specialty" },
               { key: "contact_name", label: "Contact" },
               { key: "contact_email", label: "Email" },
-              { key: "contact", label: "Phone / other" },
+              { key: "phone", label: "Phone" },
               { key: "created_at", label: "Added" },
+              { key: "actions", label: "" },
             ]}
             rows={rows}
           />
