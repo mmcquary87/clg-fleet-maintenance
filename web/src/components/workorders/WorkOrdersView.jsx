@@ -36,6 +36,20 @@ function severityTone(s) {
   return "neutral";
 }
 
+// Whole days only -- date_opened/date_closed are dates, not timestamps, so
+// there's no honest way to show hours the way a live "2d 4h" clock would.
+function daysBetween(startStr, endStr) {
+  const start = new Date(startStr + "T00:00:00");
+  const end = new Date(endStr + "T00:00:00");
+  return Math.max(0, Math.round((end - start) / 86400000));
+}
+
+function ageDays(o) {
+  if (!o.date_opened) return null;
+  if (o.status === "Closed") return o.date_closed ? daysBetween(o.date_opened, o.date_closed) : null;
+  return daysBetween(o.date_opened, new Date().toISOString().slice(0, 10));
+}
+
 export default function WorkOrdersView({ initialCategory }) {
   const [range, setRange] = useState(null);
   const { orders, loading, error, reload } = useAllWorkOrders(range);
@@ -48,6 +62,14 @@ export default function WorkOrdersView({ initialCategory }) {
   const unitOptions = useMemo(() => {
     return ["All", ...Array.from(new Set(orders.map((o) => o.unit?.number).filter(Boolean))).sort()];
   }, [orders]);
+
+  const tabCounts = useMemo(() => ({
+    All: orders.length,
+    "Needs approval": orders.filter((o) => o.approval_status === "needs_approval").length,
+    Open: orders.filter((o) => o.status === "Open").length,
+    "In Progress": orders.filter((o) => o.status === "In Progress").length,
+    Closed: orders.filter((o) => o.status === "Closed").length,
+  }), [orders]);
 
   const filtered = useMemo(() => {
     return orders
@@ -63,10 +85,24 @@ export default function WorkOrdersView({ initialCategory }) {
         const q = query.toLowerCase();
         return [o.wo_number, o.unit?.number, o.vendor?.name, o.category, o.description, o.complaint, o.invoice_ref]
           .filter(Boolean).some((v) => v.toLowerCase().includes(q));
+      })
+      // Who's blocking it first (needs your approval), then oldest/longest-
+      // open first within each group -- the more urgent read for an open
+      // list than the hook's default newest-first ordering.
+      .sort((a, b) => {
+        const aBlocked = a.approval_status === "needs_approval" ? 0 : 1;
+        const bBlocked = b.approval_status === "needs_approval" ? 0 : 1;
+        if (aBlocked !== bBlocked) return aBlocked - bBlocked;
+        const aOpen = a.status !== "Closed" ? 0 : 1;
+        const bOpen = b.status !== "Closed" ? 0 : 1;
+        if (aOpen !== bOpen) return aOpen - bOpen;
+        return (ageDays(b) ?? 0) - (ageDays(a) ?? 0);
       });
   }, [orders, tab, category, unit, query]);
 
   const totalCost = filtered.reduce((s, o) => s + (Number(o.cost) || 0), 0);
+  const openCount = tabCounts.Open + tabCounts["In Progress"];
+  const openNoCostCount = orders.filter((o) => o.status !== "Closed" && !o.cost).length;
 
   return (
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1100, margin: "0 auto" }}>
@@ -76,6 +112,9 @@ export default function WorkOrdersView({ initialCategory }) {
           <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>
             {filtered.length} order{filtered.length === 1 ? "" : "s"}
           </h2>
+          <p style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
+            {openCount} open, {tabCounts.Closed} closed. Open items are sorted by who's blocking them, then by age.
+          </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ position: "relative", width: 260 }}>
@@ -105,13 +144,14 @@ export default function WorkOrdersView({ initialCategory }) {
             key={t}
             onClick={() => setTab(t)}
             style={{
-              padding: "7px 13px", fontSize: 12, cursor: "pointer",
-              border: "1px solid " + (tab === t ? "var(--clg-royal)" : "var(--clg-reflection)"),
-              background: tab === t ? "var(--clg-royal)" : "#fff",
+              padding: "7px 14px", fontSize: 12.5, cursor: "pointer", borderRadius: "var(--clg-radius-pill)",
+              border: "1px solid " + (tab === t ? "var(--clg-navy)" : "var(--clg-reflection)"),
+              background: tab === t ? "var(--clg-navy)" : "#fff",
               color: tab === t ? "#fff" : "var(--clg-pewter)",
+              boxShadow: tab === t ? "none" : "var(--clg-shadow-resting)",
             }}
           >
-            {t}
+            {t} · {tabCounts[t]}
           </button>
         ))}
       </div>
@@ -149,9 +189,9 @@ export default function WorkOrdersView({ initialCategory }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
               <thead>
                 <tr>
-                  {["WO #", "Unit", "Category", "Issue", "Severity", "Vendor", "Status", "Opened", "Closed", "Cost"].map((h) => (
+                  {["WO #", "Unit", "Category", "Issue", "Severity", "Vendor", "Status", "Opened", "Closed", "Cost", "Age"].map((h) => (
                     <th key={h} style={{
-                      textAlign: h === "Cost" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
+                      textAlign: h === "Cost" || h === "Age" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
                       color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
                     }}>{h}</th>
@@ -196,6 +236,13 @@ export default function WorkOrdersView({ initialCategory }) {
                     <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)" }}>
                       {money(o.cost)}
                     </td>
+                    <td style={{
+                      padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right",
+                      fontFamily: "var(--clg-font-heading)", fontWeight: 700,
+                      color: o.status !== "Closed" ? "var(--clg-scarlet)" : "var(--clg-text-muted)",
+                    }}>
+                      {ageDays(o) != null ? `${ageDays(o)}d` : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -205,12 +252,19 @@ export default function WorkOrdersView({ initialCategory }) {
                   <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 700, color: "var(--clg-navy)" }}>
                     {money(totalCost)}
                   </td>
+                  <td />
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
       </Card>
+
+      {openNoCostCount > 0 && (
+        <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 14, lineHeight: 1.6, maxWidth: 760 }}>
+          {openNoCostCount} of {openCount} open item{openCount === 1 ? "" : "s"} {openNoCostCount === 1 ? "has" : "have"} no cost on file yet — nothing to price the delay against until a vendor sends one.
+        </div>
+      )}
 
       {openId && (
         <WorkOrderDetailModal
