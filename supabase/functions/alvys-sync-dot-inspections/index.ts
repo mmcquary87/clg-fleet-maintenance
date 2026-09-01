@@ -23,7 +23,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ALVYS_TOKEN_URL = "https://auth.alvys.com/oauth/token";
 const ALVYS_API_BASE = "https://integrations.alvys.com/api/p/v1.0";
-const CONCURRENCY = 8;
+// A live run against the real fleet (241 units) at CONCURRENCY=8 got
+// 429'd on 184 of them -- Alvys's rate limit is tighter than that. Lower
+// concurrency plus retry-with-backoff on 429 specifically (not other
+// errors, which should fail fast) gets through the whole fleet reliably.
+const CONCURRENCY = 3;
+const MAX_429_RETRIES = 5;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,6 +68,14 @@ function parseDateFromLabel(attachmentType: string): string | null {
   return Number.isNaN(new Date(iso).getTime()) ? null : iso;
 }
 
+async function fetchWithRetry(url: string, options: RequestInit): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, options);
+    if (res.status !== 429 || attempt >= MAX_429_RETRIES) return res;
+    await new Promise((r) => setTimeout(r, 500 * 2 ** attempt)); // 500ms, 1s, 2s, 4s, 8s
+  }
+}
+
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
@@ -99,7 +112,7 @@ Deno.serve(async (req) => {
     const rows = await mapWithConcurrency(units, CONCURRENCY, async (u) => {
       const path = u.type === "Truck" ? "trucks" : "trailers";
       try {
-        const res = await fetch(`${ALVYS_API_BASE}/${path}/${u.alvys_asset_id}/documents`, {
+        const res = await fetchWithRetry(`${ALVYS_API_BASE}/${path}/${u.alvys_asset_id}/documents`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const text = await res.text();
