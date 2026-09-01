@@ -93,7 +93,8 @@ Deno.serve(async (req) => {
 
     const runStartedAt = new Date().toISOString();
     let noDocument = 0;
-    let errors = 0;
+    const errorSamples: { unitNumber: string; type: string; message: string }[] = [];
+    const errorsByStatus: Record<string, number> = {};
 
     const rows = await mapWithConcurrency(units, CONCURRENCY, async (u) => {
       const path = u.type === "Truck" ? "trucks" : "trailers";
@@ -120,7 +121,10 @@ Deno.serve(async (req) => {
         }
         return { unit_id: u.id, kind: "dot_inspection", label: "Annual DOT Inspection", due_date: best.dueDate, basis: "alvys_certificate", synced_at: runStartedAt };
       } catch (err) {
-        errors += 1;
+        const message = err instanceof Error ? err.message : String(err);
+        const statusKey = message.slice(0, 3);
+        errorsByStatus[statusKey] = (errorsByStatus[statusKey] ?? 0) + 1;
+        if (errorSamples.length < 15) errorSamples.push({ unitNumber: u.number, type: u.type, message });
         return { unit_id: u.id, kind: "dot_inspection", label: "Annual DOT Inspection", due_date: null, basis: "no_document_on_file", synced_at: runStartedAt };
       }
     });
@@ -135,11 +139,14 @@ Deno.serve(async (req) => {
       .from("unit_maintenance_due").delete().eq("kind", "dot_inspection").lt("synced_at", runStartedAt);
     if (cleanupErr) throw cleanupErr;
 
+    const fetchErrors = Object.values(errorsByStatus).reduce((s, n) => s + n, 0);
     return new Response(JSON.stringify({
       unitsChecked: units.length,
-      withCertificate: rows.length - noDocument - errors,
+      withCertificate: rows.filter((r) => r.basis === "alvys_certificate").length,
       noDocumentOnFile: noDocument,
-      fetchErrors: errors,
+      fetchErrors,
+      errorsByStatus,
+      errorSamples,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
