@@ -85,13 +85,27 @@ Deno.serve(async (req) => {
       vehicleIds,
     });
 
+    // obdOdometerMeters updates ~every 30s while a truck is moving -- a
+    // full month for an active truck could be thousands of readings. If
+    // Samsara's pagination ever splits one vehicle's series across pages
+    // (rather than only paginating across different vehicles), the same
+    // vehicle id would show up as multiple separate items -- merge all
+    // readings per vehicle id across every page before computing a delta,
+    // rather than trusting any single item to hold the complete series.
+    const readingsByVehicleId = new Map<string, { time: string; value: number }[]>();
+    for (const item of items) {
+      if (!vehicleIdToUnit.has(item.id)) continue;
+      const arr = readingsByVehicleId.get(item.id) ?? [];
+      arr.push(...(item.obdOdometerMeters ?? []));
+      readingsByVehicleId.set(item.id, arr);
+    }
+
     const perVehicle: { unitNumber: string; readingCount: number; miles: number }[] = [];
     let totalMiles = 0;
     let vehiclesWithFewerThan2Readings = 0;
-    for (const item of items) {
-      const unit = vehicleIdToUnit.get(item.id);
-      if (!unit) continue;
-      const readings = item.obdOdometerMeters ?? [];
+    for (const [vehicleId, rawReadings] of readingsByVehicleId) {
+      const unit = vehicleIdToUnit.get(vehicleId);
+      const readings = [...rawReadings].sort((a, b) => (a.time < b.time ? -1 : 1));
       if (readings.length < 2) {
         vehiclesWithFewerThan2Readings += 1;
         continue;
@@ -104,7 +118,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       trucksQueried: trucks.length,
-      vehiclesReturnedByApi: items.length,
+      vehiclesReturnedByApi: readingsByVehicleId.size,
       vehiclesWithFewerThan2Readings,
       totalMilesViaOdometerDelta: Math.round(totalMiles),
       // For comparison: samsara-miles (fuel-energy report) said 239,646 mi;
