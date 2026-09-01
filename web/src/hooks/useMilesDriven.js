@@ -8,6 +8,8 @@ import { supabase } from "../lib/supabaseClient";
 export function useMilesDriven(range) {
   const [miles, setMiles] = useState(null);
   const [perUnit, setPerUnit] = useState([]);
+  const [matchedButNoDataCount, setMatchedButNoDataCount] = useState(0);
+  const [matchedButNoDataSample, setMatchedButNoDataSample] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -15,6 +17,8 @@ export function useMilesDriven(range) {
     if (!range?.start || !range?.end) {
       setMiles(null);
       setPerUnit([]);
+      setMatchedButNoDataCount(0);
+      setMatchedButNoDataSample([]);
       setError(null);
       return;
     }
@@ -40,18 +44,24 @@ export function useMilesDriven(range) {
         setError(message);
         setMiles(null);
         setPerUnit([]);
+        setMatchedButNoDataCount(0);
+        setMatchedButNoDataSample([]);
       } else if (data?.error) {
         setError(data.error);
         setMiles(null);
         setPerUnit([]);
+        setMatchedButNoDataCount(0);
+        setMatchedButNoDataSample([]);
       } else {
         setMiles(data.totalMiles);
         setPerUnit(data.perUnit ?? []);
+        setMatchedButNoDataCount(data.matchedButNoDataCount ?? 0);
+        setMatchedButNoDataSample(data.matchedButNoDataSample ?? []);
       }
       setLoading(false);
     });
     return () => { cancelled = true; };
   }, [range?.start, range?.end]);
 
-  return { miles, perUnit, loading, error };
+  return { miles, perUnit, matchedButNoDataCount, matchedButNoDataSample, loading, error };
 }

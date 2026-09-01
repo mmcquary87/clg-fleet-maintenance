@@ -97,7 +97,7 @@ export default function UnitView({ records, range }) {
   const [typeFilter, setTypeFilter] = useState("All");
   const [ownershipSort, setOwnershipSort] = useState("highest");
   const [selected, setSelected] = useState(null);
-  const { perUnit: milesPerUnit, loading: milesLoading, error: milesError } = useMilesDriven(range);
+  const { perUnit: milesPerUnit, matchedButNoDataCount, matchedButNoDataSample, loading: milesLoading, error: milesError } = useMilesDriven(range);
 
   const filteredRecords = useMemo(
     () => records.filter((r) => typeFilter === "All" || r.unitType === typeFilter),
@@ -293,6 +293,11 @@ export default function UnitView({ records, range }) {
                 Ranked highest cost/mile first.{" "}
                 {excludedFromRatio > 0 && `${excludedFromRatio} unit${excludedFromRatio === 1 ? "" : "s"} excluded — under ${MIN_MILES_FOR_RATIO} mi or no Samsara match this period, too little data for a reliable ratio.`}
               </div>
+              {matchedButNoDataCount > 0 && (
+                <div style={{ fontSize: 11.5, color: "var(--clg-scarlet)", marginBottom: 8, lineHeight: 1.5 }}>
+                  {matchedButNoDataCount} unit{matchedButNoDataCount === 1 ? "" : "s"} matched to a Samsara vehicle returned zero mileage data for this range at all (not just under {MIN_MILES_FOR_RATIO} mi) — worth checking Samsara's own report directly for these, since a truck matched to Samsara silently missing from its report isn't expected: {matchedButNoDataSample.slice(0, 8).join(", ")}{matchedButNoDataCount > 8 ? ", …" : ""}.
+                </div>
+              )}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 2 }}>
                 {costPerMileUnits.slice(0, 10).map((u, i) => (
                   <LeaderboardRow

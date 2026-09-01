@@ -99,10 +99,14 @@ Deno.serve(async (req) => {
     }
 
     const perUnit: { unitId: string; unitNumber: string; miles: number }[] = [];
+    const matchedButNoData: string[] = [];
     let totalMiles = 0;
     for (const u of units) {
       const miles = milesByUnitId.get(u.id);
-      if (miles == null) continue;
+      if (miles == null) {
+        matchedButNoData.push(u.number);
+        continue;
+      }
       perUnit.push({ unitId: u.id, unitNumber: u.number, miles: Math.round(miles) });
       totalMiles += miles;
     }
@@ -111,6 +115,14 @@ Deno.serve(async (req) => {
       totalMiles: Math.round(totalMiles),
       perUnit,
       unitsWithSamsara: units.length,
+      // unitsWithSamsara counts everything with a samsara_vehicle_id set --
+      // matchedButNoData is the subset of those that Samsara's own report
+      // never returned a vehicleReports entry for in this window at all
+      // (as opposed to genuinely having 0 miles, which the report would
+      // still return a row for). A high count here means the report is
+      // silently dropping vehicles, not that they didn't drive.
+      matchedButNoDataCount: matchedButNoData.length,
+      matchedButNoDataSample: matchedButNoData.slice(0, 20),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error
