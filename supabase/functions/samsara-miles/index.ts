@@ -1,18 +1,27 @@
 // Fleet Maintenance System — miles driven over a date range (for cost/mile)
 //
-// Called live from the Spend page whenever its date filter changes — not
-// part of the periodic samsara-sync. Pulls obdOdometerMeters (Samsara's
-// own recommended mileage source — see developers.samsara.com/docs/
-// mileage-and-distance) for every unit matched to a Samsara vehicle, takes
-// the first and last reading inside the requested window, and returns the
-// delta per unit + fleet total. There is no dedicated IFTA endpoint in
-// Samsara's API (confirmed against their full docs) — this is the same
-// odometer-delta approach their own mileage guide recommends, which is
-// what IFTA mileage reporting is built from anyway.
+// Called live from the Spend page whenever its date filter changes. Uses
+// Samsara's fuel/energy report endpoint -- the same one samsara-fleet-mpg
+// uses for the Operations Dashboard's MPG KPI -- rather than diffing raw
+// obdOdometerMeters readings. Samsara computes each vehicle's
+// distanceTraveledMeters server-side for the exact requested window, so
+// there's no dependency on catching a reading right at the start/end of
+// the range.
 //
-// Requires SAMSARA_API secret. Runs with the caller's own auth (not
-// service role) — this is a read against Samsara plus a read of our own
-// units table, no writes, so the normal authenticated-user RLS is enough.
+// The original version of this function pulled obdOdometerMeters from
+// /fleet/vehicles/stats/history and diffed the first vs. last reading --
+// but unlike every other Samsara function in this repo (samsara-sync,
+// samsara-hos-sync, samsara-drive-hour-utilization, samsara-fleet-mpg), it
+// never paginated the response. Any date range or vehicle count spanning
+// more than one page of readings silently truncated to the first page, so
+// "last reading" wasn't anywhere near the actual end of the range --
+// undercounting miles and inflating Cost/Mile well past $1/mile regardless
+// of which date preset was selected. See developers.samsara.com/reference/
+// getfuelenergyvehiclereports.
+//
+// Requires SAMSARA_API secret (token needs the "Read Fuel & Energy" scope,
+// same as samsara-fleet-mpg). Runs with the caller's own auth (not service
+// role) -- read-only.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -62,27 +71,44 @@ Deno.serve(async (req) => {
     const vehicleIdToUnit = new Map(units.map((u: any) => [u.samsara_vehicle_id, u]));
     const vehicleIds = units.map((u: any) => u.samsara_vehicle_id).join(",");
 
-    const url = new URL(`${SAMSARA_BASE}/fleet/vehicles/stats/history`);
-    url.searchParams.set("types", "obdOdometerMeters");
-    url.searchParams.set("startTime", startTime);
-    url.searchParams.set("endTime", endTime);
-    url.searchParams.set("vehicleIds", vehicleIds);
+    // The fuel-energy report wants dates (YYYY-MM-DD); useMilesDriven
+    // passes full ISO datetimes, so trim to the date part.
+    const startDate = startTime.slice(0, 10);
+    const endDate = endTime.slice(0, 10);
 
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    const text = await res.text();
-    if (!res.ok) throw new Error(`stats/history failed (${res.status}): ${text}`);
-    const json = JSON.parse(text);
+    const milesByUnitId = new Map<string, number>();
+    let after: string | undefined;
+
+    while (true) {
+      const url = new URL(`${SAMSARA_BASE}/fleet/reports/vehicles/fuel-energy`);
+      url.searchParams.set("startDate", startDate);
+      url.searchParams.set("endDate", endDate);
+      url.searchParams.set("vehicleIds", vehicleIds);
+      url.searchParams.set("energyType", "fuel");
+      if (after) url.searchParams.set("after", after);
+
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const text = await res.text();
+      if (!res.ok) throw new Error(`fuel-energy report failed (${res.status}): ${text}`);
+      const json = JSON.parse(text);
+
+      for (const r of json.data?.vehicleReports ?? []) {
+        const unit = vehicleIdToUnit.get(r.vehicle?.id);
+        if (!unit) continue;
+        const miles = metersToMiles(r.distanceTraveledMeters ?? 0);
+        milesByUnitId.set(unit.id, (milesByUnitId.get(unit.id) ?? 0) + miles);
+      }
+
+      if (!json.pagination?.hasNextPage) break;
+      after = json.pagination.endCursor;
+    }
 
     const perUnit: { unitId: string; unitNumber: string; miles: number }[] = [];
     let totalMiles = 0;
-    for (const v of json.data ?? []) {
-      const unit = vehicleIdToUnit.get(v.id);
-      if (!unit) continue;
-      const readings = v.obdOdometerMeters ?? [];
-      if (readings.length < 2) continue;
-      const deltaMeters = readings.at(-1).value - readings[0].value;
-      const miles = Math.max(0, metersToMiles(deltaMeters));
-      perUnit.push({ unitId: unit.id, unitNumber: unit.number, miles: Math.round(miles) });
+    for (const u of units) {
+      const miles = milesByUnitId.get(u.id);
+      if (miles == null) continue;
+      perUnit.push({ unitId: u.id, unitNumber: u.number, miles: Math.round(miles) });
       totalMiles += miles;
     }
 
