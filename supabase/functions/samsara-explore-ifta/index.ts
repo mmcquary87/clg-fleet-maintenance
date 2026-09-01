@@ -15,7 +15,11 @@
 //
 // Run once via this function's Test button in the Supabase dashboard
 // (Authorization: Bearer <anon key>, body {}) and paste the output back.
-// Delete once the real shape/numbers are confirmed.
+// First attempt (startDate/endDate) got a clear error: IFTA reports are
+// quarterly, keyed by year+quarter -- worth keeping in mind that this may
+// mean the endpoint can't serve arbitrary date ranges (This Week/This
+// Month/custom) the way the rest of this app's date filters expect, only
+// whole quarters. Delete once the real shape/numbers are confirmed.
 
 const SAMSARA_BASE = "https://api.samsara.com";
 
@@ -32,14 +36,16 @@ Deno.serve(async (req) => {
     const token = Deno.env.get("SAMSARA_API");
     if (!token) throw new Error("SAMSARA_API secret not set");
 
-    // Same window as the discrepancy: August 2026.
-    const startDate = "2026-08-01";
-    const endDate = "2026-08-31";
+    // First attempt used startDate/endDate and got a clear error back:
+    // IFTA reports are quarterly, keyed by year+quarter, not an arbitrary
+    // date range. August 2026 falls in Q3 (Jul-Sep).
+    const year = 2026;
+    const quarter = 3;
 
     async function tryEndpoint(label: string, path: string) {
       const url = new URL(`${SAMSARA_BASE}${path}`);
-      url.searchParams.set("startDate", startDate);
-      url.searchParams.set("endDate", endDate);
+      url.searchParams.set("year", String(year));
+      url.searchParams.set("quarter", String(quarter));
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       const text = await res.text();
       let body: any = text;
