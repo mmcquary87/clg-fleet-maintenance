@@ -6,15 +6,26 @@
 // "Planned" comes from our own planned_home_time table (recurring
 // schedules, linked to a real Alvys driver via driver_id — confirmed
 // trips/search's Driver1.Id and drivers/search's Id are the same
-// identifier space). "Honored" is checked against Alvys trips/search:
-// for each planned home-time date, was that driver actually assigned to
-// a trip covering it? No overlapping trip = honored; an overlapping trip
-// = violated.
+// identifier space). Each planned date lands in one of three buckets:
+//   - Violated: the driver was actually assigned to a trip covering it
+//     (checked against Alvys trips/search, as before).
+//   - Honored: no trip AND a real Alvys driver event (drivers/events/
+//     search — EventType Hometime/Restart/Vacation/SickOrEmergency;
+//     "Other" excluded, since real account data shows it's mostly used
+//     for meetings, not time off) actually covers that date. This is
+//     evidence-backed, not inferred.
+//   - Unconfirmed: no trip, but no matching event either. Previously this
+//     silently counted as "honored" on trip-absence alone — a driver with
+//     nothing to do (in the shop, waiting on dispatch) isn't necessarily
+//     actually home, so this is now reported separately rather than
+//     assumed. adherencePct is honored ÷ total, i.e. Unconfirmed does NOT
+//     count toward the percentage — confirmed by CLG (2026-09-01) as a
+//     deliberately stricter number than the old trip-absence-only version.
 //
 // Only planned_home_time rows with a driver_id are eligible — a row
 // added via "+ Add a new driver" (not yet synced from Alvys) has no way
-// to check real trip activity, so it's excluded and reported separately
-// rather than silently skipped.
+// to check real trip/event activity, so it's excluded and reported
+// separately rather than silently skipped.
 //
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets + service role
 // (to read our own planned_home_time table for aggregate reporting).
@@ -62,6 +73,27 @@ async function fetchAllTrips(token: string, rangeField: string, startDate: strin
     page += 1;
   }
   return items;
+}
+
+// EventType values confirmed against real account data (alvys-explore-
+// driver-events, 2026-09-01): Hometime, Other, Vacation, SickOrEmergency,
+// Restart. "Other" excluded — the sample was almost entirely company
+// meetings ("Driver Safety Program Launch Meeting"), not time off.
+const HOME_EVENT_TYPES = new Set(["Hometime", "Restart", "Vacation", "SickOrEmergency"]);
+
+// drivers/events/search isn't paginated (no Page/PageSize in its request
+// schema) — a single call covering every linked driver is enough.
+async function fetchDriverEvents(token: string, driverIds: string[], startDate: string, endDate: string) {
+  if (driverIds.length === 0) return [];
+  const res = await fetch(`${ALVYS_API_BASE}/drivers/events/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ StartDate: startDate, EndDate: endDate, DriverIds: driverIds }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`drivers/events/search failed (${res.status}): ${text}`);
+  const json = JSON.parse(text);
+  return Array.isArray(json) ? json : (json.Items ?? json.Events ?? []);
 }
 
 // --- Same recurrence logic as web/src/lib/homeTimeSchedule.js, ported to
@@ -145,20 +177,23 @@ Deno.serve(async (req) => {
 
     if (plannedEvents.length === 0) {
       return new Response(JSON.stringify({
-        totalPlannedEvents: 0, honoredEvents: 0, violatedEvents: 0, adherencePct: null,
+        totalPlannedEvents: 0, honoredEvents: 0, violatedEvents: 0, unconfirmedEvents: 0, adherencePct: null,
         unlinkedSchedules: unlinked.length,
         violations: [],
+        unconfirmed: [],
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Pad the trip search window so a trip that started before the report
+    // Pad the search windows so a trip/event that started before the report
     // window but overlaps a planned date at the edge still gets caught.
     const paddedStart = addDays(startDate, -14);
     const paddedEnd = addDays(endDate, 14);
     const token = await getAlvysToken();
-    const [pickedUp, delivered] = await Promise.all([
+    const linkedDriverIds = [...new Set(linked.map((s) => s.driver_id))];
+    const [pickedUp, delivered, driverEvents] = await Promise.all([
       fetchAllTrips(token, "PickupDateRange", paddedStart, paddedEnd),
       fetchAllTrips(token, "DeliveryDateRange", paddedStart, paddedEnd),
+      fetchDriverEvents(token, linkedDriverIds, `${paddedStart}T00:00:00Z`, `${paddedEnd}T23:59:59Z`),
     ]);
     const byId = new Map<string, any>();
     for (const t of [...pickedUp, ...delivered]) byId.set(t.Id, t);
@@ -177,15 +212,36 @@ Deno.serve(async (req) => {
       busyRangesByDriver.set(driverId, arr);
     }
 
+    // Per driver, the date ranges a real Alvys event confirms they were
+    // off (Hometime/Restart/Vacation/SickOrEmergency only — see
+    // HOME_EVENT_TYPES).
+    const homeRangesByDriver = new Map<string, { start: string; end: string }[]>();
+    for (const e of driverEvents) {
+      if (!HOME_EVENT_TYPES.has(e.EventType) || !e.DriverId) continue;
+      const start = (e.StartDate || "").slice(0, 10);
+      const end = (e.EndDate || start).slice(0, 10);
+      if (!start) continue;
+      const arr = homeRangesByDriver.get(e.DriverId) ?? [];
+      arr.push({ start, end: end || start });
+      homeRangesByDriver.set(e.DriverId, arr);
+    }
+
     const violations: { driverName: string; date: string; tripStart: string; tripEnd: string }[] = [];
+    const unconfirmed: { driverName: string; date: string }[] = [];
     let honored = 0;
     for (const ev of plannedEvents) {
-      const ranges = busyRangesByDriver.get(ev.driverId) ?? [];
-      const overlap = ranges.find((r) => ev.date >= r.start && ev.date <= r.end);
-      if (overlap) {
-        violations.push({ driverName: ev.driverName, date: ev.date, tripStart: overlap.start, tripEnd: overlap.end });
-      } else {
+      const busyRanges = busyRangesByDriver.get(ev.driverId) ?? [];
+      const tripOverlap = busyRanges.find((r) => ev.date >= r.start && ev.date <= r.end);
+      if (tripOverlap) {
+        violations.push({ driverName: ev.driverName, date: ev.date, tripStart: tripOverlap.start, tripEnd: tripOverlap.end });
+        continue;
+      }
+      const homeRanges = homeRangesByDriver.get(ev.driverId) ?? [];
+      const homeOverlap = homeRanges.some((r) => ev.date >= r.start && ev.date <= r.end);
+      if (homeOverlap) {
         honored += 1;
+      } else {
+        unconfirmed.push({ driverName: ev.driverName, date: ev.date });
       }
     }
 
@@ -193,9 +249,11 @@ Deno.serve(async (req) => {
       totalPlannedEvents: plannedEvents.length,
       honoredEvents: honored,
       violatedEvents: violations.length,
+      unconfirmedEvents: unconfirmed.length,
       adherencePct: Math.round((honored / plannedEvents.length) * 1000) / 10,
       unlinkedSchedules: unlinked.length,
       violations: violations.slice(0, 50),
+      unconfirmed: unconfirmed.slice(0, 50),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
