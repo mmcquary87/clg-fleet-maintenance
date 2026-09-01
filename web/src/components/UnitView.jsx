@@ -6,7 +6,14 @@ import { LayoutGrid, Search } from "lucide-react";
 import { Input } from "../ds";
 import { CATEGORIES, CAT_COLORS } from "../lib/categories";
 import { groupSum } from "../lib/groupSum";
+import { useMilesDriven } from "../hooks/useMilesDriven";
 import EmptyState from "./EmptyState";
+
+// Below this, a unit's odometer/GPS delta for the period is too thin to
+// trust as a cost/mile ratio -- a truck that sat in the shop most of the
+// window can otherwise look like a wild per-mile outlier purely because
+// the denominator is tiny, not because it's actually expensive to run.
+const MIN_MILES_FOR_RATIO = 500;
 
 const UNIT_TYPES = ["All", "Truck", "Trailer"];
 // Higher than the Company Spend page's fleet-wide 15% bar -- a single
@@ -29,6 +36,9 @@ function fmtMoney(n) {
 function fmtMoney2(n) {
   return "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
 }
+function fmtPerMile(n) {
+  return "$" + n.toFixed(2);
+}
 
 function unitTotals(records) {
   const m = {};
@@ -41,7 +51,7 @@ function unitTotals(records) {
   return Object.values(m);
 }
 
-function LeaderboardRow({ rank, label, sub, value, max, color, active, onClick }) {
+function LeaderboardRow({ rank, label, sub, value, max, color, active, onClick, format = fmtMoney }) {
   return (
     <button
       onClick={onClick}
@@ -63,7 +73,7 @@ function LeaderboardRow({ rank, label, sub, value, max, color, active, onClick }
         {sub && <div style={{ fontSize: 11, color: "var(--clg-text-muted)", marginTop: 1 }}>{sub}</div>}
       </div>
       <div style={{ flexShrink: 0, textAlign: "right" }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--clg-navy)", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(value)}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--clg-navy)", fontVariantNumeric: "tabular-nums" }}>{format(value)}</div>
         {max != null && (
           <div style={{ width: 70, background: "var(--clg-smoke)", borderRadius: "var(--clg-radius-pill)", height: 5, marginTop: 4, overflow: "hidden" }}>
             <div style={{ width: `${Math.max(4, (value / max) * 100)}%`, background: color || "var(--clg-royal)", height: "100%" }} />
@@ -82,11 +92,12 @@ function SectionCard({ children, style }) {
   );
 }
 
-export default function UnitView({ records }) {
+export default function UnitView({ records, range }) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [ownershipSort, setOwnershipSort] = useState("highest");
   const [selected, setSelected] = useState(null);
+  const { perUnit: milesPerUnit, loading: milesLoading, error: milesError } = useMilesDriven(range);
 
   const filteredRecords = useMemo(
     () => records.filter((r) => typeFilter === "All" || r.unitType === typeFilter),
@@ -102,6 +113,29 @@ export default function UnitView({ records }) {
       .slice(0, q ? 25 : 10);
   }, [units, ownershipSort, query]);
   const ownershipMax = Math.max(...ownershipUnits.map((u) => u.total), 1);
+
+  // Cost/mile per unit -- only for units with a real Samsara mileage match
+  // above MIN_MILES_FOR_RATIO this period; everything else is excluded from
+  // the ranking rather than shown as a misleadingly huge or tiny ratio.
+  const milesByUnitNumber = useMemo(
+    () => new Map(milesPerUnit.map((u) => [u.unitNumber, u.miles])),
+    [milesPerUnit],
+  );
+  const costPerMileUnits = useMemo(() => {
+    return units
+      .map((u) => {
+        const miles = milesByUnitNumber.get(u.unit);
+        if (miles == null || miles < MIN_MILES_FOR_RATIO) return null;
+        return { ...u, miles, perMile: u.total / miles };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.perMile - a.perMile);
+  }, [units, milesByUnitNumber]);
+  const excludedFromRatio = units.length - costPerMileUnits.length;
+  const fleetAvgPerMile = costPerMileUnits.length > 0
+    ? costPerMileUnits.reduce((s, u) => s + u.total, 0) / costPerMileUnits.reduce((s, u) => s + u.miles, 0)
+    : null;
+  const costPerMileMax = Math.max(...costPerMileUnits.map((u) => u.perMile), 0.01);
 
   const categoryLeaderboards = useMemo(() => {
     return CATEGORIES.map((cat) => {
@@ -236,6 +270,49 @@ export default function UnitView({ records }) {
           </div>
         )}
       </SectionCard>
+
+      {range?.start && (
+        <SectionCard style={{ marginBottom: 18 }}>
+          <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", marginBottom: 4 }}>
+            Cost per mile
+          </div>
+          {milesLoading ? (
+            <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", padding: "10px 0" }}>Loading mileage…</div>
+          ) : milesError ? (
+            <div style={{ fontSize: 12.5, color: "var(--clg-scarlet)", padding: "10px 0" }}>{milesError}</div>
+          ) : costPerMileUnits.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", padding: "10px 0" }}>
+              No unit has at least {MIN_MILES_FOR_RATIO} mi of Samsara-matched mileage in this range yet.
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginBottom: 8, lineHeight: 1.5 }}>
+                Fleet-wide average is <strong style={{ color: "var(--clg-navy)" }}>{fmtPerMile(fleetAvgPerMile)}/mi</strong> across {costPerMileUnits.length} unit{costPerMileUnits.length === 1 ? "" : "s"} with enough mileage data — highest is Unit {costPerMileUnits[0].unit} at {fmtPerMile(costPerMileUnits[0].perMile)}/mi.
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 8 }}>
+                Ranked highest cost/mile first.{" "}
+                {excludedFromRatio > 0 && `${excludedFromRatio} unit${excludedFromRatio === 1 ? "" : "s"} excluded — under ${MIN_MILES_FOR_RATIO} mi or no Samsara match this period, too little data for a reliable ratio.`}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 2 }}>
+                {costPerMileUnits.slice(0, 10).map((u, i) => (
+                  <LeaderboardRow
+                    key={u.unit}
+                    rank={i + 1}
+                    label={u.unit}
+                    sub={`${fmtMoney(u.total)} over ${u.miles.toLocaleString()} mi`}
+                    value={u.perMile}
+                    max={costPerMileMax}
+                    format={fmtPerMile}
+                    color="var(--clg-scarlet)"
+                    active={selected === u.unit}
+                    onClick={() => setSelected(u.unit)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </SectionCard>
+      )}
 
       <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", marginBottom: 4 }}>
         Top units by category
