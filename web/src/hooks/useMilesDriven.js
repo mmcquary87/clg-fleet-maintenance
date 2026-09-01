@@ -24,11 +24,25 @@ export function useMilesDriven(range) {
         startTime: new Date(range.start + "T00:00:00Z").toISOString(),
         endTime: new Date(range.end + "T23:59:59Z").toISOString(),
       },
-    }).then(({ data, error: fnError }) => {
+    }).then(async ({ data, error: fnError }) => {
       if (cancelled) return;
-      if (fnError) { setError(fnError.message); setMiles(null); }
-      else if (data?.error) { setError(data.error); setMiles(null); }
-      else { setMiles(data.totalMiles); }
+      if (fnError) {
+        // supabase-js's FunctionsHttpError.message is just "Edge Function
+        // returned a non-2xx status code" -- the function's own {error}
+        // body (the actually useful message) is on .context, a Response.
+        let message = fnError.message;
+        try {
+          const body = await fnError.context?.json();
+          if (body?.error) message = body.error;
+        } catch { /* context wasn't JSON -- keep the generic message */ }
+        setError(message);
+        setMiles(null);
+      } else if (data?.error) {
+        setError(data.error);
+        setMiles(null);
+      } else {
+        setMiles(data.totalMiles);
+      }
       setLoading(false);
     });
     return () => { cancelled = true; };
