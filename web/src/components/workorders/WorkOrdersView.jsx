@@ -24,7 +24,7 @@ const EXPORT_COLUMNS = [
   { label: "Chargeback driver", value: (o) => o.chargeback_driver_name },
 ];
 
-const STATUS_TABS = ["All", "Needs approval", "Open", "In Progress", "Closed"];
+const STATUS_TABS = ["All", "Needs approval", "Open", "In Progress", "Closed", "Voided"];
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -65,16 +65,19 @@ export default function WorkOrdersView({ initialCategory }) {
 
   const tabCounts = useMemo(() => ({
     All: orders.length,
-    "Needs approval": orders.filter((o) => o.approval_status === "needs_approval").length,
-    Open: orders.filter((o) => o.status === "Open").length,
-    "In Progress": orders.filter((o) => o.status === "In Progress").length,
-    Closed: orders.filter((o) => o.status === "Closed").length,
+    "Needs approval": orders.filter((o) => !o.voided && o.approval_status === "needs_approval").length,
+    Open: orders.filter((o) => !o.voided && o.status === "Open").length,
+    "In Progress": orders.filter((o) => !o.voided && o.status === "In Progress").length,
+    Closed: orders.filter((o) => !o.voided && o.status === "Closed").length,
+    Voided: orders.filter((o) => o.voided).length,
   }), [orders]);
 
   const filtered = useMemo(() => {
     return orders
       .filter((o) => {
         if (tab === "All") return true;
+        if (tab === "Voided") return o.voided;
+        if (o.voided) return false;
         if (tab === "Needs approval") return o.approval_status === "needs_approval";
         return o.status === tab;
       })
@@ -100,9 +103,9 @@ export default function WorkOrdersView({ initialCategory }) {
       });
   }, [orders, tab, category, unit, query]);
 
-  const totalCost = filtered.reduce((s, o) => s + (Number(o.cost) || 0), 0);
+  const totalCost = filtered.reduce((s, o) => s + (o.voided ? 0 : Number(o.cost) || 0), 0);
   const openCount = tabCounts.Open + tabCounts["In Progress"];
-  const openNoCostCount = orders.filter((o) => o.status !== "Closed" && !o.cost).length;
+  const openNoCostCount = orders.filter((o) => !o.voided && o.status !== "Closed" && !o.cost).length;
 
   return (
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1100, margin: "0 auto" }}>
@@ -203,7 +206,10 @@ export default function WorkOrdersView({ initialCategory }) {
                   <tr
                     key={o.id}
                     onClick={() => setOpenId(o.id)}
-                    style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer" }}
+                    style={{
+                      background: i % 2 ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer",
+                      opacity: o.voided ? 0.55 : 1,
+                    }}
                   >
                     <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)", whiteSpace: "nowrap" }}>
                       {o.wo_number || "—"}
@@ -225,7 +231,11 @@ export default function WorkOrdersView({ initialCategory }) {
                       {o.vendor?.name || "—"}
                     </td>
                     <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                      {o.approval_status === "needs_approval" ? <Badge tone="critical">Needs approval</Badge> : o.status}
+                      {o.voided ? (
+                        <Badge tone="neutral">Voided</Badge>
+                      ) : o.approval_status === "needs_approval" ? (
+                        <Badge tone="critical">Needs approval</Badge>
+                      ) : o.status}
                     </td>
                     <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: "var(--clg-text-muted)", fontFamily: "var(--clg-font-mono, monospace)" }}>
                       {o.date_opened || "—"}

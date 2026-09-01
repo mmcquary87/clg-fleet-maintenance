@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { X, Loader2, ExternalLink, FileWarning, Mail, Sparkles, Plus, Trash2, Pencil } from "lucide-react";
-import { Badge, Button, Input, Select } from "../../ds";
+import { X, Loader2, ExternalLink, FileWarning, Mail, Sparkles, Plus, Trash2, Pencil, Ban, RotateCcw } from "lucide-react";
+import { Badge, Button, Input, Select, Alert } from "../../ds";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import { useVendors } from "../../hooks/useVendors";
+import { useAuth } from "../../hooks/useAuth";
+import { useProfile } from "../../hooks/useProfile";
 import { supabase } from "../../lib/supabaseClient";
 import { buildMailto } from "../../lib/mailto";
 import { uploadReceipt, fileToBase64 } from "../../lib/invoiceFiles";
@@ -88,6 +90,13 @@ function emptyDetailsForm() {
 export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }) {
   const { order, loading, error, receiptUrl, reload } = useWorkOrder(workOrderId);
   const { vendors } = useVendors();
+  const { session } = useAuth();
+  const { canVoidWorkOrders } = useProfile(session?.user?.id);
+
+  const [voiding, setVoiding] = useState(false);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidBusy, setVoidBusy] = useState(false);
+  const [voidError, setVoidError] = useState(null);
   const [pendingFile, setPendingFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
@@ -135,6 +144,52 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       setStatusError(err.message);
     } finally {
       setStatusBusy(false);
+    }
+  };
+
+  const openVoidForm = () => {
+    setStatusError(null);
+    setClosing(false);
+    setEditingDetails(false);
+    setVoidReason("");
+    setVoidError(null);
+    setVoiding(true);
+  };
+
+  const confirmVoid = async () => {
+    setVoidBusy(true);
+    setVoidError(null);
+    try {
+      const { error: updateErr } = await supabase.from("work_orders").update({
+        voided: true,
+        voided_at: new Date().toISOString(),
+        voided_reason: voidReason.trim() || null,
+      }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+      setVoiding(false);
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setVoidError(err.message);
+    } finally {
+      setVoidBusy(false);
+    }
+  };
+
+  const unvoid = async () => {
+    setVoidBusy(true);
+    setVoidError(null);
+    try {
+      const { error: updateErr } = await supabase.from("work_orders").update({
+        voided: false, voided_at: null, voided_reason: null,
+      }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setVoidError(err.message);
+    } finally {
+      setVoidBusy(false);
     }
   };
 
@@ -346,6 +401,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                   {order.category}
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  {order.voided && <Badge tone="neutral">Voided</Badge>}
                   {order.severity && <Badge tone={severityTone(order.severity)}>{order.severity}</Badge>}
                   {order.approval_status === "needs_approval" ? (
                     <Badge tone="critical">Needs approval</Badge>
@@ -353,7 +409,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                     <Badge tone="neutral">{order.status}</Badge>
                   )}
                 </div>
-                {!closing && !editingDetails && (
+                {!closing && !editingDetails && !voiding && !order.voided && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                     <Button size="sm" variant="outline" iconLeft={<Pencil size={12} />} onClick={openDetailsForm} disabled={statusBusy}>
                       Edit details
@@ -383,9 +439,22 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                         Reopen
                       </Button>
                     )}
+                    {canVoidWorkOrders && (
+                      <Button size="sm" variant="outline" iconLeft={<Ban size={12} />} onClick={openVoidForm} disabled={statusBusy}>
+                        Void
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {order.voided && canVoidWorkOrders && (
+                  <div style={{ marginTop: 12 }}>
+                    <Button size="sm" variant="outline" iconLeft={voidBusy ? <Loader2 size={12} className="spin" /> : <RotateCcw size={12} />} onClick={unvoid} disabled={voidBusy}>
+                      Un-void
+                    </Button>
                   </div>
                 )}
                 {statusError && !closing && !editingDetails && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 8 }}>{statusError}</div>}
+                {voidError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 8 }}>{voidError}</div>}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {shopHeadsUpMailto(order) && (
@@ -398,6 +467,37 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
             </div>
 
             <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+              {order.voided && (
+                <Alert tone="critical" title="This work order is voided">
+                  It's excluded from spend, cost/mile, and board tracking everywhere in the app.
+                  {order.voided_reason && <div style={{ marginTop: 4 }}>Reason: {order.voided_reason}</div>}
+                  {order.voided_at && <div style={{ marginTop: 4, fontSize: 11.5, opacity: 0.8 }}>Voided {new Date(order.voided_at).toLocaleString()}</div>}
+                </Alert>
+              )}
+
+              {voiding && (
+                <div style={{ border: "1px solid var(--clg-scarlet)", borderRadius: "var(--clg-radius-md)", padding: 16, background: "var(--clg-surface-subtle)" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-scarlet)", marginBottom: 12 }}>
+                    Void this work order
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--clg-text-body)", marginBottom: 12 }}>
+                    It stays in the record for history, but is removed from spend, cost/mile, and board tracking until un-voided.
+                  </div>
+                  <FormField label="Reason (optional)">
+                    <Input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="e.g. duplicate entry, entered on wrong unit" />
+                  </FormField>
+                  {voidError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 10 }}>{voidError}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <Button size="sm" onClick={confirmVoid} disabled={voidBusy} iconLeft={voidBusy ? <Loader2 size={13} className="spin" /> : <Ban size={13} />}>
+                      Confirm void
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setVoiding(false)} disabled={voidBusy}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {closing && (
                 <div style={{ border: "1px solid var(--clg-royal)", borderRadius: "var(--clg-radius-md)", padding: 16, background: "var(--clg-surface-subtle)" }}>
                   <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-royal)", marginBottom: 12 }}>

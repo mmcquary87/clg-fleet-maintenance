@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     );
 
     const { data: profiles, error: profilesErr } = await adminClient
-      .from("profiles").select("id, full_name, role, can_edit_roster, created_at");
+      .from("profiles").select("id, full_name, role, can_edit_roster, can_void_work_orders, created_at");
     if (profilesErr) throw profilesErr;
 
     // auth.admin.listUsers pages at up to 1000 per call — fine for CLG's headcount.

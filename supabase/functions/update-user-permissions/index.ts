@@ -40,27 +40,41 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { userId, canEditRoster } = await req.json();
+    const { userId, canEditRoster, canVoidWorkOrders } = await req.json();
     if (!userId || typeof userId !== "string") {
       return new Response(JSON.stringify({ error: "userId is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (typeof canEditRoster !== "boolean") {
-      return new Response(JSON.stringify({ error: "canEditRoster (boolean) is required" }), {
+    if (canEditRoster === undefined && canVoidWorkOrders === undefined) {
+      return new Response(JSON.stringify({ error: "canEditRoster and/or canVoidWorkOrders (boolean) is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (canEditRoster !== undefined && typeof canEditRoster !== "boolean") {
+      return new Response(JSON.stringify({ error: "canEditRoster must be a boolean" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (canVoidWorkOrders !== undefined && typeof canVoidWorkOrders !== "boolean") {
+      return new Response(JSON.stringify({ error: "canVoidWorkOrders must be a boolean" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const patch: Record<string, boolean> = {};
+    if (canEditRoster !== undefined) patch.can_edit_roster = canEditRoster;
+    if (canVoidWorkOrders !== undefined) patch.can_void_work_orders = canVoidWorkOrders;
 
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
     const { error: updateErr } = await adminClient
-      .from("profiles").update({ can_edit_roster: canEditRoster }).eq("id", userId);
+      .from("profiles").update(patch).eq("id", userId);
     if (updateErr) throw updateErr;
 
-    return new Response(JSON.stringify({ updated: true, userId, canEditRoster }), {
+    return new Response(JSON.stringify({ updated: true, userId, ...patch }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {

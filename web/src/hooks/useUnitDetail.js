@@ -38,7 +38,7 @@ export function useUnitDetail(unitId) {
     setError(null);
     const [unitRes, ordersRes, defectsRes, faultsRes, tripRes, hosRes] = await Promise.all([
       supabase.from("units").select(UNIT_SELECT).eq("id", unitId).single(),
-      supabase.from("work_orders").select(ORDER_SELECT).eq("unit_id", unitId).order("date_opened", { ascending: false }),
+      supabase.from("work_orders").select(ORDER_SELECT).eq("unit_id", unitId).eq("voided", false).order("date_opened", { ascending: false }),
       supabase.from("dvir_defects").select("id, defect_type, created_at").eq("unit_id", unitId).eq("is_resolved", false)
         .order("created_at", { ascending: false }).limit(5),
       supabase.from("fault_events").select("id, dtc_code, dtc_description, samsara_reading_time, light_severity")
