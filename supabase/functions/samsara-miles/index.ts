@@ -8,6 +8,12 @@
 // there's no dependency on catching a reading right at the start/end of
 // the range.
 //
+// Trucks only, by design (per CLG, 2026-09-01) -- trailers have no engine/
+// fuel system and will never report real distanceTraveledMeters here, so
+// including them just produced noisy "matched but no data" exclusions on
+// the By Unit page for every trailer that happens to carry a Samsara GPS
+// tracker, not a real gap.
+//
 // The original version of this function pulled obdOdometerMeters from
 // /fleet/vehicles/stats/history and diffed the first vs. last reading --
 // but unlike every other Samsara function in this repo (samsara-sync,
@@ -59,11 +65,21 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { data: units, error: unitsErr } = await supabase
-      .from("units").select("id, number, samsara_vehicle_id").not("samsara_vehicle_id", "is", null);
-    if (unitsErr) throw unitsErr;
+    // Active trucks regardless of Samsara match, so the response can show
+    // exactly how many are missing samsara_vehicle_id entirely -- that gap
+    // (not a Samsara API issue) is the leading suspect for Cost/Mile
+    // undercounting vs. Samsara's own dashboard totals.
+    const { data: allActiveTrucks, error: allTrucksErr } = await supabase
+      .from("units").select("id, number, samsara_vehicle_id").eq("type", "Truck").eq("is_active", true);
+    if (allTrucksErr) throw allTrucksErr;
+    const unmatchedTrucks = allActiveTrucks.filter((u) => !u.samsara_vehicle_id).map((u) => u.number);
+
+    const units = allActiveTrucks.filter((u) => u.samsara_vehicle_id);
     if (units.length === 0) {
-      return new Response(JSON.stringify({ totalMiles: 0, perUnit: [], unitsWithSamsara: 0 }), {
+      return new Response(JSON.stringify({
+        totalMiles: 0, perUnit: [], unitsWithSamsara: 0,
+        activeTrucks: allActiveTrucks.length, unmatchedTruckCount: unmatchedTrucks.length, unmatchedTruckSample: unmatchedTrucks.slice(0, 20),
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -99,10 +115,14 @@ Deno.serve(async (req) => {
     }
 
     const perUnit: { unitId: string; unitNumber: string; miles: number }[] = [];
+    const matchedButNoData: string[] = [];
     let totalMiles = 0;
     for (const u of units) {
       const miles = milesByUnitId.get(u.id);
-      if (miles == null) continue;
+      if (miles == null) {
+        matchedButNoData.push(u.number);
+        continue;
+      }
       perUnit.push({ unitId: u.id, unitNumber: u.number, miles: Math.round(miles) });
       totalMiles += miles;
     }
@@ -111,6 +131,22 @@ Deno.serve(async (req) => {
       totalMiles: Math.round(totalMiles),
       perUnit,
       unitsWithSamsara: units.length,
+      // unitsWithSamsara counts trucks with a samsara_vehicle_id set --
+      // matchedButNoData is the subset of those that Samsara's own report
+      // never returned a vehicleReports entry for in this window at all
+      // (as opposed to genuinely having 0 miles, which the report would
+      // still return a row for). Trailers are excluded from this query
+      // entirely (no engine/fuel data to report), so any nonzero count
+      // here is a real truck-side gap worth checking, not expected noise.
+      matchedButNoDataCount: matchedButNoData.length,
+      matchedButNoDataSample: matchedButNoData.slice(0, 20),
+      // Total active trucks vs. how many actually have a samsara_vehicle_id
+      // at all -- a gap here (this app's own units.samsara_vehicle_id
+      // never set) is a leading suspect for undercounting vs. Samsara's own
+      // dashboard totals, distinct from anything the Samsara API is doing.
+      activeTrucks: allActiveTrucks.length,
+      unmatchedTruckCount: unmatchedTrucks.length,
+      unmatchedTruckSample: unmatchedTrucks.slice(0, 20),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error

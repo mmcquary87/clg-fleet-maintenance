@@ -43,7 +43,7 @@ function fmtPerMile(n) {
 function unitTotals(records) {
   const m = {};
   records.forEach((r) => {
-    if (!m[r.unit]) m[r.unit] = { unit: r.unit, total: 0, count: 0, categories: new Set() };
+    if (!m[r.unit]) m[r.unit] = { unit: r.unit, unitType: r.unitType, total: 0, count: 0, categories: new Set() };
     m[r.unit].total += r.cost;
     m[r.unit].count += 1;
     m[r.unit].categories.add(r.category);
@@ -97,7 +97,11 @@ export default function UnitView({ records, range }) {
   const [typeFilter, setTypeFilter] = useState("All");
   const [ownershipSort, setOwnershipSort] = useState("highest");
   const [selected, setSelected] = useState(null);
-  const { perUnit: milesPerUnit, loading: milesLoading, error: milesError } = useMilesDriven(range);
+  const {
+    perUnit: milesPerUnit, matchedButNoDataCount, matchedButNoDataSample,
+    unmatchedTruckCount, unmatchedTruckSample,
+    loading: milesLoading, error: milesError,
+  } = useMilesDriven(range);
 
   const filteredRecords = useMemo(
     () => records.filter((r) => typeFilter === "All" || r.unitType === typeFilter),
@@ -114,15 +118,18 @@ export default function UnitView({ records, range }) {
   }, [units, ownershipSort, query]);
   const ownershipMax = Math.max(...ownershipUnits.map((u) => u.total), 1);
 
-  // Cost/mile per unit -- only for units with a real Samsara mileage match
-  // above MIN_MILES_FOR_RATIO this period; everything else is excluded from
-  // the ranking rather than shown as a misleadingly huge or tiny ratio.
+  // Cost/mile per unit -- trucks only (trailers don't get their own trip
+  // mileage in Alvys -- a trip's TotalMileage is attributed to the Truck,
+  // not a trailer -- not a data gap, just not applicable), and only above
+  // MIN_MILES_FOR_RATIO this period; everything else is excluded from the
+  // ranking rather than shown as a misleadingly huge or tiny ratio.
   const milesByUnitNumber = useMemo(
     () => new Map(milesPerUnit.map((u) => [u.unitNumber, u.miles])),
     [milesPerUnit],
   );
+  const truckUnits = useMemo(() => units.filter((u) => u.unitType === "Truck"), [units]);
   const costPerMileUnits = useMemo(() => {
-    return units
+    return truckUnits
       .map((u) => {
         const miles = milesByUnitNumber.get(u.unit);
         if (miles == null || miles < MIN_MILES_FOR_RATIO) return null;
@@ -130,8 +137,8 @@ export default function UnitView({ records, range }) {
       })
       .filter(Boolean)
       .sort((a, b) => b.perMile - a.perMile);
-  }, [units, milesByUnitNumber]);
-  const excludedFromRatio = units.length - costPerMileUnits.length;
+  }, [truckUnits, milesByUnitNumber]);
+  const excludedFromRatio = truckUnits.length - costPerMileUnits.length;
   const fleetAvgPerMile = costPerMileUnits.length > 0
     ? costPerMileUnits.reduce((s, u) => s + u.total, 0) / costPerMileUnits.reduce((s, u) => s + u.miles, 0)
     : null;
@@ -282,17 +289,27 @@ export default function UnitView({ records, range }) {
             <div style={{ fontSize: 12.5, color: "var(--clg-scarlet)", padding: "10px 0" }}>{milesError}</div>
           ) : costPerMileUnits.length === 0 ? (
             <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", padding: "10px 0" }}>
-              No unit has at least {MIN_MILES_FOR_RATIO} mi of Samsara-matched mileage in this range yet.
+              No truck has at least {MIN_MILES_FOR_RATIO} mi of Alvys-matched mileage in this range yet.
             </div>
           ) : (
             <>
               <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginBottom: 8, lineHeight: 1.5 }}>
-                Fleet-wide average is <strong style={{ color: "var(--clg-navy)" }}>{fmtPerMile(fleetAvgPerMile)}/mi</strong> across {costPerMileUnits.length} unit{costPerMileUnits.length === 1 ? "" : "s"} with enough mileage data — highest is Unit {costPerMileUnits[0].unit} at {fmtPerMile(costPerMileUnits[0].perMile)}/mi.
+                Fleet-wide average is <strong style={{ color: "var(--clg-navy)" }}>{fmtPerMile(fleetAvgPerMile)}/mi</strong> across {costPerMileUnits.length} truck{costPerMileUnits.length === 1 ? "" : "s"} with enough mileage data — highest is Unit {costPerMileUnits[0].unit} at {fmtPerMile(costPerMileUnits[0].perMile)}/mi.
               </div>
               <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 8 }}>
-                Ranked highest cost/mile first.{" "}
-                {excludedFromRatio > 0 && `${excludedFromRatio} unit${excludedFromRatio === 1 ? "" : "s"} excluded — under ${MIN_MILES_FOR_RATIO} mi or no Samsara match this period, too little data for a reliable ratio.`}
+                Ranked highest cost/mile first. Trailers don't accrue their own mileage, so this is trucks only.{" "}
+                {excludedFromRatio > 0 && `${excludedFromRatio} truck${excludedFromRatio === 1 ? "" : "s"} excluded — under ${MIN_MILES_FOR_RATIO} mi or no Alvys match this period, too little data for a reliable ratio.`}
               </div>
+              {matchedButNoDataCount > 0 && (
+                <div style={{ fontSize: 11.5, color: "var(--clg-scarlet)", marginBottom: 8, lineHeight: 1.5 }}>
+                  {matchedButNoDataCount} unit{matchedButNoDataCount === 1 ? "" : "s"} linked to Alvys had zero completed trips for this range at all (not just under {MIN_MILES_FOR_RATIO} mi) — likely just didn't run this period: {matchedButNoDataSample.slice(0, 8).join(", ")}{matchedButNoDataCount > 8 ? ", …" : ""}.
+                </div>
+              )}
+              {unmatchedTruckCount > 0 && (
+                <div style={{ fontSize: 11.5, color: "var(--clg-scarlet)", marginBottom: 8, lineHeight: 1.5 }}>
+                  {unmatchedTruckCount} active truck{unmatchedTruckCount === 1 ? "" : "s"} {unmatchedTruckCount === 1 ? "has" : "have"} no Alvys asset linked at all, so {unmatchedTruckCount === 1 ? "it never counts" : "they never count"} toward miles driven for any period — this is a gap in this app's own unit-to-Alvys matching, not something Alvys's API is doing: {unmatchedTruckSample.slice(0, 8).join(", ")}{unmatchedTruckCount > 8 ? ", …" : ""}.
+                </div>
+              )}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 2 }}>
                 {costPerMileUnits.slice(0, 10).map((u, i) => (
                   <LeaderboardRow
