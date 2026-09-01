@@ -7,7 +7,7 @@ import { useUsersAdmin } from "../../hooks/useUsersAdmin";
 const ROLES = ["dispatcher", "mechanic", "admin"];
 
 function UsersPanel() {
-  const { users, loading, error, setCanEditRoster } = useUsersAdmin();
+  const { users, loading, error, setCanEditRoster, setCanVoidWorkOrders } = useUsersAdmin();
   const [toggleError, setToggleError] = useState(null);
 
   const onToggle = async (userId, next) => {
@@ -16,11 +16,18 @@ function UsersPanel() {
     if (err) setToggleError(err);
   };
 
+  const onToggleVoid = async (userId, next) => {
+    setToggleError(null);
+    const err = await setCanVoidWorkOrders(userId, next);
+    if (err) setToggleError(err);
+  };
+
   return (
     <Card>
       <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Users</h3>
       <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
         Roster rights controls who can add, edit, or remove records on the driver availability roster.
+        Void rights controls who can void/un-void a work order. Admins always have both.
       </p>
 
       {error && <Alert tone="critical" title="Couldn't load users" style={{ marginBottom: 16 }}>{error}</Alert>}
@@ -36,9 +43,9 @@ function UsersPanel() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
           <thead>
             <tr>
-              {["Name", "Email", "Role", "Roster rights"].map((h) => (
+              {["Name", "Email", "Role", "Roster rights", "Void rights"].map((h) => (
                 <th key={h} style={{
-                  textAlign: h === "Roster rights" ? "right" : "left", padding: "8px 10px", fontFamily: "var(--clg-font-heading)",
+                  textAlign: h === "Roster rights" || h === "Void rights" ? "right" : "left", padding: "8px 10px", fontFamily: "var(--clg-font-heading)",
                   fontSize: 10.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
                   color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)",
                 }}>{h}</th>
@@ -59,6 +66,9 @@ function UsersPanel() {
                 </td>
                 <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid var(--clg-border-subtle)" }}>
                   <Toggle checked={u.can_edit_roster} onChange={(next) => onToggle(u.id, next)} />
+                </td>
+                <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                  <Toggle checked={u.can_void_work_orders} onChange={(next) => onToggleVoid(u.id, next)} />
                 </td>
               </tr>
             ))}

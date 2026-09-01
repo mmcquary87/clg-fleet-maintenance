@@ -32,6 +32,7 @@ export function useWorkOrders(range) {
         "id, category, cost, date_closed, invoice_ref, description, unit:units(number, type), vendor:vendors(name)"
       )
       .eq("status", "Closed")
+      .eq("voided", false)
       .order("date_closed", { ascending: false });
 
     if (range?.start) query = query.gte("date_closed", range.start);

@@ -17,6 +17,7 @@ export function useDeductions(range) {
         "invoice_ref, po_number, unit:units(number), vendor:vendors(name)"
       )
       .eq("is_chargeback", true)
+      .eq("voided", false)
       .order("date_opened", { ascending: false });
 
     if (range?.start) query = query.gte("date_opened", range.start);

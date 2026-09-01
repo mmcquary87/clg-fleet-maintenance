@@ -41,5 +41,17 @@ export function useUsersAdmin() {
     return null;
   };
 
-  return { users, loading, error, reload: load, setCanEditRoster };
+  const setCanVoidWorkOrders = async (userId, canVoidWorkOrders) => {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, can_void_work_orders: canVoidWorkOrders } : u)));
+    const { data, error: fnError } = await supabase.functions.invoke("update-user-permissions", {
+      body: { userId, canVoidWorkOrders },
+    });
+    if (fnError || data?.error) {
+      await load(); // revert to server state on failure
+      return fnError?.message || data?.error;
+    }
+    return null;
+  };
+
+  return { users, loading, error, reload: load, setCanEditRoster, setCanVoidWorkOrders };
 }

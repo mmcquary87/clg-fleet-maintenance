@@ -18,6 +18,7 @@ export function useVendorActivity() {
       .from("work_orders")
       .select("vendor_id, cost, status, date_opened, date_closed, unit:units(number)")
       .not("vendor_id", "is", null)
+      .eq("voided", false)
       .order("date_opened", { ascending: true })
       .limit(2000);
 

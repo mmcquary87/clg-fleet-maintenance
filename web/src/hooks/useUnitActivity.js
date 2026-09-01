@@ -17,6 +17,7 @@ export function useUnitActivity() {
     const { data, error: err } = await supabase
       .from("work_orders")
       .select("unit_id, cost, status, date_closed, severity, category, complaint, description, wo_number, vendor:vendors(name)")
+      .eq("voided", false)
       .order("date_opened", { ascending: false })
       .limit(1000);
 

@@ -32,6 +32,7 @@ export function useBoard() {
       .from("work_orders")
       .select("unit_id", { count: "exact", head: true })
       .eq("status", "Closed")
+      .eq("voided", false)
       .eq("date_closed", today);
     setClosedToday(count ?? 0);
 
@@ -45,6 +46,7 @@ export function useBoard() {
         "vendor:vendors(id, name)"
       )
       .neq("status", "Closed")
+      .eq("voided", false)
       .order("date_opened", { ascending: true });
 
     if (err) {
