@@ -71,18 +71,13 @@ Deno.serve(async (req) => {
     const vehicleIdToUnit = new Map(units.map((u: any) => [u.samsara_vehicle_id, u]));
     const vehicleIds = units.map((u: any) => u.samsara_vehicle_id).join(",");
 
-    // The fuel-energy report wants dates (YYYY-MM-DD); useMilesDriven
-    // passes full ISO datetimes, so trim to the date part.
-    const startDate = startTime.slice(0, 10);
-    const endDate = endTime.slice(0, 10);
-
     const milesByUnitId = new Map<string, number>();
     let after: string | undefined;
 
     while (true) {
       const url = new URL(`${SAMSARA_BASE}/fleet/reports/vehicles/fuel-energy`);
-      url.searchParams.set("startDate", startDate);
-      url.searchParams.set("endDate", endDate);
+      url.searchParams.set("startDate", startTime);
+      url.searchParams.set("endDate", endTime);
       url.searchParams.set("vehicleIds", vehicleIds);
       url.searchParams.set("energyType", "fuel");
       if (after) url.searchParams.set("after", after);
