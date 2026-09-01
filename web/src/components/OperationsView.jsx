@@ -225,6 +225,18 @@ export default function OperationsView() {
         })),
       };
     }
+    if (kpi.no === 17) {
+      if (!homeTimeData || homeTimeData.totalPlannedEvents === 0) return null;
+      return {
+        title: "PLANNED HOME-TIME DATES",
+        note: "Unconfirmed = no trip conflict, but no matching Alvys event (Hometime/Restart/Vacation/SickOrEmergency) either — doesn't count toward the percentage above.",
+        items: [
+          { key: "honored", label: "Confirmed home", valueText: `${homeTimeData.honoredEvents}`, status: "green" },
+          { key: "unconfirmed", label: "Unconfirmed", valueText: `${homeTimeData.unconfirmedEvents ?? 0}`, status: "yellow" },
+          { key: "violated", label: "Violated", valueText: `${homeTimeData.violatedEvents}`, status: "red" },
+        ],
+      };
+    }
     if (kpi.no === 16) {
       if (!tripsData) return null;
       const fmtHrs = (v) => (v == null ? "—" : `${v.toFixed(1)} hrs`);
@@ -285,7 +297,7 @@ export default function OperationsView() {
                   }
                   caveat={
                     kpi.no === 17
-                      ? `Covers ${homeTimeData?.totalPlannedEvents ?? 0} recurring home-time occurrences checked against Alvys trip activity — not yet planned-day-off exceptions or approval-status filtering.${homeTimeData?.unlinkedSchedules ? ` ${homeTimeData.unlinkedSchedules} schedule(s) excluded (not linked to an Alvys driver).` : ""}`
+                      ? `Covers ${homeTimeData?.totalPlannedEvents ?? 0} recurring home-time occurrences. Violated = an actual trip covered the date; Confirmed = no trip and a real Alvys event (Hometime/Restart/Vacation/SickOrEmergency) covers it; Unconfirmed = neither — not yet planned-day-off exceptions or approval-status filtering.${homeTimeData?.unlinkedSchedules ? ` ${homeTimeData.unlinkedSchedules} schedule(s) excluded (not linked to an Alvys driver).` : ""}`
                       : kpi.no === 13
                       ? `${driveHourData?.driversWithActivity ?? 0} of ${driveHourData?.driversConsidered ?? 0} active drivers had HOS activity this window, across ${driveHourData?.totalWorkingDays ?? 0} working-days. "Available capacity" = 11 legal drive hrs × working days, not a roster schedule.`
                       : kpi.no === 2
