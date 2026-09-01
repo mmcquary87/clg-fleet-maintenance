@@ -97,7 +97,11 @@ export default function UnitView({ records, range }) {
   const [typeFilter, setTypeFilter] = useState("All");
   const [ownershipSort, setOwnershipSort] = useState("highest");
   const [selected, setSelected] = useState(null);
-  const { perUnit: milesPerUnit, matchedButNoDataCount, matchedButNoDataSample, loading: milesLoading, error: milesError } = useMilesDriven(range);
+  const {
+    perUnit: milesPerUnit, matchedButNoDataCount, matchedButNoDataSample,
+    unmatchedTruckCount, unmatchedTruckSample,
+    loading: milesLoading, error: milesError,
+  } = useMilesDriven(range);
 
   const filteredRecords = useMemo(
     () => records.filter((r) => typeFilter === "All" || r.unitType === typeFilter),
@@ -299,6 +303,11 @@ export default function UnitView({ records, range }) {
               {matchedButNoDataCount > 0 && (
                 <div style={{ fontSize: 11.5, color: "var(--clg-scarlet)", marginBottom: 8, lineHeight: 1.5 }}>
                   {matchedButNoDataCount} unit{matchedButNoDataCount === 1 ? "" : "s"} matched to a Samsara vehicle returned zero mileage data for this range at all (not just under {MIN_MILES_FOR_RATIO} mi) — worth checking Samsara's own report directly for these, since a truck matched to Samsara silently missing from its report isn't expected: {matchedButNoDataSample.slice(0, 8).join(", ")}{matchedButNoDataCount > 8 ? ", …" : ""}.
+                </div>
+              )}
+              {unmatchedTruckCount > 0 && (
+                <div style={{ fontSize: 11.5, color: "var(--clg-scarlet)", marginBottom: 8, lineHeight: 1.5 }}>
+                  {unmatchedTruckCount} active truck{unmatchedTruckCount === 1 ? "" : "s"} {unmatchedTruckCount === 1 ? "has" : "have"} no Samsara vehicle linked at all, so {unmatchedTruckCount === 1 ? "it never counts" : "they never count"} toward miles driven for any period — this is a gap in this app's own unit-to-Samsara matching, not something Samsara's API is doing: {unmatchedTruckSample.slice(0, 8).join(", ")}{unmatchedTruckCount > 8 ? ", …" : ""}.
                 </div>
               )}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 2 }}>

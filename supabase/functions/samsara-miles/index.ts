@@ -65,11 +65,21 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { data: units, error: unitsErr } = await supabase
-      .from("units").select("id, number, samsara_vehicle_id").eq("type", "Truck").not("samsara_vehicle_id", "is", null);
-    if (unitsErr) throw unitsErr;
+    // Active trucks regardless of Samsara match, so the response can show
+    // exactly how many are missing samsara_vehicle_id entirely -- that gap
+    // (not a Samsara API issue) is the leading suspect for Cost/Mile
+    // undercounting vs. Samsara's own dashboard totals.
+    const { data: allActiveTrucks, error: allTrucksErr } = await supabase
+      .from("units").select("id, number, samsara_vehicle_id").eq("type", "Truck").eq("is_active", true);
+    if (allTrucksErr) throw allTrucksErr;
+    const unmatchedTrucks = allActiveTrucks.filter((u) => !u.samsara_vehicle_id).map((u) => u.number);
+
+    const units = allActiveTrucks.filter((u) => u.samsara_vehicle_id);
     if (units.length === 0) {
-      return new Response(JSON.stringify({ totalMiles: 0, perUnit: [], unitsWithSamsara: 0 }), {
+      return new Response(JSON.stringify({
+        totalMiles: 0, perUnit: [], unitsWithSamsara: 0,
+        activeTrucks: allActiveTrucks.length, unmatchedTruckCount: unmatchedTrucks.length, unmatchedTruckSample: unmatchedTrucks.slice(0, 20),
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -130,6 +140,13 @@ Deno.serve(async (req) => {
       // here is a real truck-side gap worth checking, not expected noise.
       matchedButNoDataCount: matchedButNoData.length,
       matchedButNoDataSample: matchedButNoData.slice(0, 20),
+      // Total active trucks vs. how many actually have a samsara_vehicle_id
+      // at all -- a gap here (this app's own units.samsara_vehicle_id
+      // never set) is a leading suspect for undercounting vs. Samsara's own
+      // dashboard totals, distinct from anything the Samsara API is doing.
+      activeTrucks: allActiveTrucks.length,
+      unmatchedTruckCount: unmatchedTrucks.length,
+      unmatchedTruckSample: unmatchedTrucks.slice(0, 20),
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error

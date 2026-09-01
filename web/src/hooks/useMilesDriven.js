@@ -1,24 +1,24 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
+const EMPTY_RESULT = {
+  miles: null, perUnit: [],
+  matchedButNoDataCount: 0, matchedButNoDataSample: [],
+  activeTrucks: 0, unmatchedTruckCount: 0, unmatchedTruckSample: [],
+};
+
 // range: { start: "YYYY-MM-DD", end: "YYYY-MM-DD" } | null
 // Cost-per-mile needs a bounded window (it's an odometer delta), so this
 // returns null (not 0) when there's no range selected — "All time" has no
 // well-defined start reading to diff against.
 export function useMilesDriven(range) {
-  const [miles, setMiles] = useState(null);
-  const [perUnit, setPerUnit] = useState([]);
-  const [matchedButNoDataCount, setMatchedButNoDataCount] = useState(0);
-  const [matchedButNoDataSample, setMatchedButNoDataSample] = useState([]);
+  const [result, setResult] = useState(EMPTY_RESULT);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!range?.start || !range?.end) {
-      setMiles(null);
-      setPerUnit([]);
-      setMatchedButNoDataCount(0);
-      setMatchedButNoDataSample([]);
+      setResult(EMPTY_RESULT);
       setError(null);
       return;
     }
@@ -42,26 +42,25 @@ export function useMilesDriven(range) {
           if (body?.error) message = body.error;
         } catch { /* context wasn't JSON -- keep the generic message */ }
         setError(message);
-        setMiles(null);
-        setPerUnit([]);
-        setMatchedButNoDataCount(0);
-        setMatchedButNoDataSample([]);
+        setResult(EMPTY_RESULT);
       } else if (data?.error) {
         setError(data.error);
-        setMiles(null);
-        setPerUnit([]);
-        setMatchedButNoDataCount(0);
-        setMatchedButNoDataSample([]);
+        setResult(EMPTY_RESULT);
       } else {
-        setMiles(data.totalMiles);
-        setPerUnit(data.perUnit ?? []);
-        setMatchedButNoDataCount(data.matchedButNoDataCount ?? 0);
-        setMatchedButNoDataSample(data.matchedButNoDataSample ?? []);
+        setResult({
+          miles: data.totalMiles,
+          perUnit: data.perUnit ?? [],
+          matchedButNoDataCount: data.matchedButNoDataCount ?? 0,
+          matchedButNoDataSample: data.matchedButNoDataSample ?? [],
+          activeTrucks: data.activeTrucks ?? 0,
+          unmatchedTruckCount: data.unmatchedTruckCount ?? 0,
+          unmatchedTruckSample: data.unmatchedTruckSample ?? [],
+        });
       }
       setLoading(false);
     });
     return () => { cancelled = true; };
   }, [range?.start, range?.end]);
 
-  return { miles, perUnit, matchedButNoDataCount, matchedButNoDataSample, loading, error };
+  return { ...result, loading, error };
 }
