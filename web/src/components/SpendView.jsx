@@ -62,7 +62,7 @@ export default function SpendView({ onGoToWorkOrders, onGoToUnits }) {
           ) : !error && (
             view === "company"
               ? <CompanyView records={records} range={range} onGoToWorkOrders={onGoToWorkOrders} onGoToUnits={onGoToUnits} />
-              : <UnitView records={records} />
+              : <UnitView records={records} range={range} />
           )}
         </>
       )}

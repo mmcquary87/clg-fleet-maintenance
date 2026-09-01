@@ -7,12 +7,14 @@ import { supabase } from "../lib/supabaseClient";
 // well-defined start reading to diff against.
 export function useMilesDriven(range) {
   const [miles, setMiles] = useState(null);
+  const [perUnit, setPerUnit] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!range?.start || !range?.end) {
       setMiles(null);
+      setPerUnit([]);
       setError(null);
       return;
     }
@@ -37,16 +39,19 @@ export function useMilesDriven(range) {
         } catch { /* context wasn't JSON -- keep the generic message */ }
         setError(message);
         setMiles(null);
+        setPerUnit([]);
       } else if (data?.error) {
         setError(data.error);
         setMiles(null);
+        setPerUnit([]);
       } else {
         setMiles(data.totalMiles);
+        setPerUnit(data.perUnit ?? []);
       }
       setLoading(false);
     });
     return () => { cancelled = true; };
   }, [range?.start, range?.end]);
 
-  return { miles, loading, error };
+  return { miles, perUnit, loading, error };
 }
