@@ -14,21 +14,28 @@
 // -- that's just the signed download URL's ~11-minute TTL, unrelated to
 // the certificate's real-world expiration.
 //
-// Safe to re-run -- full-snapshot upsert into unit_maintenance_due
-// (kind = 'dot_inspection'), stale rows (e.g. a deactivated unit) deleted
-// by synced_at cutoff. Requires ALVYS_CLIENT_ID/ALVYS_CLIENT_SECRET +
-// service role.
+// INCREMENTAL, not full-snapshot: a live run against the whole fleet (241
+// units) got 429'd on ~185 of them at both CONCURRENCY=8 and CONCURRENCY=3
+// -- barely different, which points to a coarser per-minute/per-hour
+// account-wide limit (already partly used up from repeated test runs),
+// not just this run's own request pacing. No amount of intra-run
+// throttling fixes that in one shot, so instead this only processes units
+// that don't have a resolved answer yet (no row at all, or a previous
+// 'fetch_error') and caps itself at BATCH_SIZE per invocation --
+// re-running it (a few times, spaced a bit apart) converges on the whole
+// fleet without re-fighting the same rate limit budget on units already
+// answered. Units already resolved as 'alvys_certificate' or
+// 'no_document_on_file' are skipped entirely on subsequent runs.
+//
+// Requires ALVYS_CLIENT_ID/ALVYS_CLIENT_SECRET + service role.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ALVYS_TOKEN_URL = "https://auth.alvys.com/oauth/token";
 const ALVYS_API_BASE = "https://integrations.alvys.com/api/p/v1.0";
-// A live run against the real fleet (241 units) at CONCURRENCY=8 got
-// 429'd on 184 of them -- Alvys's rate limit is tighter than that. Lower
-// concurrency plus retry-with-backoff on 429 specifically (not other
-// errors, which should fail fast) gets through the whole fleet reliably.
-const CONCURRENCY = 3;
-const MAX_429_RETRIES = 5;
+const CONCURRENCY = 2;
+const MAX_429_RETRIES = 4;
+const BATCH_SIZE = 60;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,7 +79,7 @@ async function fetchWithRetry(url: string, options: RequestInit): Promise<Respon
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(url, options);
     if (res.status !== 429 || attempt >= MAX_429_RETRIES) return res;
-    await new Promise((r) => setTimeout(r, 500 * 2 ** attempt)); // 500ms, 1s, 2s, 4s, 8s
+    await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt)); // 1s, 2s, 4s, 8s
   }
 }
 
@@ -99,10 +106,20 @@ Deno.serve(async (req) => {
     );
     const token = await getAlvysToken();
 
-    const { data: units, error: unitsErr } = await supabase
+    const { data: allUnits, error: unitsErr } = await supabase
       .from("units").select("id, number, type, alvys_asset_id")
       .in("type", ["Truck", "Trailer"]).not("alvys_asset_id", "is", null);
     if (unitsErr) throw unitsErr;
+
+    const { data: existing, error: existingErr } = await supabase
+      .from("unit_maintenance_due").select("unit_id, basis").eq("kind", "dot_inspection");
+    if (existingErr) throw existingErr;
+    const resolvedUnitIds = new Set(
+      existing.filter((r) => r.basis === "alvys_certificate" || r.basis === "no_document_on_file").map((r) => r.unit_id)
+    );
+
+    const remaining = allUnits.filter((u) => !resolvedUnitIds.has(u.id));
+    const units = remaining.slice(0, BATCH_SIZE);
 
     const runStartedAt = new Date().toISOString();
     let noDocument = 0;
@@ -138,7 +155,9 @@ Deno.serve(async (req) => {
         const statusKey = message.slice(0, 3);
         errorsByStatus[statusKey] = (errorsByStatus[statusKey] ?? 0) + 1;
         if (errorSamples.length < 15) errorSamples.push({ unitNumber: u.number, type: u.type, message });
-        return { unit_id: u.id, kind: "dot_inspection", label: "Annual DOT Inspection", due_date: null, basis: "no_document_on_file", synced_at: runStartedAt };
+        // 'fetch_error', not 'no_document_on_file' -- next run retries this
+        // unit instead of treating "couldn't check" as "confirmed absent."
+        return { unit_id: u.id, kind: "dot_inspection", label: "Annual DOT Inspection", due_date: null, basis: "fetch_error", synced_at: runStartedAt };
       }
     });
 
@@ -148,13 +167,12 @@ Deno.serve(async (req) => {
       if (upsertErr) throw upsertErr;
     }
 
-    const { error: cleanupErr } = await supabase
-      .from("unit_maintenance_due").delete().eq("kind", "dot_inspection").lt("synced_at", runStartedAt);
-    if (cleanupErr) throw cleanupErr;
-
     const fetchErrors = Object.values(errorsByStatus).reduce((s, n) => s + n, 0);
     return new Response(JSON.stringify({
-      unitsChecked: units.length,
+      totalUnits: allUnits.length,
+      alreadyResolvedBeforeThisRun: resolvedUnitIds.size,
+      processedThisRun: units.length,
+      stillRemainingAfterThisRun: remaining.length - units.length,
       withCertificate: rows.filter((r) => r.basis === "alvys_certificate").length,
       noDocumentOnFile: noDocument,
       fetchErrors,
