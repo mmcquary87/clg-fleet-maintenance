@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Loader2, ExternalLink, FileWarning, Mail, Sparkles, Plus, Trash2, Pencil, Ban, RotateCcw } from "lucide-react";
 import { Badge, Button, Input, Select, Alert } from "../../ds";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
@@ -114,6 +114,26 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState(null);
 
+  // For the in-house labor+parts cost estimate below -- fetched once, not
+  // per work order, same singleton-row config IntakeWizard reads for
+  // approval_threshold.
+  const [laborRate, setLaborRate] = useState(0);
+  useEffect(() => {
+    supabase.from("app_settings").select("shop_labor_rate").single()
+      .then(({ data }) => setLaborRate(Number(data?.shop_labor_rate) || 0));
+  }, []);
+
+  const partsCost = (order?.parts ?? []).reduce((s, p) => s + (Number(p.quantity) || 0) * (Number(p.unit_cost) || 0), 0);
+  const laborCost = (Number(order?.labor_hours) || 0) * laborRate;
+  const inHouseCost = partsCost + laborCost;
+  const hasMechanicData = order && (order.labor_hours != null || order.parts?.length > 0);
+
+  const saveUnitCost = async (partId, raw) => {
+    const val = raw.trim() === "" ? null : Number(raw);
+    await supabase.from("work_order_parts").update({ unit_cost: val }).eq("id", partId);
+    await reload();
+  };
+
   const attachReceipt = async () => {
     if (!pendingFile || !order) return;
     setUploading(true);
@@ -201,8 +221,12 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       poNumber: order.po_number ?? "",
       dateClosed: todayIso(),
     });
+    // If there's no cost on file yet but the mechanic logged parts/hours,
+    // prefill with that estimate instead of blank -- still just a starting
+    // point the closer reviews/edits, not treated as final.
+    const prefillCost = order.cost ? order.cost : (inHouseCost > 0 ? Math.round(inHouseCost * 100) / 100 : "");
     setCloseLineItems([
-      emptyCloseLineItem({ category: order.category, description: order.description || order.complaint || "", cost: order.cost ?? "" }),
+      emptyCloseLineItem({ category: order.category, description: order.description || order.complaint || "", cost: prefillCost }),
     ]);
     setCloseFile(null);
     setCloseScanApplied(false);
@@ -704,15 +728,38 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                   <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
                     Parts used (logged by mechanic)
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {order.parts.map((p) => (
-                      <span
+                      <div
                         key={p.id}
-                        style={{ fontSize: 12.5, color: "var(--clg-text-body)", background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-pill)", padding: "4px 10px" }}
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                          fontSize: 12.5, color: "var(--clg-text-body)", background: "var(--clg-surface-subtle)",
+                          borderRadius: "var(--clg-radius-sm)", padding: "6px 10px",
+                        }}
                       >
-                        {p.part_name} × {p.quantity}
-                      </span>
+                        <span>{p.part_name} × {p.quantity}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--clg-text-muted)", flexShrink: 0 }}>
+                          $
+                          <input
+                            type="number" min="0" step="0.01" defaultValue={p.unit_cost ?? ""} placeholder="cost each"
+                            onBlur={(e) => saveUnitCost(p.id, e.target.value)}
+                            style={{ width: 74, fontSize: 12, padding: "3px 6px", border: "1px solid var(--clg-border-default)", borderRadius: "var(--clg-radius-sm)" }}
+                          />
+                          each
+                        </span>
+                      </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {hasMechanicData && (
+                <div style={{ fontSize: 12.5, color: "var(--clg-text-body)", background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-sm)", padding: "10px 12px" }}>
+                  <strong style={{ color: "var(--clg-navy)" }}>Estimated in-house cost: {money(inHouseCost)}</strong>
+                  <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>
+                    {money(partsCost)} parts + {order.labor_hours ?? 0} hr × {money(laborRate)}/hr labor
+                    {laborRate === 0 && order.labor_hours ? " — set a shop labor rate in Settings to price labor" : ""}
                   </div>
                 </div>
               )}
