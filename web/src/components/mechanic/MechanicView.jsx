@@ -141,6 +141,9 @@ function RepairSheet({ workOrderId, onBack }) {
   const [saveError, setSaveError] = useState(null);
   const [saved, setSaved] = useState(false);
   const [removingPartId, setRemovingPartId] = useState(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   // Seed the editable fields once the order loads. useWorkOrder starts out
   // with order === null, so this can't happen in useState's initializer --
@@ -167,6 +170,27 @@ function RepairSheet({ workOrderId, onBack }) {
       await reload();
     } finally {
       setRemovingPartId(null);
+    }
+  };
+
+  // A real (hard) delete, not the office-facing void feature -- this is
+  // for a job that shouldn't exist at all (mechanic started it by mistake,
+  // wrong unit, duplicate), not a real job that needs to stay in the
+  // record for spend history. work_order_parts rows cascade-delete with
+  // it. Any authenticated user can already do this per work_orders' own
+  // RLS policy (void is the one column with finer trigger-enforced
+  // permissions, not deletion) -- the confirm step here is the only
+  // safeguard, so it's here rather than skipped.
+  const confirmDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const { error: err } = await supabase.from("work_orders").delete().eq("id", order.id);
+      if (err) throw err;
+      onBack();
+    } catch (err) {
+      setDeleteError(err.message);
+      setDeleting(false);
     }
   };
 
@@ -224,9 +248,43 @@ function RepairSheet({ workOrderId, onBack }) {
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px 80px" }}>
-      <button onClick={onBack} style={backButtonStyle}>
-        <ChevronLeft size={18} /> Back to queue
-      </button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <button onClick={onBack} style={{ ...backButtonStyle, marginBottom: 0 }}>
+          <ChevronLeft size={18} /> Back to queue
+        </button>
+        {!confirmingDelete && (
+          <button
+            onClick={() => { setConfirmingDelete(true); setDeleteError(null); }}
+            style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", color: "var(--clg-scarlet)", fontSize: 13, fontWeight: 600, padding: 0 }}
+          >
+            <Trash2 size={15} /> Delete job
+          </button>
+        )}
+      </div>
+
+      {confirmingDelete && (
+        <div style={{
+          border: "1px solid var(--clg-scarlet)", borderRadius: "var(--clg-radius-md)", padding: 16,
+          background: "var(--clg-surface-subtle)", marginBottom: 20,
+        }}>
+          <div style={{ fontSize: 13.5, color: "var(--clg-text-body)", marginBottom: 12 }}>
+            Delete this job? This removes the work order and any parts logged on it — it can't be undone.
+          </div>
+          {deleteError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12.5, marginBottom: 10 }}>{deleteError}</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button
+              size="sm" onClick={confirmDelete} disabled={deleting}
+              iconLeft={deleting ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
+              style={{ background: "var(--clg-scarlet)", border: "1px solid var(--clg-scarlet)" }}
+            >
+              {deleting ? "Deleting…" : "Confirm delete"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 22, color: "var(--clg-navy)" }}>
         Unit {order.unit?.number ?? "—"} · {order.category}
