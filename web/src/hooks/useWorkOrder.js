@@ -7,9 +7,10 @@ const FULL_SELECT = `
   po_number, intake_source, assigned_bay, assigned_tech, waiting_on_parts, parts_eta,
   promised_back, warranty_recovery_amount, receipt_path, source, samsara_reference_id,
   alvys_maintenance_id, created_at, updated_at, is_chargeback, chargeback_driver_name,
-  voided, voided_at, voided_reason,
+  voided, voided_at, voided_reason, labor_hours,
   unit:units(id, number, type, vin, driver_name, current_location),
-  vendor:vendors(id, name, contact_name, contact_email)
+  vendor:vendors(id, name, contact_name, contact_email),
+  parts:work_order_parts(id, part_name, quantity, unit_cost, created_at)
 `;
 
 // Fetches one work order with every column (the list views only pull a
@@ -29,7 +30,9 @@ export function useWorkOrder(id) {
       setError(err.message);
       setOrder(null);
     } else {
-      setOrder(data);
+      // Embedded selects don't guarantee row order -- sort parts oldest
+      // first so the list reads the order they were logged in.
+      setOrder({ ...data, parts: [...(data.parts ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : 1)) });
       if (data.receipt_path) {
         const { data: signed } = await supabase.storage.from("invoices").createSignedUrl(data.receipt_path, 300);
         setReceiptUrl(signed?.signedUrl ?? null);

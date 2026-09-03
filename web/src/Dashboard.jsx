@@ -14,11 +14,14 @@ import RosterView from "./components/roster/RosterView";
 import HomeTimeView from "./components/roster/HomeTimeView";
 import TrackingView from "./components/tracking/TrackingView";
 import ReloadsView from "./components/reloads/ReloadsView";
+import MechanicView from "./components/mechanic/MechanicView";
 import "./ds/tokens.css";
 
 // Grouped so related views sit together instead of one flat row — each
 // group renders with a visible divider between it and the next. Sentence
 // case (not tracked uppercase) per the CLG-OS-Design-Package nav spec.
+// "Mechanic" is appended separately below (mechanic/admin only), since
+// every other tab here is visible to all authenticated users.
 const NAV_GROUPS = [
   { id: "overview", items: [{ id: "board", label: "Board" }, { id: "tracking", label: "Tracking" }, { id: "reloads", label: "Reloads" }, { id: "operations", label: "Operations" }] },
   { id: "work", items: [{ id: "workorders", label: "Work orders" }] },
@@ -37,7 +40,13 @@ function initialsFor(email) {
 export default function Dashboard({ session }) {
   const [tab, setTab] = useState("board");
   const [woInitialCategory, setWoInitialCategory] = useState(null);
-  const { isAdmin } = useProfile(session.user.id);
+  const { profile, isAdmin } = useProfile(session.user.id);
+  const isMechanic = profile?.role === "mechanic";
+  const canUseMechanicQueue = isMechanic || isAdmin;
+
+  const navGroups = canUseMechanicQueue
+    ? [...NAV_GROUPS, { id: "mechanic", items: [{ id: "mechanic", label: "Mechanic" }] }]
+    : NAV_GROUPS;
 
   const goToWorkOrders = (category) => {
     setWoInitialCategory(category ?? null);
@@ -69,7 +78,7 @@ export default function Dashboard({ session }) {
         </div>
 
         <nav style={{ display: "flex", alignItems: "center", gap: 28 }}>
-          {NAV_GROUPS.map((group, i) => (
+          {navGroups.map((group, i) => (
             <div key={group.id} style={{ display: "flex", alignItems: "center", gap: 28 }}>
               {i > 0 && <NavDivider />}
               <div style={{ display: "flex", gap: 16 }}>
@@ -145,6 +154,7 @@ export default function Dashboard({ session }) {
       {tab === "vendors" && <VendorsView />}
       {tab === "roster" && <RosterView session={session} />}
       {tab === "hometime" && <HomeTimeView session={session} />}
+      {tab === "mechanic" && canUseMechanicQueue && <MechanicView />}
       {tab === "settings" && isAdmin && <SettingsView />}
     </div>
   );

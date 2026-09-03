@@ -699,6 +699,24 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 </div>
               )}
 
+              {order.parts?.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                    Parts used (logged by mechanic)
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {order.parts.map((p) => (
+                      <span
+                        key={p.id}
+                        style={{ fontSize: 12.5, color: "var(--clg-text-body)", background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-pill)", padding: "4px 10px" }}
+                      >
+                        {p.part_name} × {p.quantity}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
                 <Field label="WO #" value={order.wo_number} />
                 <Field label="Vendor" value={order.vendor?.name} />
@@ -713,6 +731,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 <Field label="Source" value={order.source} />
                 <Field label="Assigned bay" value={order.assigned_bay} />
                 <Field label="Assigned tech" value={order.assigned_tech} />
+                <Field label="Labor hours" value={order.labor_hours != null ? `${order.labor_hours} hr` : null} />
                 <Field label="Waiting on parts" value={order.waiting_on_parts ? (order.parts_eta ? `Yes — ETA ${order.parts_eta}` : "Yes") : null} />
                 <Field label="Warranty recovery" value={order.warranty_recovery_amount ? money(order.warranty_recovery_amount) : null} />
                 <Field label="Approved by" value={order.approved_by} />
