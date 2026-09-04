@@ -48,18 +48,25 @@ function PrimaryLane({ cards, onChanged }) {
 
   return (
     <div>
-      <div style={{
-        fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12, letterSpacing: "0.13em",
-        textTransform: "uppercase", color: "var(--clg-ruby)",
-      }}>
-        {meta.title}
-      </div>
-      <div style={{ fontSize: 12.5, color: "var(--clg-pewter)", marginTop: 3, marginBottom: 14 }}>
-        {cards.length} unit{cards.length === 1 ? "" : "s"}
-        {cards.length > 0 && ` · ${meta.hint}`}
+      {/* Fixed height + align-items:center, matching MonitoredLane's header
+          exactly -- this one used to be two stacked lines (title, then a
+          separate "N units · hint" line below), which made its header
+          taller than the monitored lanes' single-line header and threw the
+          first card's y-position out of alignment across the row. */}
+      <div style={{ height: 20, display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{
+          fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12, letterSpacing: "0.13em",
+          textTransform: "uppercase", color: "var(--clg-ruby)",
+        }}>
+          {meta.title}
+        </span>
+        <span style={{ fontSize: 12.5, color: "var(--clg-pewter)" }}>
+          {cards.length} unit{cards.length === 1 ? "" : "s"}
+          {cards.length > 0 && ` · ${meta.hint}`}
+        </span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
         {cards.length === 0 ? (
           <EmptyLaneCard text={meta.emptyLine} />
         ) : (
@@ -78,7 +85,7 @@ function MonitoredLane({ laneKey, cards, onChanged }) {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+      <div style={{ height: 20, display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{
           fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.13em",
           textTransform: "uppercase", color: "var(--clg-navy)",
@@ -88,7 +95,7 @@ function MonitoredLane({ laneKey, cards, onChanged }) {
         <span style={{ fontSize: 11.5, color: "var(--clg-cool)" }}>{cards.length}</span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
         {cards.length === 0 ? (
           <EmptyLaneCard text={meta.emptyLine} />
         ) : (
@@ -171,11 +178,11 @@ export default function Board({ onGoToUnits }) {
       {/* 46/54 split — the lane you own gets the wider, expanded-first-item
           side; the three lanes you only monitor share the rest as compact
           stacks. Attention comes from this layout, not from color. */}
-      <div style={{ display: "grid", gridTemplateColumns: "46fr 54fr", gap: 24, padding: "24px 28px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "46fr 54fr", gap: 14, padding: "24px 28px" }}>
         <PrimaryLane cards={lanes.waiting_on_you} onChanged={reload} />
 
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
             {MONITORED_LANE_KEYS.map((laneKey) => (
               <MonitoredLane key={laneKey} laneKey={laneKey} cards={lanes[laneKey]} onChanged={reload} />
             ))}
