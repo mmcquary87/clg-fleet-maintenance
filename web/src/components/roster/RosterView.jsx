@@ -98,7 +98,7 @@ export default function RosterView({ session }) {
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <Eyebrow tone="brand">Roster</Eyebrow>
+          <Eyebrow tone="brand">Drivers</Eyebrow>
           <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>Governed driver-availability roster</h2>
           <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
             Feeds Planning Horizon Compliance (KPI 1) and Driver Utilization / Capacity KPIs (4, 11, 13) once reliably maintained.

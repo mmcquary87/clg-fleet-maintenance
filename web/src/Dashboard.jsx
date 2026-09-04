@@ -26,7 +26,11 @@ const NAV_GROUPS = [
   { id: "overview", items: [{ id: "board", label: "Board" }, { id: "tracking", label: "Tracking" }, { id: "reloads", label: "Reloads" }, { id: "operations", label: "Operations" }] },
   { id: "work", items: [{ id: "workorders", label: "Work orders" }] },
   { id: "fleet", items: [{ id: "spend", label: "Spend" }, { id: "units", label: "Units" }, { id: "vendors", label: "Vendors" }] },
-  { id: "driver", items: [{ id: "roster", label: "Roster" }, { id: "hometime", label: "Home time" }] },
+  // "Home time" is intentionally not in nav (2026-09-04, CLG) -- a Power BI
+  // driver dashboard is planned to eventually cover this ground; the page
+  // and its data stay in the codebase (Dashboard.jsx still renders
+  // tab === "hometime") in case it's needed again before that ships.
+  { id: "driver", items: [{ id: "roster", label: "Drivers" }] },
 ];
 
 function NavDivider() {
