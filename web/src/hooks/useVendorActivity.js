@@ -14,35 +14,48 @@ export function useVendorActivity() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
-      .from("work_orders")
-      .select("vendor_id, cost, status, date_opened, date_closed, unit:units(number)")
-      .not("vendor_id", "is", null)
-      .eq("voided", false)
-      .order("date_opened", { ascending: true })
-      .limit(2000);
 
-    if (err) {
-      setError(err.message);
+    const yearStart = `${new Date().getFullYear()}-01-01`;
+
+    // Two separately-scoped queries instead of one "oldest-first, capped at
+    // N rows" fetch -- that shape silently dropped this year's rows (and
+    // any currently-open job) once total vendor work orders passed the cap,
+    // since oldest-first + a row limit keeps the wrong end of the table.
+    // Both queries below are naturally bounded by what they ask for (a
+    // calendar year of closed jobs; whatever's open right now) rather than
+    // by an arbitrary row count, so there's no cap to silently exceed.
+    const [ytdRes, holdingRes] = await Promise.all([
+      supabase
+        .from("work_orders")
+        .select("vendor_id, cost")
+        .not("vendor_id", "is", null)
+        .eq("voided", false)
+        .eq("status", "Closed")
+        .gte("date_closed", yearStart),
+      supabase
+        .from("work_orders")
+        .select("vendor_id, date_opened, unit:units(number)")
+        .not("vendor_id", "is", null)
+        .eq("voided", false)
+        .neq("status", "Closed"),
+    ]);
+
+    if (ytdRes.error || holdingRes.error) {
+      setError(ytdRes.error?.message || holdingRes.error?.message);
       setByVendorId({});
       setLoading(false);
       return;
     }
 
-    const yearStart = `${new Date().getFullYear()}-01-01`;
     const m = {};
-    for (const row of data ?? []) {
-      const v = (m[row.vendor_id] ??= {
-        jobsYtd: 0, spendYtd: 0, holding: [],
-      });
-      if (row.status === "Closed") {
-        if (row.date_closed && row.date_closed >= yearStart) {
-          v.jobsYtd += 1;
-          v.spendYtd += Number(row.cost) || 0;
-        }
-      } else {
-        v.holding.push({ unit: row.unit?.number ?? "—", since: row.date_opened });
-      }
+    const bucket = (vendorId) => (m[vendorId] ??= { jobsYtd: 0, spendYtd: 0, holding: [] });
+    for (const row of ytdRes.data ?? []) {
+      const v = bucket(row.vendor_id);
+      v.jobsYtd += 1;
+      v.spendYtd += Number(row.cost) || 0;
+    }
+    for (const row of holdingRes.data ?? []) {
+      bucket(row.vendor_id).holding.push({ unit: row.unit?.number ?? "—", since: row.date_opened });
     }
     setByVendorId(m);
     setLoading(false);

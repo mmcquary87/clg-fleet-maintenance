@@ -20,6 +20,7 @@ export function useUnitDetail(unitId) {
   const [recentFaults, setRecentFaults] = useState([]);
   const [trip, setTrip] = useState(null);
   const [hos, setHos] = useState(null);
+  const [maintenanceDue, setMaintenanceDue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -31,12 +32,13 @@ export function useUnitDetail(unitId) {
       setRecentFaults([]);
       setTrip(null);
       setHos(null);
+      setMaintenanceDue([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
-    const [unitRes, ordersRes, defectsRes, faultsRes, tripRes, hosRes] = await Promise.all([
+    const [unitRes, ordersRes, defectsRes, faultsRes, tripRes, hosRes, maintenanceDueRes] = await Promise.all([
       supabase.from("units").select(UNIT_SELECT).eq("id", unitId).single(),
       supabase.from("work_orders").select(ORDER_SELECT).eq("unit_id", unitId).eq("voided", false).order("date_opened", { ascending: false }),
       supabase.from("dvir_defects").select("id, defect_type, created_at").eq("unit_id", unitId).eq("is_resolved", false)
@@ -49,6 +51,14 @@ export function useUnitDetail(unitId) {
       supabase.from("unit_current_trip").select(TRIP_SELECT).eq("unit_id", unitId).maybeSingle(),
       supabase.from("unit_hos_status").select("duty_status, drive_remaining_minutes, shift_remaining_minutes, cycle_remaining_minutes")
         .eq("unit_id", unitId).maybeSingle(),
+      // Real, Alvys-certificate-sourced maintenance due dates (currently
+      // just dot_inspection) -- separate from the manually-logged
+      // last_annual_inspection_date/pm_interval_days fields above, which
+      // only reflect work orders closed in this app and can silently
+      // disagree with the real certificate on file. Surfaced alongside the
+      // old tracker in UnitDrawer rather than replacing it, since only the
+      // DOT half is populated by a sync so far.
+      supabase.from("unit_maintenance_due").select("kind, label, due_date, basis, synced_at").eq("unit_id", unitId),
     ]);
     if (unitRes.error) {
       setError(unitRes.error.message);
@@ -61,6 +71,7 @@ export function useUnitDetail(unitId) {
     if (!faultsRes.error) setRecentFaults(faultsRes.data ?? []);
     setTrip(tripRes.data ?? null);
     setHos(hosRes.data ?? null);
+    setMaintenanceDue(maintenanceDueRes.error ? [] : (maintenanceDueRes.data ?? []));
     setLoading(false);
   }, [unitId]);
 
@@ -74,5 +85,5 @@ export function useUnitDetail(unitId) {
     return err;
   };
 
-  return { unit, orders, openDefects, recentFaults, trip, hos, loading, error, reload: load, updateSchedule };
+  return { unit, orders, openDefects, recentFaults, trip, hos, maintenanceDue, loading, error, reload: load, updateSchedule };
 }
