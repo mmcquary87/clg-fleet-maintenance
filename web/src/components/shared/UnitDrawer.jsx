@@ -37,6 +37,24 @@ function statusLabel(status) {
   return "Not set";
 }
 
+// The Annual Inspection milestone above is entirely manual -- last_annual_
+// inspection_date only updates when someone closes an "Annual" work order
+// in this app, so it can silently disagree with the real certificate on
+// file. This surfaces that real answer (synced from Alvys documents)
+// alongside it rather than replacing the milestone tracker, since that's
+// the only kind currently populated by a sync (see useUnitDetail.js).
+function alvysDotInspectionNote(maintenanceDue) {
+  const row = (maintenanceDue ?? []).find((d) => d.kind === "dot_inspection");
+  if (!row) return null;
+  if (row.basis === "alvys_certificate" && row.due_date) {
+    return { tone: "brand", text: `Alvys certificate on file — expires ${row.due_date}` };
+  }
+  if (row.basis === "no_document_on_file") {
+    return { tone: "critical", text: "No DOT inspection document found on file in Alvys" };
+  }
+  return null;
+}
+
 function MilestoneRow({ milestone, unit, onSave, saving }) {
   const interval = milestone.fixedInterval ?? unit[milestone.intervalField];
   const [lastDate, setLastDate] = useState(unit[milestone.lastField] || "");
@@ -206,7 +224,7 @@ function Section({ title, children }) {
 // history below already carries individual job cost, so per-unit spend
 // isn't lost, just not yet rolled up into one total here.
 export default function UnitDrawer({ unitId, onClose }) {
-  const { unit, orders, openDefects, recentFaults, trip, hos, loading, error, updateSchedule } = useUnitDetail(unitId);
+  const { unit, orders, openDefects, recentFaults, trip, hos, maintenanceDue, loading, error, updateSchedule } = useUnitDetail(unitId);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -282,9 +300,20 @@ export default function UnitDrawer({ unitId, onClose }) {
                 )}
 
                 <Section title="Maintenance schedule">
-                  {MILESTONES.map((m) => (
-                    <MilestoneRow key={m.key} milestone={m} unit={unit} onSave={handleSave} saving={saving} />
-                  ))}
+                  {MILESTONES.map((m) => {
+                    const dotNote = m.key === "annual" ? alvysDotInspectionNote(maintenanceDue) : null;
+                    return (
+                      <div key={m.key}>
+                        <MilestoneRow milestone={m} unit={unit} onSave={handleSave} saving={saving} />
+                        {dotNote && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 0 0", fontSize: 12 }}>
+                            <Badge tone={dotNote.tone}>Alvys</Badge>
+                            <span style={{ color: "var(--clg-text-muted)" }}>{dotNote.text}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </Section>
 
                 <Section title={`Work order history (${orders.length})`}>

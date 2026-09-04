@@ -14,31 +14,51 @@ export function useUnitActivity() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
-      .from("work_orders")
-      .select("unit_id, cost, status, date_closed, severity, category, complaint, description, wo_number, vendor:vendors(name)")
-      .eq("voided", false)
-      .order("date_opened", { ascending: false })
-      .limit(1000);
 
-    if (err) {
-      setError(err.message);
+    const yearStart = `${new Date().getFullYear()}-01-01`;
+
+    // Two separately-scoped queries instead of one "newest-first, capped at
+    // N rows" fetch -- that shape could silently drop a unit's one
+    // lingering open work order (or this year's spend) once total
+    // non-voided work orders fleet-wide passed the cap. Both queries below
+    // are naturally bounded by what they ask for (a calendar year of
+    // closed jobs; whatever's open right now) rather than by an arbitrary
+    // row count.
+    const [ytdRes, openRes] = await Promise.all([
+      supabase
+        .from("work_orders")
+        .select("unit_id, cost, category")
+        .eq("voided", false)
+        .eq("status", "Closed")
+        .gte("date_closed", yearStart),
+      supabase
+        .from("work_orders")
+        .select("unit_id, severity, category, complaint, description, wo_number, vendor:vendors(name)")
+        .eq("voided", false)
+        .neq("status", "Closed")
+        .order("date_opened", { ascending: false }),
+    ]);
+
+    if (ytdRes.error || openRes.error) {
+      setError(ytdRes.error?.message || openRes.error?.message);
       setByUnitId({});
       setLoading(false);
       return;
     }
 
-    const yearStart = `${new Date().getFullYear()}-01-01`;
     const m = {};
-    for (const row of data ?? []) {
-      const v = (m[row.unit_id] ??= { spendYtd: 0, itemsYtd: 0, categories: new Set(), openOrder: null });
-      if (row.status === "Closed") {
-        if (row.date_closed && row.date_closed >= yearStart) {
-          v.spendYtd += Number(row.cost) || 0;
-          v.itemsYtd += 1;
-          v.categories.add(row.category);
-        }
-      } else if (!v.openOrder || (row.severity === "Unit down" && v.openOrder.severity !== "Unit down")) {
+    const bucket = (unitId) => (m[unitId] ??= { spendYtd: 0, itemsYtd: 0, categories: new Set(), openOrder: null });
+    for (const row of ytdRes.data ?? []) {
+      const v = bucket(row.unit_id);
+      v.spendYtd += Number(row.cost) || 0;
+      v.itemsYtd += 1;
+      v.categories.add(row.category);
+    }
+    // openRes is newest-first, so the first row seen per unit is already
+    // the most recent -- only overridden by a later "Unit down" row.
+    for (const row of openRes.data ?? []) {
+      const v = bucket(row.unit_id);
+      if (!v.openOrder || (row.severity === "Unit down" && v.openOrder.severity !== "Unit down")) {
         v.openOrder = row;
       }
     }

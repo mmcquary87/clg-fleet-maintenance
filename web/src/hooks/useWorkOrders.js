@@ -17,6 +17,8 @@ function toRecord(row) {
   };
 }
 
+const PAGE_SIZE = 1000;
+
 // range: { start: "YYYY-MM-DD", end: "YYYY-MM-DD" } | null (null = all time)
 export function useWorkOrders(range) {
   const [records, setRecords] = useState([]);
@@ -26,27 +28,42 @@ export function useWorkOrders(range) {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    let query = supabase
-      .from("work_orders")
-      .select(
-        "id, category, cost, date_closed, invoice_ref, description, unit:units(number, type), vendor:vendors(name)"
-      )
-      .eq("status", "Closed")
-      .eq("voided", false)
-      .order("date_closed", { ascending: false });
+    try {
+      // "All time" (range === null) has no upper bound on row count -- this
+      // is the main Spend page's source of truth for total fleet spend, so
+      // an arbitrary .limit() here would silently under-report spend once
+      // closed work orders exceed it (the same class of bug that caused
+      // the Cost/Mile undercount earlier). Paginate with .range() instead,
+      // so every matching row is fetched regardless of how many there are.
+      const rows = [];
+      let from = 0;
+      while (true) {
+        let query = supabase
+          .from("work_orders")
+          .select(
+            "id, category, cost, date_closed, invoice_ref, description, unit:units(number, type), vendor:vendors(name)"
+          )
+          .eq("status", "Closed")
+          .eq("voided", false)
+          .order("date_closed", { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
 
-    if (range?.start) query = query.gte("date_closed", range.start);
-    if (range?.end) query = query.lte("date_closed", range.end);
+        if (range?.start) query = query.gte("date_closed", range.start);
+        if (range?.end) query = query.lte("date_closed", range.end);
 
-    const { data, error: err } = await query;
-
-    if (err) {
+        const { data, error: err } = await query;
+        if (err) throw err;
+        rows.push(...(data ?? []));
+        if (!data || data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      setRecords(rows.map(toRecord));
+    } catch (err) {
       setError(err.message);
       setRecords([]);
-    } else {
-      setRecords((data ?? []).map(toRecord));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [range?.start, range?.end]);
 
   useEffect(() => {
