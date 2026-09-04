@@ -19,7 +19,12 @@ restructure them to match; do not fork a parallel implementation.
   runtime.** Read it for layout, values, and copy only.
 - `design/CLG-OS-standalone.html` — the same thing as one self-contained file. Open it in a
   browser and click through the nav. Easiest way to understand the flows.
-- `screenshots/` — one PNG per screen, for orientation. **The HTML wins** on exact values.
+- `screenshots/` — one PNG per screen, for orientation only. **Captured at ~900px wide, which
+  is narrower than the design's target** — the sidebar leaves little room at that width, so
+  columns look more cramped than intended and icon glyphs render as grey squares (a capture
+  artifact; they load correctly in the browser). Design target is **≥1440px desktop**.
+  **Open `design/CLG-OS-standalone.html` at full width to judge layout, and read the HTML for
+  exact values.**
 
 ## Fidelity
 
@@ -84,8 +89,39 @@ This is the detail most likely to be "simplified" away. Don't.
 
 ## Screens
 
-Nav order matches the live app: Board · Tracking · Operations | Work orders · Spend · Units ·
-Vendors | Roster · Home time.
+### The shell (every screen)
+
+**Persistent left sidebar, 230px, Navy `--clg-navy`, full viewport height, `position:sticky`.**
+This replaced an earlier top-nav bar — build the sidebar, not a horizontal nav.
+
+- Brand lockup at the top: `StarMark tone="reverse"` + "CLG OS" (Montserrat 700, 14.5px, white,
+  `letter-spacing:.05em`) over "FLEET & OPERATIONS" (9px, `.14em`, Mercury).
+  **`StarMark` defaults `assetBase` to `'../../assets'`, relative to its own module — you must
+  pass the project-relative path explicitly or the star 404s.**
+- Five grouped sections, each labelled with `Eyebrow tone="muted"`: **Overview** (Board,
+  Tracking, Reloads, Operations) · **Work** (Work orders) · **Fleet** (Spend, Units, Vendors) ·
+  **Drivers** (Drivers) · **Mechanic + admin only** (Mechanic). Group labels are deliberately
+  quiet — 9.5px, `letter-spacing:.15em`, Cool — **subordinate to the 13.5px nav items.**
+  `Eyebrow`'s own default size is 14px, which inverts the hierarchy; override it (the component
+  spreads `style` last, so pass a style through).
+- Nav item: `display:flex; gap:12px; margin:0 12px; padding:10px 12px; border-radius:4px`.
+  Active = Royal fill, white, 600 weight. Inactive = Mercury text, no fill.
+- Every glyph mounts the design system's **`Icon`** component with a Lucide name —
+  `layout-grid`, `map-pin`, `refresh-cw`, `bar-chart-3`, `clipboard-list`,
+  `circle-dollar-sign`, `truck`, `briefcase`, `user`, `wrench`. **Do not hand-author SVG
+  paths**; the guide routes all interface glyphs through `Icon` so a real CLG set can be
+  swapped in one place.
+- Account chip pinned to the bottom behind a `rgba(255,255,255,.1)` hairline: 28px Reflection
+  initials tile + email in 11.5px Moon, truncating with ellipsis.
+
+**Top bar, 64px, white, `box-shadow:0 1px 0 rgba(34,59,98,.08)`, sticky.** Carries only two
+things: a breadcrumb (`Group / Page`, group in Pewter, page in Navy 600) and the single global
+`New work order` primary CTA. The breadcrumb is per-screen — Fleet / Spend, Work / WO-1041,
+Fleet / Unit 3307 — so drill-in states have a location.
+
+**One CTA rule:** because "New work order" is global in the top bar, **no screen repeats it in
+its own header.** Page-level headers carry only page-specific actions (`Export CSV`,
+`Add a unit`, `Log invoice`).
 
 ### 1. Board — `screenshots/01-board.png`
 The home screen. Idle count and cost-of-waiting as two large figures, then the 46/54 lane split.
@@ -96,13 +132,22 @@ The home screen. Idle count and cost-of-waiting as two large figures, then the 4
   single grid rows (`90px 1fr 92px 66px`).
 - Right: three monitored lanes as a 3-col grid of compact stacks, then a full-width row holding
   the navy "back on the road today" card and the closing observation card.
+- **All four lane headers share a fixed `height:20px` with `align-items:center`, and all four
+  columns use `gap:14px`.** Their labels are different lengths and the left one carries an
+  extra count line, so without the fixed height each column's first card starts at a different
+  y and the lanes visibly fail to align.
 - Clicking either open item opens the work order.
 
 ### 2. Work orders — `screenshots/02-work-orders.png`
 Full list, filter pills (Open 2 · Closed 4 · All 6), one table.
-Grid `110px 92px 1fr 230px 200px 108px 78px`; header row on Smoke in tracked 10.5px caps.
+Grid `96px 74px minmax(240px,1.4fr) minmax(150px,1fr) minmax(150px,1fr) 96px 68px`; header row on
+Smoke in tracked 10.5px caps. The wrapper is `overflow-x:auto` and the rows carry
+`min-width:960px`. **This matters:** the 230px sidebar permanently claims horizontal space, and an
+earlier 818px fixed-column budget made the ISSUE column resolve to 0px and clipped three columns
+unreachably. Keep `minmax()` floors on the text columns and a scrollable wrapper.
 Note the **BLOCKED ON** column — it carries "Your authorization," not a status word. Closed rows
-drop to Pewter/Cool so open work is the only thing with contrast.
+drop to Pewter/Cool so open work is the only thing with contrast. Page action is `Export CSV`
+only — the global CTA lives in the top bar.
 
 ### 3. Work order detail — `screenshots/03-work-order-detail.png`
 Breadcrumb, then a header with severity Badge, 50px unit number, and the idle clock in Ruby.
@@ -181,7 +226,7 @@ value is gone.
 unit per period, without which cost per mile is fiction; and a PM interval per unit, without which
 planned-vs-reactive cannot be computed.
 
-### Tracking · Operations · Roster · Home time
+### Tracking · Reloads · Operations · Drivers · Mechanic
 **Deliberately blank**, each showing a "Not designed yet" card that says so and invites a brief.
 I did not invent these screens because I don't know what they answer. Do not fill them with
 placeholder dashboards — get the brief first. (See Open questions.)
@@ -320,8 +365,9 @@ Show real identifiers — unit 3307, WO-1041, PO 4471. Never lorem.
 
 ## Open questions for the product owner
 
-1. **Tracking, Operations, Roster, Home time** — four nav sections, no brief. What does each
-   answer? They are blank on purpose until then.
+1. **Tracking, Reloads, Operations, Drivers, Mechanic** — five nav sections, no brief. What
+   does each answer? They are blank on purpose until then. "Mechanic + admin only" implies a
+   role-gated view; confirm the roles and what a mechanic may and may not see.
 2. **Hourly revenue rate per unit** — cost of waiting can't compute without it. Does Alvys
    expose one, or is it a fleet-wide constant?
 2b. **Miles per unit per period** — the Spend page's cost-per-mile is the headline metric and
@@ -348,5 +394,5 @@ CLG-OS-Design-Package/
     _ds/capital-logistics-.../     ← design system: tokens/*.css (authoritative token
                                      values), styles.css, _ds_bundle.js (Button, Badge,
                                      + 17 more), assets/
-  screenshots/                     ← 01–07, one per screen
+  screenshots/                     ← 01–08, one per screen (narrow-viewport reference only)
 ```
