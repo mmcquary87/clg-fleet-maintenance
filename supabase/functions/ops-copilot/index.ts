@@ -67,6 +67,12 @@ function idleHours(unit, wo) {
   return Math.max(0, (Date.now() - new Date(since).getTime()) / 36e5);
 }
 
+// Mirrors web/src/hooks/useUnitFaults.js exactly -- same "unaddressed
+// reading right now" plus "same code 3+ times in 90 days" signal, so the
+// Copilot's answer matches what the Units page badge shows.
+const FAULT_SEVERITY_RANK = { red: 3, amber: 2, yellow: 1 };
+const FAULT_LOOKBACK_DAYS = 90;
+
 const TOOLS = [
   {
     name: "get_idle_and_down_units",
@@ -124,6 +130,16 @@ const TOOLS = [
       required: ["unit_number"],
       additionalProperties: false,
     },
+  },
+  {
+    name: "get_fault_signals",
+    description:
+      "Units with an unaddressed fault code or DVIR defect on file right now -- signals that can sit for weeks with " +
+      "no work order ever opened, so they're otherwise invisible outside the shop. Includes which units have the " +
+      "same fault code recur 3+ times in the last 90 days, a stronger sign of a real developing failure than a " +
+      "single reading. Use for questions about check-engine lights, fault codes, DVIR defects, or predictive/" +
+      "recurring maintenance risk.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
 ];
 
@@ -287,6 +303,56 @@ async function runTool(supabase, name, input) {
           category: o.category, cost_usd: Math.round(Number(o.cost) || 0), vendor: o.vendor?.name ?? null, closed: o.date_closed,
         })),
       };
+    }
+
+    case "get_fault_signals": {
+      const since = new Date(Date.now() - FAULT_LOOKBACK_DAYS * 86400000).toISOString();
+      const [faultsRes, defectsRes] = await Promise.all([
+        supabase.from("fault_events")
+          .select("unit_id, dtc_code, dtc_description, light_severity, status, samsara_reading_time, unit:units(number)")
+          .gte("samsara_reading_time", since),
+        supabase.from("dvir_defects")
+          .select("unit_id, defect_type, created_at, unit:units(number)")
+          .eq("is_resolved", false).is("matched_work_order_id", null),
+      ]);
+      if (faultsRes.error) throw faultsRes.error;
+      if (defectsRes.error) throw defectsRes.error;
+
+      const byUnit = new Map();
+      const bucket = (unitNumber) => {
+        if (!byUnit.has(unitNumber)) {
+          byUnit.set(unitNumber, { unit: unitNumber, active_fault: null, codeCounts: new Map(), open_defects: [] });
+        }
+        return byUnit.get(unitNumber);
+      };
+      for (const f of faultsRes.data ?? []) {
+        if (!f.unit) continue;
+        const v = bucket(f.unit.number);
+        v.codeCounts.set(f.dtc_code, (v.codeCounts.get(f.dtc_code) ?? 0) + 1);
+        if (f.status !== "new") continue;
+        const rank = FAULT_SEVERITY_RANK[f.light_severity] ?? 0;
+        if (!v.active_fault || rank > (FAULT_SEVERITY_RANK[v.active_fault.severity] ?? 0)) {
+          v.active_fault = { code: f.dtc_code, description: f.dtc_description, severity: f.light_severity ?? "yellow" };
+        }
+      }
+      for (const d of defectsRes.data ?? []) {
+        if (!d.unit) continue;
+        bucket(d.unit.number).open_defects.push({ type: d.defect_type, reported: d.created_at });
+      }
+
+      const units = [...byUnit.values()]
+        .map((v) => {
+          const repeat = [...v.codeCounts.entries()].find(([, count]) => count >= 3);
+          return {
+            unit: v.unit,
+            active_fault: v.active_fault,
+            repeat_code: repeat ? { code: repeat[0], count: repeat[1] } : null,
+            open_defects: v.open_defects,
+          };
+        })
+        .filter((u) => u.active_fault || u.repeat_code || u.open_defects.length > 0);
+
+      return { units, count: units.length };
     }
 
     default:
