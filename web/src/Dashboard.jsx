@@ -15,6 +15,7 @@ import HomeTimeView from "./components/roster/HomeTimeView";
 import TrackingView from "./components/tracking/TrackingView";
 import ReloadsView from "./components/reloads/ReloadsView";
 import MechanicView from "./components/mechanic/MechanicView";
+import CopilotWidget from "./components/copilot/CopilotWidget";
 import "./ds/tokens.css";
 
 // Group/page labels for the top bar's breadcrumb -- one global "New work
@@ -87,7 +88,13 @@ export default function Dashboard({ session }) {
           {tab === "reloads" && <ReloadsView />}
           {tab === "workorders" && <WorkOrdersView initialCategory={woInitialCategory} />}
           {tab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
-          {tab === "spend" && <SpendView onGoToWorkOrders={goToWorkOrders} onGoToUnits={() => setTab("units")} />}
+          {tab === "spend" && (
+            <SpendView
+              onGoToWorkOrders={goToWorkOrders}
+              onGoToUnits={() => setTab("units")}
+              canViewAssetLifecycle={profile?.role !== "mechanic"}
+            />
+          )}
           {tab === "operations" && <OperationsView />}
           {tab === "units" && <UnitsView />}
           {tab === "vendors" && <VendorsView />}
@@ -97,6 +104,8 @@ export default function Dashboard({ session }) {
           {tab === "settings" && isAdmin && <SettingsView />}
         </div>
       </div>
+
+      <CopilotWidget />
     </div>
   );
 }

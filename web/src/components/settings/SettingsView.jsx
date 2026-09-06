@@ -3,8 +3,14 @@ import { UserPlus, Loader2, CheckCircle2 } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert, Eyebrow, Toggle, Badge } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import { useUsersAdmin } from "../../hooks/useUsersAdmin";
+import { CATEGORIES } from "../../lib/categories";
 
 const ROLES = ["dispatcher", "mechanic", "admin"];
+
+// "Tow" is frontend-only (see CLAUDE.md's category-drift note) -- it's not
+// a value of the wo_category Postgres enum, so it can't be a member of the
+// asset_reliability_categories wo_category[] column below.
+const DB_CATEGORIES = CATEGORIES.filter((c) => c !== "Tow");
 
 // Single-row config, same pattern as IntakeWizard's approval_threshold --
 // this just adds an editable UI for it, since a $/hour rate is something
@@ -49,6 +55,98 @@ function ShopLaborRatePanel() {
             onChange={(e) => { setRate(e.target.value); setSaved(false); }}
           />
         </Field>
+        <Button size="sm" onClick={save} disabled={saving || !loaded} iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {saved && <span style={{ fontSize: 12.5, color: "var(--clg-royal)", fontWeight: 600 }}>Saved</span>}
+      </div>
+    </Card>
+  );
+}
+
+// Asset_Lifecycle_Disposal_Spec.md §2: the target exit band and reliability
+// triggers are "a configurable input, not a fixed rule" -- edited here,
+// same singleton-row app_settings pattern as ShopLaborRatePanel above.
+// asset_single_invoice_threshold starts blank/null (spec §5, item 2: no
+// starting figure yet) rather than a guessed number -- left blank here
+// means that trigger simply doesn't fire, and the panel says so.
+function AssetLifecycleSettingsPanel() {
+  const [targetMiles, setTargetMiles] = useState("");
+  const [targetAgeYears, setTargetAgeYears] = useState("");
+  const [threshold, setThreshold] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    supabase.from("app_settings")
+      .select("asset_target_miles, asset_target_age_years, asset_single_invoice_threshold, asset_reliability_categories")
+      .single()
+      .then(({ data }) => {
+        setTargetMiles(data?.asset_target_miles != null ? String(data.asset_target_miles) : "250000");
+        setTargetAgeYears(data?.asset_target_age_years != null ? String(data.asset_target_age_years) : "2");
+        setThreshold(data?.asset_single_invoice_threshold != null ? String(data.asset_single_invoice_threshold) : "");
+        setCategories(data?.asset_reliability_categories ?? ["Engine", "Transmission"]);
+        setLoaded(true);
+      });
+  }, []);
+
+  const toggleCategory = (cat) => {
+    setCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
+    setSaved(false);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    const { error: err } = await supabase.from("app_settings").update({
+      asset_target_miles: Number(targetMiles) || 250000,
+      asset_target_age_years: Number(targetAgeYears) || 2,
+      asset_single_invoice_threshold: threshold.trim() === "" ? null : Number(threshold),
+      asset_reliability_categories: categories,
+    }).eq("id", true);
+    setSaving(false);
+    if (err) setError(err.message);
+    else setSaved(true);
+  };
+
+  return (
+    <Card>
+      <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Asset lifecycle</h3>
+      <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
+        Drives the buy/sell decision signal on each unit's Spend page tile. The target exit band is a default, not
+        a hard rule. Leave the single-invoice threshold blank to leave that trigger off until you have a starting
+        figure from CLG's own repair history.
+      </p>
+      {error && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 16 }}>{error}</Alert>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 16 }}>
+        <Field label="Target miles"><Input type="number" min="0" disabled={!loaded} value={targetMiles} onChange={(e) => { setTargetMiles(e.target.value); setSaved(false); }} /></Field>
+        <Field label="Target age (years)"><Input type="number" min="0" step="0.1" disabled={!loaded} value={targetAgeYears} onChange={(e) => { setTargetAgeYears(e.target.value); setSaved(false); }} /></Field>
+        <Field label="Single-invoice threshold ($)" help="Blank = off">
+          <Input type="number" min="0" step="0.01" disabled={!loaded} placeholder="Not configured" value={threshold} onChange={(e) => { setThreshold(e.target.value); setSaved(false); }} />
+        </Field>
+      </div>
+      <Field label="Repair categories that flag a reliability event" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {DB_CATEGORIES.map((cat) => (
+            <button
+              key={cat} type="button" disabled={!loaded} onClick={() => toggleCategory(cat)}
+              style={{
+                padding: "6px 12px", fontSize: 12, borderRadius: "var(--clg-radius-pill)", cursor: "pointer",
+                border: "1px solid " + (categories.includes(cat) ? "var(--clg-royal)" : "var(--clg-border-default)"),
+                background: categories.includes(cat) ? "var(--clg-royal)" : "#fff",
+                color: categories.includes(cat) ? "#fff" : "var(--clg-text-muted)",
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <Button size="sm" onClick={save} disabled={saving || !loaded} iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}>
           {saving ? "Saving…" : "Save"}
         </Button>
@@ -204,6 +302,10 @@ export default function SettingsView() {
 
       <div style={{ marginTop: 32 }}>
         <ShopLaborRatePanel />
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        <AssetLifecycleSettingsPanel />
       </div>
 
       <div style={{ marginTop: 32 }}>

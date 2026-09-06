@@ -8,6 +8,7 @@ import { CATEGORIES, CAT_COLORS } from "../lib/categories";
 import { groupSum } from "../lib/groupSum";
 import { useMilesDriven } from "../hooks/useMilesDriven";
 import EmptyState from "./EmptyState";
+import AssetLifecycleCard from "./units/AssetLifecycleCard";
 
 // Below this, a unit's odometer/GPS delta for the period is too thin to
 // trust as a cost/mile ratio -- a truck that sat in the shop most of the
@@ -92,7 +93,7 @@ function SectionCard({ children, style }) {
   );
 }
 
-export default function UnitView({ records, range }) {
+export default function UnitView({ records, range, canViewAssetLifecycle }) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [ownershipSort, setOwnershipSort] = useState("highest");
@@ -427,6 +428,8 @@ export default function UnitView({ records, range }) {
           </div>
         </SectionCard>
       )}
+
+      {selectedUnit && canViewAssetLifecycle && <AssetLifecycleCard unitNumber={selectedUnit.unit} />}
     </>
   );
 }

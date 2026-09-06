@@ -3,9 +3,16 @@ import { Plus, Loader2, Search } from "lucide-react";
 import { Button, Badge, Eyebrow, Alert, Input } from "../../ds";
 import { useUnits } from "../../hooks/useUnits";
 import { useUnitActivity } from "../../hooks/useUnitActivity";
+import { useUnitFaults } from "../../hooks/useUnitFaults";
 import { worstStatus } from "../../lib/maintenanceSchedule";
 import UnitForm from "./UnitForm";
 import UnitDrawer from "../shared/UnitDrawer";
+
+function faultTone(severity) {
+  if (severity === "red") return "critical";
+  if (severity === "amber") return "accent";
+  return "neutral";
+}
 
 function maintenanceTone(status) {
   if (status === "overdue") return "critical";
@@ -43,7 +50,7 @@ function Stat({ label, value, tone }) {
   );
 }
 
-function UnitCard({ unit, activity, onOpen, onToggleActive }) {
+function UnitCard({ unit, activity, faults, onOpen, onToggleActive }) {
   const status = worstStatus(unit);
   const isDown = unit.can_move_load === false;
   const openOrder = activity?.openOrder;
@@ -63,8 +70,16 @@ function UnitCard({ unit, activity, onOpen, onToggleActive }) {
         <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 26, color: "var(--clg-navy)", letterSpacing: "-0.01em" }}>
           {unit.number}
         </span>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {isDown && <Badge tone="critical">Down</Badge>}
+          {faults?.activeSeverity && (
+            <Badge tone={faultTone(faults.activeSeverity)} title={faults.activeDescription || faults.activeCode}>
+              Check engine
+            </Badge>
+          )}
+          {faults?.openDefectCount > 0 && (
+            <Badge tone="accent">DVIR ({faults.openDefectCount})</Badge>
+          )}
           <Badge tone={maintenanceTone(status)}>{maintenanceLabel(status)}</Badge>
           {!unit.is_active && <Badge tone="neutral">Inactive</Badge>}
         </div>
@@ -76,6 +91,15 @@ function UnitCard({ unit, activity, onOpen, onToggleActive }) {
       <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginTop: 12, lineHeight: 1.55 }}>
         {sentence}
       </div>
+
+      {faults?.repeatCode && (
+        <div style={{
+          fontSize: 12, color: "var(--clg-ruby)", marginTop: 8, padding: "6px 10px",
+          background: "var(--clg-surface-subtle, #F3F7FA)", borderRadius: 6,
+        }}>
+          Code {faults.repeatCode.code} has recurred {faults.repeatCode.count}× in the last 90 days.
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--clg-border-subtle)" }}>
         <Stat label="Odometer" value={unit.odometer ? `${unit.odometer.toLocaleString()} mi` : "—"} />
@@ -99,6 +123,7 @@ function UnitCard({ unit, activity, onOpen, onToggleActive }) {
 export default function UnitsView() {
   const { units, loading, error, reload, toggleActive } = useUnits();
   const { byUnitId, loading: activityLoading } = useUnitActivity();
+  const { byUnitId: faultsByUnitId } = useUnitFaults();
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("active");
   const [query, setQuery] = useState("");
@@ -115,6 +140,7 @@ export default function UnitsView() {
   }, [units, filter, query]);
 
   const downCount = visible.filter((u) => u.can_move_load === false).length;
+  const faultCount = visible.filter((u) => faultsByUnitId[u.id]?.activeSeverity).length;
 
   return (
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1200, margin: "0 auto" }}>
@@ -126,6 +152,7 @@ export default function UnitsView() {
           </h2>
           <p style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
             {downCount > 0 ? `${downCount} currently down, can't move a load.` : "None currently down."}
+            {faultCount > 0 && ` ${faultCount} with an unaddressed check-engine light.`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -170,7 +197,7 @@ export default function UnitsView() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
           {visible.map((u) => (
             <UnitCard
-              key={u.id} unit={u} activity={byUnitId[u.id]}
+              key={u.id} unit={u} activity={byUnitId[u.id]} faults={faultsByUnitId[u.id]}
               onOpen={() => setOpenUnitId(u.id)}
               onToggleActive={() => toggleActive(u.id, !u.is_active)}
             />

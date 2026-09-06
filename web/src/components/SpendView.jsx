@@ -8,7 +8,7 @@ import DeductionsView from "./DeductionsView";
 import NewWorkOrderForm from "./NewWorkOrderForm";
 import DateRangeFilter from "./DateRangeFilter";
 
-export default function SpendView({ onGoToWorkOrders, onGoToUnits }) {
+export default function SpendView({ onGoToWorkOrders, onGoToUnits, canViewAssetLifecycle }) {
   const [view, setView] = useState("company");
   const [showForm, setShowForm] = useState(false);
   const [range, setRange] = useState(null);
@@ -62,7 +62,7 @@ export default function SpendView({ onGoToWorkOrders, onGoToUnits }) {
           ) : !error && (
             view === "company"
               ? <CompanyView records={records} range={range} onGoToWorkOrders={onGoToWorkOrders} onGoToUnits={onGoToUnits} />
-              : <UnitView records={records} range={range} />
+              : <UnitView records={records} range={range} canViewAssetLifecycle={canViewAssetLifecycle} />
           )}
         </>
       )}
