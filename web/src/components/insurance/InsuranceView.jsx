@@ -47,6 +47,9 @@ export default function InsuranceView() {
   const [equipment, setEquipment] = useState([]);
   const [equipmentLoading, setEquipmentLoading] = useState(true);
   const [equipmentError, setEquipmentError] = useState(null);
+  const [leased, setLeased] = useState([]);
+  const [leasedLoading, setLeasedLoading] = useState(true);
+  const [leasedError, setLeasedError] = useState(null);
 
   useEffect(() => {
     supabase.from("app_settings")
@@ -76,6 +79,15 @@ export default function InsuranceView() {
       });
   }, []);
 
+  useEffect(() => {
+    supabase.from("leased_equipment_values")
+      .select("ownership, current_value")
+      .then(({ data, error: err }) => {
+        if (err) { setLeasedError(err.message); setLeased([]); } else { setLeased(data ?? []); }
+        setLeasedLoading(false);
+      });
+  }, []);
+
   const mileageMonth = new Date(reportingMonth.getFullYear(), reportingMonth.getMonth() - 1, 1);
   const range = monthRangeFor(mileageMonth);
   const {
@@ -102,8 +114,23 @@ export default function InsuranceView() {
     if (u.type === "Truck") truckValue += depreciated;
     else trailerValue += depreciated;
   }
-  const totalEquipmentValue = equipment.length > 0 ? truckValue + trailerValue : null;
-  const physicalDamagePremium = totalEquipmentValue != null ? (totalEquipmentValue * rates.physical_damage) / 100 : null;
+  // CLG-owned only -- what the Physical Damage premium is actually rated
+  // on, per the workbook's own stated scope (Penske/Hale equipment is
+  // ordinarily insured under the lessor's own policy, not CLG's).
+  const clgEquipmentValue = equipment.length > 0 ? truckValue + trailerValue : null;
+  const physicalDamagePremium = clgEquipmentValue != null ? (clgEquipmentValue * rates.physical_damage) / 100 : null;
+
+  // Penske/Hale carry a flat stated value (no monthly depreciation
+  // modeled -- see 20260906040000_leased_equipment_values.sql) --
+  // informational total exposure across every equipment type CLG
+  // operates, not part of the premium base above.
+  let penskeValue = 0;
+  let haleValue = 0;
+  for (const l of leased) {
+    if (l.ownership === "penske_lease") penskeValue += Number(l.current_value);
+    else haleValue += Number(l.current_value);
+  }
+  const grandTotalEquipmentValue = clgEquipmentValue != null ? clgEquipmentValue + penskeValue + haleValue : null;
 
   const totalPremium = [autoLiabilityPremium, cargoPremium, physicalDamagePremium].every((v) => v != null)
     ? autoLiabilityPremium + cargoPremium + physicalDamagePremium
@@ -175,24 +202,46 @@ export default function InsuranceView() {
         )}
       </Card>
 
+      {leasedError && <Alert tone="critical" title="Couldn't load Penske/Hale values" style={{ marginBottom: 16 }}>{leasedError}</Alert>}
+
       <Card style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)", marginBottom: 6 }}>
-          CLG-owned equipment value — {monthLabel(reportingMonth)}
+          Total equipment value — {monthLabel(reportingMonth)}
         </div>
-        {equipmentLoading ? (
+        {equipmentLoading || leasedLoading ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--clg-cool)", fontSize: 13, padding: "8px 0" }}>
             <Loader2 size={15} className="spin" /> Loading…
           </div>
-        ) : totalEquipmentValue != null ? (
+        ) : grandTotalEquipmentValue != null ? (
           <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 28, color: "var(--clg-navy)" }}>
-            {fmtMoney(totalEquipmentValue)}
+            {fmtMoney(grandTotalEquipmentValue)}
           </div>
         ) : (
           <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>No unit valuations on file yet.</div>
         )}
-        <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
-          {fmtMoney(truckValue)} trucks + {fmtMoney(trailerValue)} trailers, depreciated forward from each unit's last
-          reported value. Penske and Hale-leased equipment isn't included — CLG doesn't own it.
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, marginTop: 10 }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: "4px 0", color: "var(--clg-text-body)" }}>CLG-owned (trucks + trailers)</td>
+              <td style={{ padding: "4px 0", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>
+                {clgEquipmentValue != null ? fmtMoney(clgEquipmentValue) : "—"}
+              </td>
+            </tr>
+            <tr>
+              <td style={{ padding: "4px 0", color: "var(--clg-text-body)" }}>Penske (long-term lease trucks)</td>
+              <td style={{ padding: "4px 0", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>{fmtMoney(penskeValue)}</td>
+            </tr>
+            <tr>
+              <td style={{ padding: "4px 0", color: "var(--clg-text-body)" }}>Hale (leased trailers)</td>
+              <td style={{ padding: "4px 0", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>{fmtMoney(haleValue)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 10, lineHeight: 1.5 }}>
+          CLG-owned value depreciates forward from each unit's last reported value; Penske and Hale carry a flat
+          stated value (both are reviewed periodically at renewal, not projected monthly). The Physical Damage
+          premium below is rated on CLG-owned value only — Penske/Hale equipment is ordinarily insured under the
+          lessor's own policy, not CLG's.
         </div>
       </Card>
 
