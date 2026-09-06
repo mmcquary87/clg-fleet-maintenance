@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { Card, Alert } from "../../ds";
+import { Card, Alert, Eyebrow } from "../../ds";
 import { useMilesDriven } from "../../hooks/useMilesDriven";
 import { monthRangeFor } from "../../lib/dateRangePresets";
 import { supabase } from "../../lib/supabaseClient";
@@ -37,7 +37,7 @@ function monthsBetween(a, b) {
 // its Aug 31, 2026 baseline to the reporting month, at its own per-unit
 // rate for trucks or one flat fleet-wide rate for trailers -- same split
 // the workbook itself uses.
-export default function InsuranceReporterView() {
+export default function InsuranceView() {
   const [reportingMonth, setReportingMonth] = useState(() => {
     const t = new Date();
     return new Date(t.getFullYear(), t.getMonth(), 1);
@@ -110,7 +110,15 @@ export default function InsuranceReporterView() {
     : null;
 
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 720, margin: "0 auto" }}>
+      <div style={{ marginBottom: 20 }}>
+        <Eyebrow tone="brand">Insurance</Eyebrow>
+        <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>Monthly equipment & premium reporter</h2>
+        <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
+          Auto-computes what CLG's monthly insurance reporting workbook used to require pulling by hand.
+        </p>
+      </div>
+
       <Card style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)" }}>

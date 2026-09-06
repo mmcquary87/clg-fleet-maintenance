@@ -15,6 +15,7 @@ import HomeTimeView from "./components/roster/HomeTimeView";
 import TrackingView from "./components/tracking/TrackingView";
 import ReloadsView from "./components/reloads/ReloadsView";
 import MechanicView from "./components/mechanic/MechanicView";
+import InsuranceView from "./components/insurance/InsuranceView";
 import CopilotWidget from "./components/copilot/CopilotWidget";
 import "./ds/tokens.css";
 
@@ -31,6 +32,7 @@ const PAGE_META = {
   spend: { group: "Fleet", page: "Spend" },
   units: { group: "Fleet", page: "Units" },
   vendors: { group: "Fleet", page: "Vendors" },
+  insurance: { group: "Fleet", page: "Insurance" },
   roster: { group: "Drivers", page: "Drivers" },
   hometime: { group: "Drivers", page: "Home time" },
   mechanic: { group: "Mechanic", page: "Mechanic" },
@@ -53,7 +55,7 @@ export default function Dashboard({ session }) {
 
   return (
     <div className="app" style={{ display: "flex", minHeight: "100vh", background: "var(--clg-surface-subtle)" }}>
-      <Sidebar tab={tab} onNavigate={setTab} canUseMechanicQueue={canUseMechanicQueue} isAdmin={isAdmin} email={session.user.email} />
+      <Sidebar tab={tab} onNavigate={setTab} canUseMechanicQueue={canUseMechanicQueue} isAdmin={isAdmin} isMechanic={isMechanic} email={session.user.email} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{
@@ -98,6 +100,7 @@ export default function Dashboard({ session }) {
           {tab === "operations" && <OperationsView />}
           {tab === "units" && <UnitsView />}
           {tab === "vendors" && <VendorsView />}
+          {tab === "insurance" && !isMechanic && <InsuranceView />}
           {tab === "roster" && <RosterView session={session} />}
           {tab === "hometime" && <HomeTimeView session={session} />}
           {tab === "mechanic" && canUseMechanicQueue && <MechanicView />}
