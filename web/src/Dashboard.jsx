@@ -88,7 +88,13 @@ export default function Dashboard({ session }) {
           {tab === "reloads" && <ReloadsView />}
           {tab === "workorders" && <WorkOrdersView initialCategory={woInitialCategory} />}
           {tab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
-          {tab === "spend" && <SpendView onGoToWorkOrders={goToWorkOrders} onGoToUnits={() => setTab("units")} />}
+          {tab === "spend" && (
+            <SpendView
+              onGoToWorkOrders={goToWorkOrders}
+              onGoToUnits={() => setTab("units")}
+              canViewAssetLifecycle={profile?.role !== "mechanic"}
+            />
+          )}
           {tab === "operations" && <OperationsView />}
           {tab === "units" && <UnitsView />}
           {tab === "vendors" && <VendorsView />}
