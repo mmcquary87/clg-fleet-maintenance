@@ -141,7 +141,27 @@ const TOOLS = [
       "recurring maintenance risk.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
+  {
+    name: "get_driver_compliance",
+    description:
+      "Active drivers whose CDL or medical card has expired or is expiring within 60 days -- a live DOT compliance " +
+      "and insurance exposure. Returns nothing for a caller without dispatcher/admin access (this data is " +
+      "role-restricted). Use for questions about CDL, medical cards, license expiration, or driver compliance.",
+    input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
 ];
+
+const COMPLIANCE_WARNING_DAYS = 60; // mirrors web/src/lib/driverCompliance.js
+const COMPLIANCE_CRITICAL_DAYS = 14;
+
+function complianceStatus(expiresAt) {
+  if (!expiresAt) return { status: "unknown", daysRemaining: null };
+  const daysRemaining = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 86400000);
+  if (daysRemaining < 0) return { status: "expired", daysRemaining };
+  if (daysRemaining <= COMPLIANCE_CRITICAL_DAYS) return { status: "critical", daysRemaining };
+  if (daysRemaining <= COMPLIANCE_WARNING_DAYS) return { status: "warning", daysRemaining };
+  return { status: "ok", daysRemaining };
+}
 
 async function runTool(supabase, name, input) {
   switch (name) {
@@ -353,6 +373,27 @@ async function runTool(supabase, name, input) {
         .filter((u) => u.active_fault || u.repeat_code || u.open_defects.length > 0);
 
       return { units, count: units.length };
+    }
+
+    case "get_driver_compliance": {
+      // RLS-restricted to admin/dispatcher (20260906010000_driver_compliance_rls.sql)
+      // -- a mechanic-role caller simply gets zero rows back here, not an error.
+      const { data, error } = await supabase
+        .from("drivers")
+        .select("name, employee_id, license_expires_at, medical_expires_at")
+        .eq("is_active", true);
+      if (error) throw error;
+
+      const flagged = (data ?? [])
+        .map((d) => ({
+          driver: d.name,
+          employee_id: d.employee_id,
+          license: complianceStatus(d.license_expires_at),
+          medical: complianceStatus(d.medical_expires_at),
+        }))
+        .filter((d) => ["expired", "critical", "warning"].includes(d.license.status) || ["expired", "critical", "warning"].includes(d.medical.status));
+
+      return { flagged_drivers: flagged, count: flagged.length };
     }
 
     default:

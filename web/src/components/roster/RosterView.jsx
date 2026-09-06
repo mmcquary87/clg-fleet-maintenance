@@ -1,10 +1,104 @@
-import { useState } from "react";
-import { Plus, Loader2, History, ListChecks } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Loader2, History, ListChecks, ShieldAlert } from "lucide-react";
 import { Card, Badge, Button, Eyebrow, Alert, Input } from "../../ds";
 import { useRoster } from "../../hooks/useRoster";
 import { useProfile } from "../../hooks/useProfile";
+import { useDriverCompliance } from "../../hooks/useDriverCompliance";
 import { rosterStatus, statusTone, daysRemaining } from "../../lib/rosterStatus";
+import { complianceStatus, worstStatus } from "../../lib/driverCompliance";
 import RosterFormModal from "./RosterFormModal";
+
+const COMPLIANCE_TONE = { expired: "critical", critical: "critical", warning: "accent", unknown: "neutral", ok: "brand" };
+const COMPLIANCE_LABEL = {
+  expired: "Expired", critical: "Expires soon", warning: "Expiring", unknown: "Not on file", ok: "Current",
+};
+
+function dateBadge({ status, daysRemaining }) {
+  const label = COMPLIANCE_LABEL[status];
+  const detail = status === "unknown" ? null
+    : status === "expired" ? `${Math.abs(daysRemaining)}d ago`
+    : `${daysRemaining}d`;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <Badge tone={COMPLIANCE_TONE[status]}>{label}</Badge>
+      {detail && <span style={{ fontSize: 11, color: "var(--clg-text-muted)" }}>{detail}</span>}
+    </div>
+  );
+}
+
+function ComplianceView() {
+  const { drivers, loading, error } = useDriverCompliance();
+
+  const rows = useMemo(() => {
+    return drivers
+      .map((d) => {
+        const license = complianceStatus(d.license_expires_at);
+        const medical = complianceStatus(d.medical_expires_at);
+        return { ...d, license, medical, worst: worstStatus(license, medical) };
+      })
+      .sort((a, b) => {
+        const rankDiff = { expired: 0, critical: 1, warning: 2, unknown: 3, ok: 4 }[a.worst.status]
+          - { expired: 0, critical: 1, warning: 2, unknown: 3, ok: 4 }[b.worst.status];
+        if (rankDiff !== 0) return rankDiff;
+        return (a.worst.daysRemaining ?? Infinity) - (b.worst.daysRemaining ?? Infinity);
+      });
+  }, [drivers]);
+
+  const flaggedCount = rows.filter((r) => r.worst.status === "expired" || r.worst.status === "critical" || r.worst.status === "warning").length;
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "40px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
+        <Loader2 size={16} className="spin" /> Loading compliance data…
+      </div>
+    );
+  }
+  if (error) {
+    return <Alert tone="critical" style={{ margin: 16 }}>{error}</Alert>;
+  }
+  if (rows.length === 0) {
+    return (
+      <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>
+        No active drivers on file yet.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ padding: "14px 18px", fontSize: 12.5, color: "var(--clg-text-body)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+        {flaggedCount > 0
+          ? <strong style={{ color: "var(--clg-scarlet)" }}>{flaggedCount} driver{flaggedCount === 1 ? "" : "s"} expired or expiring within 60 days.</strong>
+          : "No CDL or medical card expirations flagged within 60 days."}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
+          <thead>
+            <tr>
+              {["Driver", "Employee ID", "CDL expires", "Medical card expires"].map((h) => (
+                <th key={h} style={{
+                  textAlign: "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+                  color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.id} style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent" }}>
+                <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>{r.name}</td>
+                <td style={{ padding: "10px 14px", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)" }}>{r.employee_id || "—"}</td>
+                <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{dateBadge(r.license)}</td>
+                <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{dateBadge(r.medical)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function GovernanceBar({ settings, canEdit, onSave }) {
   const [editing, setEditing] = useState(false);
@@ -69,7 +163,8 @@ function GovernanceBar({ settings, canEdit, onSave }) {
 
 export default function RosterView({ session }) {
   const { rows, changeLog, settings, loading, error, saveRow, deleteRow, updateSettings } = useRoster();
-  const { canEditRoster } = useProfile(session.user.id);
+  const { profile, canEditRoster } = useProfile(session.user.id);
+  const canViewCompliance = profile?.role !== "mechanic";
   const [view, setView] = useState("roster");
   const [editingRow, setEditingRow] = useState(undefined); // undefined = closed, null = new, object = editing
   const [actionError, setActionError] = useState(null);
@@ -132,12 +227,26 @@ export default function RosterView({ session }) {
         >
           <History size={13} /> Change log
         </button>
+        {canViewCompliance && (
+          <button
+            onClick={() => setView("compliance")}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "7px 13px", fontSize: 12, cursor: "pointer",
+              border: "1px solid " + (view === "compliance" ? "var(--clg-royal)" : "var(--clg-reflection)"),
+              background: view === "compliance" ? "var(--clg-royal)" : "#fff", color: view === "compliance" ? "#fff" : "var(--clg-pewter)",
+            }}
+          >
+            <ShieldAlert size={13} /> Compliance
+          </button>
+        )}
       </div>
 
       {(error || actionError) && <Alert tone="critical" style={{ marginBottom: 16 }}>{error || actionError}</Alert>}
 
       <Card padding={0}>
-        {loading ? (
+        {view === "compliance" ? (
+          <ComplianceView />
+        ) : loading ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "40px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
             <Loader2 size={16} className="spin" /> Loading roster…
           </div>

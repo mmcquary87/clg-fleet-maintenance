@@ -6,6 +6,7 @@ const SUGGESTIONS = [
   "Which trucks are idle right now, and what's it costing us?",
   "Any trucks about to go empty with no reload?",
   "Any units with a check-engine light we haven't acted on?",
+  "Any drivers with a CDL or medical card expiring soon?",
   "How is Suburban Towing performing this year?",
   "What's unit 3307's status?",
   "What did we spend on maintenance this month?",
