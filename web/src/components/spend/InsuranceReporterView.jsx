@@ -5,7 +5,7 @@ import { useMilesDriven } from "../../hooks/useMilesDriven";
 import { monthRangeFor } from "../../lib/dateRangePresets";
 import { supabase } from "../../lib/supabaseClient";
 
-const DEFAULT_RATES = { auto_liability: 13.472, cargo: 1.226 };
+const DEFAULT_RATES = { auto_liability: 13.472, cargo: 1.226, physical_damage: 0.171, trailer_depreciation: 0.005 };
 
 function fmtMoney(n) {
   return "$" + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -15,6 +15,13 @@ function monthLabel(date) {
   return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
+// Whole calendar months between two first-of-month Dates (b after a).
+// Clamped at 0 -- a reporting month before a unit's valuation baseline
+// shouldn't project backward.
+function monthsBetween(a, b) {
+  return Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()));
+}
+
 // CLG's "CLG Monthly Equipment & Insurance Reporter" workbook is filled
 // out within the first 15 days of a new month, reporting on the PRIOR
 // calendar month's fleet mileage -- Reporting Month = September means
@@ -22,6 +29,14 @@ function monthLabel(date) {
 // "Mileage" sheet: one row per completed calendar month). This ties that
 // number to the same Alvys-sourced mileage the Spend page's cost/mile
 // already runs on, instead of a manual pull each month.
+//
+// Physical Damage is rated on equipment value, not mileage: each
+// CLG-owned unit's value (imported from the workbook's "CLG Valuation
+// History" / "Market Value Update" sheets -- see
+// 20260906030000_equipment_market_values.sql) depreciates forward from
+// its Aug 31, 2026 baseline to the reporting month, at its own per-unit
+// rate for trucks or one flat fleet-wide rate for trailers -- same split
+// the workbook itself uses.
 export default function InsuranceReporterView() {
   const [reportingMonth, setReportingMonth] = useState(() => {
     const t = new Date();
@@ -29,19 +44,35 @@ export default function InsuranceReporterView() {
   });
   const [rates, setRates] = useState(DEFAULT_RATES);
   const [ratesLoaded, setRatesLoaded] = useState(false);
+  const [equipment, setEquipment] = useState([]);
+  const [equipmentLoading, setEquipmentLoading] = useState(true);
+  const [equipmentError, setEquipmentError] = useState(null);
 
   useEffect(() => {
     supabase.from("app_settings")
-      .select("insurance_auto_liability_rate_per_100mi, insurance_cargo_rate_per_100mi")
+      .select("insurance_auto_liability_rate_per_100mi, insurance_cargo_rate_per_100mi, insurance_physical_damage_rate_per_100, insurance_trailer_depreciation_pct")
       .single()
       .then(({ data }) => {
         if (data) {
           setRates({
             auto_liability: Number(data.insurance_auto_liability_rate_per_100mi) || DEFAULT_RATES.auto_liability,
             cargo: Number(data.insurance_cargo_rate_per_100mi) || DEFAULT_RATES.cargo,
+            physical_damage: Number(data.insurance_physical_damage_rate_per_100) || DEFAULT_RATES.physical_damage,
+            trailer_depreciation: Number(data.insurance_trailer_depreciation_pct) || DEFAULT_RATES.trailer_depreciation,
           });
         }
         setRatesLoaded(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    supabase.from("units")
+      .select("number, type, current_market_value, current_market_value_date, market_value_mom_depreciation_pct")
+      .eq("is_active", true)
+      .not("current_market_value", "is", null)
+      .then(({ data, error: err }) => {
+        if (err) { setEquipmentError(err.message); setEquipment([]); } else { setEquipment(data ?? []); }
+        setEquipmentLoading(false);
       });
   }, []);
 
@@ -59,7 +90,24 @@ export default function InsuranceReporterView() {
 
   const autoLiabilityPremium = miles != null ? (miles * rates.auto_liability) / 100 : null;
   const cargoPremium = miles != null ? (miles * rates.cargo) / 100 : null;
-  const totalPremium = autoLiabilityPremium != null && cargoPremium != null ? autoLiabilityPremium + cargoPremium : null;
+
+  let truckValue = 0;
+  let trailerValue = 0;
+  for (const u of equipment) {
+    const baseline = new Date(u.current_market_value_date);
+    const baselineMonth = new Date(baseline.getFullYear(), baseline.getMonth(), 1);
+    const months = monthsBetween(baselineMonth, reportingMonth);
+    const rate = u.type === "Truck" ? Number(u.market_value_mom_depreciation_pct) || 0 : rates.trailer_depreciation;
+    const depreciated = Number(u.current_market_value) * Math.pow(1 - rate, months);
+    if (u.type === "Truck") truckValue += depreciated;
+    else trailerValue += depreciated;
+  }
+  const totalEquipmentValue = equipment.length > 0 ? truckValue + trailerValue : null;
+  const physicalDamagePremium = totalEquipmentValue != null ? (totalEquipmentValue * rates.physical_damage) / 100 : null;
+
+  const totalPremium = [autoLiabilityPremium, cargoPremium, physicalDamagePremium].every((v) => v != null)
+    ? autoLiabilityPremium + cargoPremium + physicalDamagePremium
+    : null;
 
   return (
     <div style={{ maxWidth: 720 }}>
@@ -87,6 +135,7 @@ export default function InsuranceReporterView() {
       </Card>
 
       {error && <Alert tone="critical" title="Couldn't load mileage" style={{ marginBottom: 16 }}>{error}</Alert>}
+      {equipmentError && <Alert tone="critical" title="Couldn't load equipment values" style={{ marginBottom: 16 }}>{equipmentError}</Alert>}
 
       <Card style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)", marginBottom: 6 }}>
@@ -118,9 +167,30 @@ export default function InsuranceReporterView() {
         )}
       </Card>
 
+      <Card style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)", marginBottom: 6 }}>
+          CLG-owned equipment value — {monthLabel(reportingMonth)}
+        </div>
+        {equipmentLoading ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--clg-cool)", fontSize: 13, padding: "8px 0" }}>
+            <Loader2 size={15} className="spin" /> Loading…
+          </div>
+        ) : totalEquipmentValue != null ? (
+          <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 28, color: "var(--clg-navy)" }}>
+            {fmtMoney(totalEquipmentValue)}
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>No unit valuations on file yet.</div>
+        )}
+        <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
+          {fmtMoney(truckValue)} trucks + {fmtMoney(trailerValue)} trailers, depreciated forward from each unit's last
+          reported value. Penske and Hale-leased equipment isn't included — CLG doesn't own it.
+        </div>
+      </Card>
+
       <Card>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)", marginBottom: 10 }}>
-          Mileage-based premium
+          Estimated premium
         </div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <tbody>
@@ -140,19 +210,27 @@ export default function InsuranceReporterView() {
                 {cargoPremium != null ? fmtMoney(cargoPremium) : "—"}
               </td>
             </tr>
+            <tr style={{ borderTop: "1px solid var(--clg-border-subtle)" }}>
+              <td style={{ padding: "8px 0", color: "var(--clg-text-body)" }}>
+                Physical Damage — {rates.physical_damage} per $100 value
+              </td>
+              <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>
+                {physicalDamagePremium != null ? fmtMoney(physicalDamagePremium) : "—"}
+              </td>
+            </tr>
             <tr style={{ borderTop: "2px solid var(--clg-border-default)" }}>
-              <td style={{ padding: "10px 0", fontWeight: 700, color: "var(--clg-navy)" }}>Total mileage-based premium</td>
+              <td style={{ padding: "10px 0", fontWeight: 700, color: "var(--clg-navy)" }}>Total estimated premium</td>
               <td style={{ padding: "10px 0", textAlign: "right", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)" }}>
                 {totalPremium != null ? fmtMoney(totalPremium) : "—"}
               </td>
             </tr>
           </tbody>
         </table>
-        <p style={{ fontSize: 11, color: "var(--clg-text-muted)", marginTop: 12, marginBottom: 0, lineHeight: 1.5 }}>
-          Physical Damage premium (rated on equipment value, not mileage) isn't included here yet — it needs a current
-          market value per unit, which the Asset Lifecycle tile only has once comps are entered.
-          {ratesLoaded && " Rates are editable in Settings — update them at each policy renewal."}
-        </p>
+        {ratesLoaded && (
+          <p style={{ fontSize: 11, color: "var(--clg-text-muted)", marginTop: 12, marginBottom: 0, lineHeight: 1.5 }}>
+            Rates are editable in Settings — update them at each policy renewal.
+          </p>
+        )}
       </Card>
     </div>
   );

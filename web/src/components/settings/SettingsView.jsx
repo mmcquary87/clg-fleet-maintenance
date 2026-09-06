@@ -164,6 +164,8 @@ function AssetLifecycleSettingsPanel() {
 function InsuranceRatesPanel() {
   const [autoLiability, setAutoLiability] = useState("");
   const [cargo, setCargo] = useState("");
+  const [physicalDamage, setPhysicalDamage] = useState("");
+  const [trailerDepreciation, setTrailerDepreciation] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -171,11 +173,13 @@ function InsuranceRatesPanel() {
 
   useEffect(() => {
     supabase.from("app_settings")
-      .select("insurance_auto_liability_rate_per_100mi, insurance_cargo_rate_per_100mi")
+      .select("insurance_auto_liability_rate_per_100mi, insurance_cargo_rate_per_100mi, insurance_physical_damage_rate_per_100, insurance_trailer_depreciation_pct")
       .single()
       .then(({ data }) => {
         setAutoLiability(data?.insurance_auto_liability_rate_per_100mi != null ? String(data.insurance_auto_liability_rate_per_100mi) : "13.472");
         setCargo(data?.insurance_cargo_rate_per_100mi != null ? String(data.insurance_cargo_rate_per_100mi) : "1.226");
+        setPhysicalDamage(data?.insurance_physical_damage_rate_per_100 != null ? String(data.insurance_physical_damage_rate_per_100) : "0.171");
+        setTrailerDepreciation(data?.insurance_trailer_depreciation_pct != null ? String(data.insurance_trailer_depreciation_pct) : "0.005");
         setLoaded(true);
       });
   }, []);
@@ -187,6 +191,8 @@ function InsuranceRatesPanel() {
     const { error: err } = await supabase.from("app_settings").update({
       insurance_auto_liability_rate_per_100mi: Number(autoLiability) || 0,
       insurance_cargo_rate_per_100mi: Number(cargo) || 0,
+      insurance_physical_damage_rate_per_100: Number(physicalDamage) || 0,
+      insurance_trailer_depreciation_pct: Number(trailerDepreciation) || 0,
     }).eq("id", true);
     setSaving(false);
     if (err) setError(err.message);
@@ -197,15 +203,21 @@ function InsuranceRatesPanel() {
     <Card>
       <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Insurance rates</h3>
       <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
-        Per-100-mile rates for the Spend page's Insurance view. Update these at each policy renewal.
+        Rates for the Spend page's Insurance view. Update these at each policy renewal.
       </p>
       {error && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 16 }}>{error}</Alert>}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
-        <Field label="Auto Liability ($ / 100 mi)" style={{ maxWidth: 200 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+        <Field label="Auto Liability ($ / 100 mi)" style={{ maxWidth: 190 }}>
           <Input type="number" min="0" step="0.001" disabled={!loaded} value={autoLiability} onChange={(e) => { setAutoLiability(e.target.value); setSaved(false); }} />
         </Field>
-        <Field label="Motor Truck Cargo ($ / 100 mi)" style={{ maxWidth: 200 }}>
+        <Field label="Motor Truck Cargo ($ / 100 mi)" style={{ maxWidth: 190 }}>
           <Input type="number" min="0" step="0.001" disabled={!loaded} value={cargo} onChange={(e) => { setCargo(e.target.value); setSaved(false); }} />
+        </Field>
+        <Field label="Physical Damage ($ / $100 value)" style={{ maxWidth: 190 }}>
+          <Input type="number" min="0" step="0.001" disabled={!loaded} value={physicalDamage} onChange={(e) => { setPhysicalDamage(e.target.value); setSaved(false); }} />
+        </Field>
+        <Field label="Trailer monthly depreciation" help="e.g. 0.005 = 0.5%/mo" style={{ maxWidth: 190 }}>
+          <Input type="number" min="0" step="0.0001" disabled={!loaded} value={trailerDepreciation} onChange={(e) => { setTrailerDepreciation(e.target.value); setSaved(false); }} />
         </Field>
         <Button size="sm" onClick={save} disabled={saving || !loaded} iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}>
           {saving ? "Saving…" : "Save"}
