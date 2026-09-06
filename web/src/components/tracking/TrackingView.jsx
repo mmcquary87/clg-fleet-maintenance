@@ -76,7 +76,7 @@ export default function TrackingView() {
           </div>
         </div>
         <div
-          title={`Position refreshes every 15 minutes from Samsara. Drive time still needed assumes ${ASSUMED_MPH} mph straight-line until Google Maps traffic-aware routing is connected — but the projected arrival factors in any mandatory HOS reset the driver's remaining drive-clock requires.`}
+          title={`Position refreshes every 15 minutes from Samsara. Drive time still needed assumes ${ASSUMED_MPH} mph straight-line until Google Maps traffic-aware routing is connected — but the projected arrival factors in any mandatory HOS reset the driver's remaining drive-clock requires (a conservative 10-hour reset by default; expand a row for the split-sleeper-berth best case, per 49 CFR 395.1(g)).`}
           style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, color: "var(--clg-reflection)", cursor: "help" }}
         >
           <Info size={15} />

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Building2, LayoutGrid, Loader2, Plus, UserMinus } from "lucide-react";
+import { Building2, LayoutGrid, Loader2, Plus, Shield, UserMinus } from "lucide-react";
 import { Button } from "../ds";
 import { useWorkOrders } from "../hooks/useWorkOrders";
 import CompanyView from "./CompanyView";
 import UnitView from "./UnitView";
 import DeductionsView from "./DeductionsView";
+import InsuranceReporterView from "./spend/InsuranceReporterView";
 import NewWorkOrderForm from "./NewWorkOrderForm";
 import DateRangeFilter from "./DateRangeFilter";
 
@@ -27,15 +28,22 @@ export default function SpendView({ onGoToWorkOrders, onGoToUnits, canViewAssetL
           <button className={"toggle-btn" + (view === "deductions" ? " active" : "")} onClick={() => setView("deductions")}>
             <UserMinus size={14} /> Deductions
           </button>
+          <button className={"toggle-btn" + (view === "insurance" ? " active" : "")} onClick={() => setView("insurance")}>
+            <Shield size={14} /> Insurance
+          </button>
         </div>
-        <Button size="sm" iconLeft={<Plus size={15} />} onClick={() => setShowForm(true)}>
-          Log Invoice
-        </Button>
+        {view !== "insurance" && (
+          <Button size="sm" iconLeft={<Plus size={15} />} onClick={() => setShowForm(true)}>
+            Log Invoice
+          </Button>
+        )}
       </div>
 
-      <div style={{ marginBottom: 16 }}>
-        <DateRangeFilter onChange={setRange} />
-      </div>
+      {view !== "insurance" && (
+        <div style={{ marginBottom: 16 }}>
+          <DateRangeFilter onChange={setRange} />
+        </div>
+      )}
 
       {showForm && (
         <NewWorkOrderForm
@@ -44,7 +52,9 @@ export default function SpendView({ onGoToWorkOrders, onGoToUnits, canViewAssetL
         />
       )}
 
-      {view === "deductions" ? (
+      {view === "insurance" ? (
+        <InsuranceReporterView />
+      ) : view === "deductions" ? (
         <DeductionsView range={range} />
       ) : (
         <>

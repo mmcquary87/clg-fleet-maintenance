@@ -84,6 +84,7 @@ lead_time = appointment_window_start - now                         # runway to r
   "severityTier": "Critical",
   "assumptions": {
     "resetHoursAssumed": 10,
+    "splitSleeperLongHoursAssumed": 7,
     "maxDrivePerCycleHours": 11,
     "routeSource": "google_directions",
     "hosSource": "samsara_hos_clocks"
@@ -108,7 +109,13 @@ These cutoffs are illustrative starting points, not approved thresholds:
 30-minute break clock or 60/7 vs 70/8 cycle exhaustion — both can add delay
 this version won't catch. Add cycle-clock as a second gating check before
 this feeds anything customer-facing.
-* Assumes a fixed 10-hour reset. Split-sleeper provisions aren't modeled.
+* Assumes a fixed 10-hour reset as the primary/conservative projection.
+  Split-sleeper provisions (49 CFR 395.1(g)) are now modeled as a secondary
+  best-case estimate — a 7-hour qualifying long break per reset, shown
+  alongside the conservative figure — since Samsara's HOS clocks don't
+  expose whether a specific driver is mid-split or which leg they're on.
+  The primary projection is left unchanged (conservative) rather than
+  guessing; this doesn't move the severity-tier math above.
 * Doesn't account for scheduled fuel stops or yard time beyond mandated
 resets.
 * Needs a CLG-approved prediction horizon (e.g., only project loads with an

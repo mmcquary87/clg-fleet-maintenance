@@ -11,10 +11,29 @@ export const ASSUMED_MPH = 55;
 
 // late-load-exposure-calc-spec.md's v1 algorithm constants.
 const MAX_DRIVE_PER_RESET_HOURS = 11; // property-carrying max drive/day
-const RESET_HOURS = 10; // default assumption — split-sleeper not modeled
+const RESET_HOURS = 10; // conservative default: one consolidated off-duty period
+
+// 49 CFR 395.1(g) — split sleeper berth: a driver may split the required
+// 10-hour break into two periods instead of one consolidated period,
+// provided one period is at least 7 consecutive hours in the sleeper
+// berth, the other is at least 2 consecutive hours (sleeper berth,
+// off-duty, or a combination), and the two together total at least 10
+// hours — neither period counts against the 14-hour on-duty window.
+// Samsara's HOS clocks (drive/shift/cycle remaining minutes) don't expose
+// whether a given driver is mid-split or which leg they're on, so this
+// can't be known for certain — same "dispatch-planning heuristic, not a
+// compliance determination" scope as the rest of this calc (see
+// late-load-exposure-calc-spec.md). Modeled as a best-case secondary
+// estimate (the qualifying long break, 7h, per reset) alongside the
+// unchanged conservative default above, not a replacement for it — a
+// dispatcher shouldn't be blindsided by a truck that's legally back on the
+// road well before a flat 10-hour assumption would suggest, but the
+// primary projection stays conservative since we can't confirm the split.
+const SPLIT_SLEEPER_LONG_HOURS = 7;
 
 const ASSUMPTIONS = {
   resetHoursAssumed: RESET_HOURS,
+  splitSleeperLongHoursAssumed: SPLIT_SLEEPER_LONG_HOURS,
   maxDrivePerCycleHours: MAX_DRIVE_PER_RESET_HOURS,
   routeSource: "straight_line_55mph", // becomes "google_directions" once connected
   hosSource: "samsara_hos_clocks",
@@ -33,17 +52,21 @@ function fmtClock(date) {
 
 // v1 algorithm from late-load-exposure-calc-spec.md: given drive-time-needed
 // D and drive-clock-remaining A, project total elapsed hours including any
-// mandatory 10-hour resets — not just D itself, which is what the old
-// straight-line ETA got wrong (it assumed a driver can keep driving past
-// their legal limit). Returns { totalHours, resetsNeeded }.
+// mandatory resets — not just D itself, which is what the old straight-line
+// ETA got wrong (it assumed a driver can keep driving past their legal
+// limit). Returns both the conservative (full 10h consolidated reset) and
+// split-sleeper best-case (7h qualifying long break per reset) totals —
+// see the SPLIT_SLEEPER_LONG_HOURS comment above for why both are kept
+// rather than picking one.
 function projectDriveTime(driveHoursNeeded, driveRemainingHours) {
   if (driveHoursNeeded <= driveRemainingHours) {
-    return { totalHours: driveHoursNeeded, resetsNeeded: 0 };
+    return { totalHours: driveHoursNeeded, resetsNeeded: 0, totalHoursSplitSleeper: driveHoursNeeded };
   }
   const remainingAfterFirstLeg = driveHoursNeeded - driveRemainingHours;
   const resetsNeeded = Math.ceil(remainingAfterFirstLeg / MAX_DRIVE_PER_RESET_HOURS);
   const totalHours = driveRemainingHours + resetsNeeded * RESET_HOURS + remainingAfterFirstLeg;
-  return { totalHours, resetsNeeded };
+  const totalHoursSplitSleeper = driveRemainingHours + resetsNeeded * SPLIT_SLEEPER_LONG_HOURS + remainingAfterFirstLeg;
+  return { totalHours, resetsNeeded, totalHoursSplitSleeper };
 }
 
 // Draft, unapproved cutoffs (late-load-exposure-calc-spec.md: "needs
@@ -92,7 +115,7 @@ function computeEta(unit, trip, hos) {
       hasHos: typeof hos?.drive_remaining_minutes === "number", hasAppointment: deadline != null,
       distanceRemainingMiles: 0, driveHoursNeeded: 0,
       driveRemainingHours: typeof hos?.drive_remaining_minutes === "number" ? hos.drive_remaining_minutes / 60 : null,
-      projectedArrival: arrivedAt, resetsNeeded: 0,
+      projectedArrival: arrivedAt, projectedArrivalSplitSleeper: arrivedAt, resetsNeeded: 0,
       deadline, deadlineType, windowStart,
       hoursShort: 0, bufferHours: null, cushionHours: null, leadTimeHours: null, severityTier: "Arrived",
       severity: "arrived",
@@ -116,11 +139,17 @@ function computeEta(unit, trip, hos) {
     : null;
 
   let projectedArrival = null;
+  let projectedArrivalSplitSleeper = null;
   let resetsNeeded = 0;
   if (driveHoursNeeded != null && driveRemainingHours != null) {
     const projection = projectDriveTime(driveHoursNeeded, driveRemainingHours);
     resetsNeeded = projection.resetsNeeded;
     projectedArrival = new Date(Date.now() + projection.totalHours * 3600000);
+    // Only meaningfully different from projectedArrival when a reset is
+    // actually involved -- see SPLIT_SLEEPER_LONG_HOURS above.
+    projectedArrivalSplitSleeper = resetsNeeded > 0
+      ? new Date(Date.now() + projection.totalHoursSplitSleeper * 3600000)
+      : projectedArrival;
   }
 
   const hoursShort = projectedArrival && deadline
@@ -148,7 +177,8 @@ function computeEta(unit, trip, hos) {
     if (hoursShort > 0) {
       severity = "attention";
       reason = resetsNeeded > 0
-        ? `Needs ${resetsNeeded > 1 ? `${resetsNeeded} required resets` : "a required 10-hour reset"} before it can finish the drive — projected ${fmtHM(hoursShort)} short of the ${fmtClock(new Date(deadline))} ${deadlineLabel}.`
+        ? `Needs ${resetsNeeded > 1 ? `${resetsNeeded} required resets` : "a required reset"} before it can finish the drive — projected ${fmtHM(hoursShort)} short of the ${fmtClock(new Date(deadline))} ${deadlineLabel}, assuming a full ${RESET_HOURS}-hour reset. ` +
+          `If running a compliant split-sleeper-berth schedule (49 CFR 395.1(g)), could resume as early as ${fmtClock(projectedArrivalSplitSleeper)} instead — can't confirm which from HOS clocks alone.`
         : `Projected ${fmtHM(hoursShort)} short of the ${fmtClock(new Date(deadline))} ${deadlineLabel}.`;
     } else if (deadline) {
       severity = "ok";
@@ -168,7 +198,7 @@ function computeEta(unit, trip, hos) {
     // these independent of whether an ETA could be computed overall.
     hasPosition, hasDestination, hasHos: driveRemainingHours != null, hasAppointment: deadline != null,
     distanceRemainingMiles, driveHoursNeeded, driveRemainingHours,
-    projectedArrival, resetsNeeded, deadline, deadlineType, windowStart,
+    projectedArrival, projectedArrivalSplitSleeper, resetsNeeded, deadline, deadlineType, windowStart,
     hoursShort, bufferHours, cushionHours, leadTimeHours, severityTier,
     severity, reason, stopType, stopLabel, assumptions: ASSUMPTIONS,
   };
