@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   LayoutGrid, MapPin, RefreshCw, BarChart3, ClipboardList, CircleDollarSign, Truck, Briefcase, User, Wrench,
-  Settings, LogOut, ChevronsLeft, ChevronsRight,
+  Settings, LogOut, ChevronsLeft, ChevronsRight, Shield,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -27,6 +27,7 @@ const NAV_GROUPS = [
       { id: "spend", label: "Spend", Icon: CircleDollarSign },
       { id: "units", label: "Units", Icon: Truck },
       { id: "vendors", label: "Vendors", Icon: Briefcase },
+      { id: "insurance", label: "Insurance", Icon: Shield },
     ],
   },
   // "Home time" is intentionally not in nav (2026-09-04, CLG) -- a Power BI
@@ -51,7 +52,7 @@ function iconButtonStyle() {
   };
 }
 
-export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin, email }) {
+export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin, isMechanic, email }) {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1"; } catch { return false; }
   });
@@ -64,9 +65,17 @@ export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin,
     });
   };
 
-  const groups = canUseMechanicQueue
-    ? [...NAV_GROUPS, { id: "mechanic", label: "Mechanic + admin only", items: [{ id: "mechanic", label: "Mechanic", Icon: Wrench }] }]
+  // Insurance carries financial/valuation data, same "not the mechanic
+  // role's day-to-day view" line CLG drew for Asset Lifecycle and driver
+  // compliance -- filtered out of the group here rather than just hiding
+  // the page content, so the nav link itself doesn't lead to a blank page.
+  const baseGroups = isMechanic
+    ? NAV_GROUPS.map((g) => (g.id === "fleet" ? { ...g, items: g.items.filter((i) => i.id !== "insurance") } : g))
     : NAV_GROUPS;
+
+  const groups = canUseMechanicQueue
+    ? [...baseGroups, { id: "mechanic", label: "Mechanic + admin only", items: [{ id: "mechanic", label: "Mechanic", Icon: Wrench }] }]
+    : baseGroups;
 
   return (
     <div style={{
