@@ -156,6 +156,66 @@ function AssetLifecycleSettingsPanel() {
   );
 }
 
+// Mileage-driven insurance premium rates, shown on the Spend page's
+// Insurance view. Defaults (13.472 / 1.226) are CLG's real rates as of the
+// 2026 policy period, sourced from the CLG Monthly Equipment & Insurance
+// Reporter workbook -- update these at each policy renewal rather than
+// letting the app quietly run a stale rate.
+function InsuranceRatesPanel() {
+  const [autoLiability, setAutoLiability] = useState("");
+  const [cargo, setCargo] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    supabase.from("app_settings")
+      .select("insurance_auto_liability_rate_per_100mi, insurance_cargo_rate_per_100mi")
+      .single()
+      .then(({ data }) => {
+        setAutoLiability(data?.insurance_auto_liability_rate_per_100mi != null ? String(data.insurance_auto_liability_rate_per_100mi) : "13.472");
+        setCargo(data?.insurance_cargo_rate_per_100mi != null ? String(data.insurance_cargo_rate_per_100mi) : "1.226");
+        setLoaded(true);
+      });
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    const { error: err } = await supabase.from("app_settings").update({
+      insurance_auto_liability_rate_per_100mi: Number(autoLiability) || 0,
+      insurance_cargo_rate_per_100mi: Number(cargo) || 0,
+    }).eq("id", true);
+    setSaving(false);
+    if (err) setError(err.message);
+    else setSaved(true);
+  };
+
+  return (
+    <Card>
+      <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Insurance rates</h3>
+      <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
+        Per-100-mile rates for the Spend page's Insurance view. Update these at each policy renewal.
+      </p>
+      {error && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 16 }}>{error}</Alert>}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
+        <Field label="Auto Liability ($ / 100 mi)" style={{ maxWidth: 200 }}>
+          <Input type="number" min="0" step="0.001" disabled={!loaded} value={autoLiability} onChange={(e) => { setAutoLiability(e.target.value); setSaved(false); }} />
+        </Field>
+        <Field label="Motor Truck Cargo ($ / 100 mi)" style={{ maxWidth: 200 }}>
+          <Input type="number" min="0" step="0.001" disabled={!loaded} value={cargo} onChange={(e) => { setCargo(e.target.value); setSaved(false); }} />
+        </Field>
+        <Button size="sm" onClick={save} disabled={saving || !loaded} iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {saved && <span style={{ fontSize: 12.5, color: "var(--clg-royal)", fontWeight: 600 }}>Saved</span>}
+      </div>
+    </Card>
+  );
+}
+
 function UsersPanel() {
   const { users, loading, error, setCanEditRoster, setCanVoidWorkOrders } = useUsersAdmin();
   const [toggleError, setToggleError] = useState(null);
@@ -306,6 +366,10 @@ export default function SettingsView() {
 
       <div style={{ marginTop: 32 }}>
         <AssetLifecycleSettingsPanel />
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        <InsuranceRatesPanel />
       </div>
 
       <div style={{ marginTop: 32 }}>
