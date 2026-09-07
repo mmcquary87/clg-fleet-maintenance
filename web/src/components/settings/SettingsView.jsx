@@ -5,7 +5,17 @@ import { supabase } from "../../lib/supabaseClient";
 import { useUsersAdmin } from "../../hooks/useUsersAdmin";
 import { CATEGORIES } from "../../lib/categories";
 
-const ROLES = ["dispatcher", "mechanic", "admin"];
+// Human-readable labels + a one-line description of what each role can
+// actually do -- the raw enum values (dispatcher/mechanic/admin) used to
+// show as-is in both the invite form and the Users table, with no
+// explanation beyond one terse line about void/roster rights, which read
+// as an unexplained "mechanic/admin" pairing.
+const ROLES = [
+  { value: "dispatcher", label: "Dispatcher", description: "Day-to-day fleet ops — Board, Tracking, Work Orders, Spend. No Settings access." },
+  { value: "mechanic", label: "Mechanic", description: "Shop-floor view (Mechanic queue) for logging repairs. Financial/valuation pages (Insurance, Asset Lifecycle, driver compliance) are hidden." },
+  { value: "admin", label: "Admin", description: "Everything a Dispatcher can see, plus Settings, user management, and void rights on work orders." },
+];
+const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.value, r.label]));
 
 // "Tow" is frontend-only (see CLAUDE.md's category-drift note) -- it's not
 // a value of the wo_category Postgres enum, so it can't be a member of the
@@ -284,7 +294,7 @@ function UsersPanel() {
                   {u.email || "—"}
                 </td>
                 <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                  <Badge tone={u.role === "admin" ? "brand" : "neutral"}>{u.role}</Badge>
+                  <Badge tone={u.role === "admin" ? "brand" : "neutral"}>{ROLE_LABEL[u.role] || u.role}</Badge>
                 </td>
                 <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid var(--clg-border-subtle)" }}>
                   <Toggle checked={u.can_edit_roster} onChange={(next) => onToggle(u.id, next)} />
@@ -345,7 +355,7 @@ export default function SettingsView() {
         {invited && (
           <Alert tone="brand" title="Invite sent" style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <CheckCircle2 size={14} /> {invited.email} invited as {invited.role}.
+              <CheckCircle2 size={14} /> {invited.email} invited as {ROLE_LABEL[invited.role] || invited.role}.
             </div>
           </Alert>
         )}
@@ -361,7 +371,10 @@ export default function SettingsView() {
           </div>
 
           <Field label="Role" style={{ marginBottom: 20 }}>
-            <Select value={role} onChange={(e) => setRole(e.target.value)} options={ROLES} />
+            <Select value={role} onChange={(e) => setRole(e.target.value)} options={ROLES.map(({ value, label }) => ({ value, label }))} />
+            <p style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
+              {ROLES.find((r) => r.value === role)?.description}
+            </p>
           </Field>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
