@@ -7,6 +7,7 @@ export default function UnitForm({ onCancel, onSaved }) {
   const [number, setNumber] = useState("");
   const [type, setType] = useState("Truck");
   const [vin, setVin] = useState("");
+  const [ownership, setOwnership] = useState("owned");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -18,6 +19,7 @@ export default function UnitForm({ onCancel, onSaved }) {
       number: number.trim(),
       type,
       vin: vin.trim() || null,
+      ownership,
     });
     setSubmitting(false);
     if (err) {
@@ -39,12 +41,18 @@ export default function UnitForm({ onCancel, onSaved }) {
       {error && <Alert tone="critical" style={{ marginBottom: 14 }}>{error}</Alert>}
 
       <form onSubmit={onSubmit}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
           <Field label="Unit number" required>
             <Input required value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g. 3303" />
           </Field>
           <Field label="Type">
             <Select value={type} onChange={(e) => setType(e.target.value)} options={["Truck", "Trailer", "Van", "Other"]} />
+          </Field>
+          <Field label="Ownership">
+            <Select
+              value={ownership} onChange={(e) => setOwnership(e.target.value)}
+              options={[{ value: "owned", label: "CLG-owned" }, { value: "penske_lease", label: "Penske lease" }, { value: "hale_lease", label: "Hale lease" }]}
+            />
           </Field>
           <Field label="VIN" help="Optional">
             <Input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="Vehicle ID number" />
