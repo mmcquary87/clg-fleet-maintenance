@@ -6,7 +6,9 @@ import { useUnitActivity } from "../../hooks/useUnitActivity";
 import { useUnitFaults } from "../../hooks/useUnitFaults";
 import { worstStatus } from "../../lib/maintenanceSchedule";
 import UnitForm from "./UnitForm";
-import UnitDrawer from "../shared/UnitDrawer";
+import UnitDetailPage from "./UnitDetailPage";
+
+const OWNERSHIP_BADGE = { penske_lease: "Penske", hale_lease: "Hale" };
 
 function faultTone(severity) {
   if (severity === "red") return "critical";
@@ -71,6 +73,7 @@ function UnitCard({ unit, activity, faults, onOpen, onToggleActive }) {
           {unit.number}
         </span>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {OWNERSHIP_BADGE[unit.ownership] && <Badge tone="brand">{OWNERSHIP_BADGE[unit.ownership]}</Badge>}
           {isDown && <Badge tone="critical">Down</Badge>}
           {faults?.activeSeverity && (
             <Badge tone={faultTone(faults.activeSeverity)} title={faults.activeDescription || faults.activeCode}>
@@ -120,7 +123,7 @@ function UnitCard({ unit, activity, faults, onOpen, onToggleActive }) {
   );
 }
 
-export default function UnitsView() {
+export default function UnitsView({ canViewAssetLifecycle }) {
   const { units, loading, error, reload, toggleActive } = useUnits();
   const { byUnitId, loading: activityLoading } = useUnitActivity();
   const { byUnitId: faultsByUnitId } = useUnitFaults();
@@ -135,12 +138,22 @@ export default function UnitsView() {
       .filter((u) => {
         if (!query.trim()) return true;
         const q = query.toLowerCase();
-        return [u.number, u.vin, u.current_location, u.type].filter(Boolean).some((v) => v.toLowerCase().includes(q));
+        return [u.number, u.vin, u.current_location, u.type, u.plate_number].filter(Boolean).some((v) => v.toLowerCase().includes(q));
       });
   }, [units, filter, query]);
 
   const downCount = visible.filter((u) => u.can_move_load === false).length;
   const faultCount = visible.filter((u) => faultsByUnitId[u.id]?.activeSeverity).length;
+
+  if (openUnitId) {
+    return (
+      <UnitDetailPage
+        unitId={openUnitId}
+        onBack={() => setOpenUnitId(null)}
+        canViewAssetLifecycle={canViewAssetLifecycle}
+      />
+    );
+  }
 
   return (
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1200, margin: "0 auto" }}>
@@ -204,8 +217,6 @@ export default function UnitsView() {
           ))}
         </div>
       )}
-
-      {openUnitId && <UnitDrawer unitId={openUnitId} onClose={() => setOpenUnitId(null)} />}
     </div>
   );
 }

@@ -72,6 +72,7 @@ export default function InsuranceView() {
     supabase.from("units")
       .select("number, type, current_market_value, current_market_value_date, market_value_mom_depreciation_pct")
       .eq("is_active", true)
+      .eq("ownership", "owned")
       .not("current_market_value", "is", null)
       .then(({ data, error: err }) => {
         if (err) { setEquipmentError(err.message); setEquipment([]); } else { setEquipment(data ?? []); }
@@ -79,9 +80,15 @@ export default function InsuranceView() {
       });
   }, []);
 
+  // Penske/Hale leased equipment now lives in `units` too (ownership !=
+  // 'owned', imported 2026-09-07 so it's a first-class unit with its own
+  // drawer/work-order history) rather than the old standalone
+  // leased_equipment_values table — this just reads the same rows a
+  // different way.
   useEffect(() => {
-    supabase.from("leased_equipment_values")
-      .select("ownership, current_value")
+    supabase.from("units")
+      .select("ownership, current_market_value")
+      .neq("ownership", "owned")
       .then(({ data, error: err }) => {
         if (err) { setLeasedError(err.message); setLeased([]); } else { setLeased(data ?? []); }
         setLeasedLoading(false);
@@ -127,8 +134,8 @@ export default function InsuranceView() {
   let penskeValue = 0;
   let haleValue = 0;
   for (const l of leased) {
-    if (l.ownership === "penske_lease") penskeValue += Number(l.current_value);
-    else haleValue += Number(l.current_value);
+    if (l.ownership === "penske_lease") penskeValue += Number(l.current_market_value) || 0;
+    else haleValue += Number(l.current_market_value) || 0;
   }
   const grandTotalEquipmentValue = clgEquipmentValue != null ? clgEquipmentValue + penskeValue + haleValue : null;
 

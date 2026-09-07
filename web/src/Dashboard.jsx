@@ -98,7 +98,7 @@ export default function Dashboard({ session }) {
             />
           )}
           {tab === "operations" && <OperationsView />}
-          {tab === "units" && <UnitsView />}
+          {tab === "units" && <UnitsView canViewAssetLifecycle={profile?.role !== "mechanic"} />}
           {tab === "vendors" && <VendorsView />}
           {tab === "insurance" && !isMechanic && <InsuranceView />}
           {tab === "roster" && <RosterView session={session} />}
