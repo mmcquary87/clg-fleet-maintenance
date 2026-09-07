@@ -35,7 +35,7 @@ const PAGE_META = {
   insurance: { group: "Fleet", page: "Insurance" },
   roster: { group: "Drivers", page: "Drivers" },
   hometime: { group: "Drivers", page: "Home time" },
-  mechanic: { group: "Mechanic", page: "Mechanic" },
+  mechanic: { group: "Shop", page: "Mechanic queue" },
   settings: { group: "Admin", page: "Settings" },
 };
 

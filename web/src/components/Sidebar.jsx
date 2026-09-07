@@ -74,7 +74,7 @@ export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin,
     : NAV_GROUPS;
 
   const groups = canUseMechanicQueue
-    ? [...baseGroups, { id: "mechanic", label: "Mechanic + admin only", items: [{ id: "mechanic", label: "Mechanic", Icon: Wrench }] }]
+    ? [...baseGroups, { id: "mechanic", label: "Shop", items: [{ id: "mechanic", label: "Mechanic queue", Icon: Wrench }] }]
     : baseGroups;
 
   return (

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { StatusPill } from "../../ds";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 function fmtFull(date) {
   return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -48,10 +49,14 @@ function HosCell({ hos, eta }) {
   );
 }
 
+function driverNameFor(row) {
+  return row.trip.driver?.name || row.unit.driver_name || "Driver not on file";
+}
+
 function Row({ row, zebra, onOpenUnit }) {
   const [open, setOpen] = useState(false);
   const { unit, trip, eta } = row;
-  const driverName = trip.driver?.name || unit.driver_name || "Driver not on file";
+  const driverName = driverNameFor(row);
   const bg = zebra ? "var(--clg-surface-subtle)" : "transparent";
 
   return (
@@ -60,10 +65,13 @@ function Row({ row, zebra, onOpenUnit }) {
         onClick={() => setOpen((o) => !o)}
         style={{ cursor: "pointer", background: bg, borderBottom: open ? "none" : "1px solid var(--clg-smoke)" }}
       >
-        <td style={{ padding: "10px 8px", fontSize: 13 }}>
+        <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 700, color: "var(--clg-navy)" }}>
+          {driverName}
+        </td>
+        <td style={{ padding: "10px 8px", fontSize: 12.5 }}>
           <button
             onClick={(e) => { e.stopPropagation(); onOpenUnit(unit.id); }}
-            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--clg-royal)", fontWeight: 700, textDecoration: "underline" }}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", color: "var(--clg-royal)", textDecoration: "underline" }}
           >
             {unit.number}
           </button>
@@ -83,7 +91,6 @@ function Row({ row, zebra, onOpenUnit }) {
             <span style={{ color: "var(--clg-mercury)" }}>—</span>
           )}
         </td>
-        <td style={{ padding: "10px 8px", fontSize: 13, color: "var(--clg-granite)" }}>{driverName}</td>
         <td style={{ padding: "10px 8px", fontSize: 12.5, color: "var(--clg-granite)", maxWidth: 160 }}>
           {unit.current_location || <span style={{ color: "var(--clg-mercury)" }}>No GPS lock</span>}
         </td>
@@ -113,7 +120,7 @@ function Row({ row, zebra, onOpenUnit }) {
       </tr>
       {open && (
         <tr style={{ background: bg, borderBottom: "1px solid var(--clg-smoke)" }}>
-          <td colSpan={12} style={{ padding: "0 8px 14px", fontSize: 12.5, color: "var(--clg-granite)" }}>
+          <td colSpan={11} style={{ padding: "0 8px 14px", fontSize: 12.5, color: "var(--clg-granite)" }}>
             <div style={{ background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)", padding: "12px 14px", lineHeight: 1.6 }}>
               {eta.reason}
             </div>
@@ -125,16 +132,103 @@ function Row({ row, zebra, onOpenUnit }) {
 }
 
 const HEADERS = [
-  "Unit", "Load #", "Driver", "Current location", "Stop", "ETA", "Appt", "ETA Cushion", "HOS", "Miles remaining", "Status", "",
+  "Driver", "Unit", "Load #", "Current location", "Stop", "ETA", "Appt", "ETA Cushion", "HOS", "Miles remaining", "Status", "",
 ];
 
-// One dense table for every unit on an active load (ui-improvement-punch-
-// list.md's Tracking rebuild) — replaces the old three-section split
-// (Needs attention/On track/Missing data). Rows already arrive worst-first
-// from useTracking (attention's negative cushion, then onTrack's positive
-// cushion, then noData last), so the whole table reads as one continuous
-// risk gradient instead of three separately-sorted lists.
+function statusTone(eta) {
+  if (eta.severity === "attention") return "red";
+  if (eta.severity === "arrived" || (eta.severity === "ok" && eta.hasAppointment)) return "green";
+  return "pending";
+}
+
+// Phone-width card, one per driver — same fields as a table row, stacked
+// instead of scrolled horizontally. A wide 11-column table is unusable
+// below ~700px, so this isn't a squeezed table, it's a different layout.
+function DriverCard({ row, onOpenUnit }) {
+  const [open, setOpen] = useState(false);
+  const { unit, trip, eta } = row;
+  const driverName = driverNameFor(row);
+
+  return (
+    <div style={{ background: "var(--clg-surface-card)", borderRadius: "var(--clg-radius-md)", boxShadow: "var(--clg-shadow-resting)", padding: 14, marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "var(--clg-navy)" }}>{driverName}</div>
+          <button
+            onClick={() => onOpenUnit(unit.id)}
+            style={{ background: "none", border: "none", padding: 0, marginTop: 2, cursor: "pointer", font: "inherit", fontSize: 12, color: "var(--clg-royal)", textDecoration: "underline" }}
+          >
+            Unit {unit.number}
+          </button>
+        </div>
+        <StatusPill tone={statusTone(eta)}>
+          {eta.severity === "attention" ? "Late risk" : eta.severity === "arrived" ? "Arrived" : eta.severity === "ok" && eta.hasAppointment ? "On track" : eta.severity === "ok" ? "No appt" : "Missing data"}
+        </StatusPill>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12, fontSize: 12.5 }}>
+        <div>
+          <div style={{ fontSize: 10, color: "var(--clg-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Stop</div>
+          <div style={{ color: "var(--clg-granite)", marginTop: 2 }}>{trip.stop_name || "Not yet synced"}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: "var(--clg-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>ETA cushion</div>
+          <div style={{ marginTop: 2 }}><CushionPill eta={eta} /></div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: "var(--clg-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>HOS</div>
+          <div style={{ marginTop: 2 }}><HosCell hos={row.hos} eta={eta} /></div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: "var(--clg-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Miles remaining</div>
+          <div style={{ color: "var(--clg-granite)", marginTop: 2 }}>{eta.distanceRemainingMiles != null ? Math.round(eta.distanceRemainingMiles).toLocaleString() : "—"}</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11.5, color: "var(--clg-text-muted)" }}>
+        <span>{unit.current_location || "No GPS lock"}</span>
+        {trip.load_number && (
+          <a href={`https://app.alvys.com/#/loads/${trip.load_number}`} target="_blank" rel="noopener noreferrer" style={{ color: "var(--clg-royal)" }}>
+            Load {trip.load_number}
+          </a>
+        )}
+      </div>
+
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{ marginTop: 10, background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--clg-royal)" }}
+      >
+        <ChevronDown size={12} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .12s" }} /> Why this ETA
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, fontSize: 12, color: "var(--clg-granite)", lineHeight: 1.6 }}>{eta.reason}</div>
+      )}
+    </div>
+  );
+}
+
+// One dense table for every driver on an active load (ui-improvement-
+// punch-list.md's Tracking rebuild) — replaces the old three-section
+// split (Needs attention/On track/Missing data). Rows already arrive
+// worst-first from useTracking (attention's negative cushion, then
+// onTrack's positive cushion, then noData last), so the whole table reads
+// as one continuous risk gradient instead of three separately-sorted
+// lists. Driver is the primary identity (leftmost column / card title) —
+// unit is still one tap away for maintenance/DVIR history, but the person
+// dispatchers are actually managing here is the driver, not the truck.
+// Below the mobile breakpoint this renders as a card list instead — an
+// 11-column table doesn't fit a phone screen no matter how it's squeezed.
 export default function TrackingTable({ rows, onOpenUnit }) {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div>
+        {rows.map((row) => <DriverCard key={row.unit.id} row={row} onOpenUnit={onOpenUnit} />)}
+      </div>
+    );
+  }
+
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Loader2, Navigation, Info } from "lucide-react";
-import { Alert } from "../../ds";
+import { Loader2, Navigation, Info, Search } from "lucide-react";
+import { Alert, Input } from "../../ds";
 import { useTracking, ASSUMED_MPH } from "../../hooks/useTracking";
 import TrackingTable from "./TrackingTable";
 import UnitDrawer from "../shared/UnitDrawer";
@@ -46,13 +46,24 @@ function FilterChips({ active, onChange }) {
 export default function TrackingView() {
   const { rows, groups, total, loading, error, reload } = useTracking();
   const [activeFilter, setActiveFilter] = useState(null);
+  const [query, setQuery] = useState("");
   const [openUnitId, setOpenUnitId] = useState(null);
 
   const visibleRows = useMemo(() => {
-    if (!activeFilter) return rows;
-    const filter = FILTERS.find((f) => f.key === activeFilter);
-    return filter ? rows.filter(filter.test) : rows;
-  }, [rows, activeFilter]);
+    let result = rows;
+    if (activeFilter) {
+      const filter = FILTERS.find((f) => f.key === activeFilter);
+      if (filter) result = result.filter(filter.test);
+    }
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      result = result.filter((r) => {
+        const driverName = r.trip.driver?.name || r.unit.driver_name || "";
+        return driverName.toLowerCase().includes(q) || r.unit.number.toLowerCase().includes(q);
+      });
+    }
+    return result;
+  }, [rows, activeFilter, query]);
 
   return (
     <div style={{ fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)" }}>
@@ -62,7 +73,7 @@ export default function TrackingView() {
       }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--clg-mercury)", display: "flex", alignItems: "center", gap: 6 }}>
-            <Navigation size={12} /> Units in transit
+            <Navigation size={12} /> Drivers in transit
           </div>
           <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 36, lineHeight: 1 }}>
             {total}
@@ -93,11 +104,15 @@ export default function TrackingView() {
           </div>
         ) : total === 0 ? (
           <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>
-            No units currently have an active trip on file.
+            No drivers currently have an active trip on file.
           </div>
         ) : (
           <>
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ position: "relative", maxWidth: 320 }}>
+                <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
+                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Look up a driver or unit…" style={{ paddingLeft: 30 }} />
+              </div>
               <FilterChips active={activeFilter} onChange={setActiveFilter} />
             </div>
 
@@ -106,7 +121,7 @@ export default function TrackingView() {
                 border: "1px dashed var(--clg-mercury)", padding: "16px 12px", fontSize: 12,
                 color: "var(--clg-pewter)", textAlign: "center", background: "var(--clg-surface-subtle)",
               }}>
-                Nothing matches this filter right now.
+                {query.trim() ? "No driver or unit matches that search." : "Nothing matches this filter right now."}
               </div>
             ) : (
               <TrackingTable rows={visibleRows} onOpenUnit={setOpenUnitId} />
