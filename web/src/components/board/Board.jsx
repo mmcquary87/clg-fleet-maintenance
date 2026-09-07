@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { useBoard } from "../../hooks/useBoard";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import UnitCard from "./UnitCard";
 
 const LANE_META = {
@@ -108,6 +109,7 @@ function MonitoredLane({ laneKey, cards, onChanged }) {
 
 export default function Board({ onGoToUnits }) {
   const { lanes, totals, closedToday, loading, error, reload } = useBoard();
+  const isMobile = useIsMobile();
 
   if (loading) {
     return (
@@ -124,7 +126,7 @@ export default function Board({ onGoToUnits }) {
     <div style={{ fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)" }}>
       <div style={{
         background: "var(--clg-navy)", color: "#fff", padding: "26px 28px",
-        display: "flex", alignItems: "center", gap: 40, position: "relative", overflow: "hidden",
+        display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap", position: "relative", overflow: "hidden",
       }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--clg-mercury)" }}>Idle right now</div>
@@ -135,7 +137,7 @@ export default function Board({ onGoToUnits }) {
             </span>
           </div>
         </div>
-        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,.18)" }} />
+        {!isMobile && <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,.18)" }} />}
         <div>
           <div style={{ fontSize: 11, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--clg-mercury)" }}>Cost of waiting, today</div>
           {totals.idleCount > 0 && totals.burnRate === 0 ? (
@@ -178,17 +180,17 @@ export default function Board({ onGoToUnits }) {
       {/* 46/54 split — the lane you own gets the wider, expanded-first-item
           side; the three lanes you only monitor share the rest as compact
           stacks. Attention comes from this layout, not from color. */}
-      <div style={{ display: "grid", gridTemplateColumns: "46fr 54fr", gap: 14, padding: "24px 28px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "46fr 54fr", gap: 14, padding: isMobile ? "20px 16px" : "24px 28px" }}>
         <PrimaryLane cards={lanes.waiting_on_you} onChanged={reload} />
 
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 14 }}>
             {MONITORED_LANE_KEYS.map((laneKey) => (
               <MonitoredLane key={laneKey} laneKey={laneKey} cards={lanes[laneKey]} onChanged={reload} />
             ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20, marginTop: 20 }}>
             <div style={{
               background: "var(--clg-navy)", color: "#fff", padding: "18px 16px", borderRadius: "var(--clg-radius-md)",
               boxShadow: "var(--clg-shadow-resting)",

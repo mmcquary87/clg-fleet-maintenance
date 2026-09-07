@@ -4,6 +4,7 @@ import {
   Settings, LogOut, ChevronsLeft, ChevronsRight, Shield,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 // Persistent left sidebar, per design_handoff/CLG-OS-Design-Package's shell
 // spec (2026-09-04) -- replaces the old horizontal top-nav bar. 230px,
@@ -53,12 +54,20 @@ function iconButtonStyle() {
 }
 
 export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin, isMechanic, email }) {
-  const [collapsed, setCollapsed] = useState(() => {
+  const [collapsedPreference, setCollapsedPreference] = useState(() => {
     try { return localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1"; } catch { return false; }
   });
+  // Below the mobile breakpoint, always show the icon-only rail — a
+  // 230px sidebar would eat over half a phone screen's width, and there's
+  // no room to usefully toggle back to expanded, so the collapse/expand
+  // button itself is hidden too rather than offering a choice with only
+  // one workable answer. Desktop keeps the user's own persisted
+  // preference untouched.
+  const isMobile = useIsMobile();
+  const collapsed = isMobile || collapsedPreference;
 
   const toggleCollapsed = () => {
-    setCollapsed((prev) => {
+    setCollapsedPreference((prev) => {
       const next = !prev;
       try { localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? "1" : "0"); } catch { /* private mode etc -- fine to not persist */ }
       return next;
@@ -107,7 +116,7 @@ export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin,
         )}
       </div>
 
-      {collapsed && (
+      {collapsed && !isMobile && (
         <button
           onClick={toggleCollapsed} title="Expand sidebar"
           style={{ ...iconButtonStyle(), justifyContent: "center", width: "100%", marginBottom: 8 }}
