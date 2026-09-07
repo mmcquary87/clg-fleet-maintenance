@@ -43,7 +43,7 @@ export function useReloadGaps() {
 
     const { data: trips, error: tripsErr } = await supabase
       .from("unit_current_trip")
-      .select("unit_id, load_number, stop_type, stop_name, stop_appointment_at, stop_window_end, driver:drivers(name)");
+      .select("unit_id, load_number, stop_type, stop_name, stop_appointment_at, stop_window_end, driver:drivers(id, name)");
 
     if (tripsErr) {
       setError(tripsErr.message);
