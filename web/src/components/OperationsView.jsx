@@ -7,6 +7,7 @@ import { useAlvysTripsReport } from "../hooks/useAlvysTripsReport";
 import { useTracking } from "../hooks/useTracking";
 import { useHomeTimeAdherence } from "../hooks/useHomeTimeAdherence";
 import { useDriveHourUtilization } from "../hooks/useDriveHourUtilization";
+import { useDriverUtilization } from "../hooks/useDriverUtilization";
 import { useAssignmentStability } from "../hooks/useAssignmentStability";
 import { useFeasibilityReview } from "../hooks/useFeasibilityReview";
 import { usePlanAdherence } from "../hooks/usePlanAdherence";
@@ -190,6 +191,7 @@ export default function OperationsView() {
   const { groups: trackingGroups, loading: trackingLoading, error: trackingError } = useTracking();
   const { data: homeTimeData, loading: homeTimeLoading, error: homeTimeError } = useHomeTimeAdherence(range);
   const { data: driveHourData, loading: driveHourLoading, error: driveHourError } = useDriveHourUtilization(range);
+  const { data: driverUtilData, loading: driverUtilLoading, error: driverUtilError } = useDriverUtilization(range);
   const { data: stabilityData, loading: stabilityLoading, error: stabilityError } = useAssignmentStability(range);
   const { data: feasibilityData, loading: feasibilityLoading, error: feasibilityError } = useFeasibilityReview(range);
   const { data: adherenceData, loading: adherenceLoading, error: adherenceError } = usePlanAdherence(range);
@@ -209,6 +211,7 @@ export default function OperationsView() {
     "DE-01": { value: trackingLoading ? null : trackingGroups.attention.length, loading: trackingLoading, error: trackingError },
     17: { value: homeTimeData?.adherencePct ?? null, loading: homeTimeLoading, error: homeTimeError },
     13: { value: driveHourData?.utilizationPct ?? null, loading: driveHourLoading, error: driveHourError },
+    11: { value: driverUtilData?.driverUtilizationPct ?? null, loading: driverUtilLoading, error: driverUtilError },
   };
 
   function breakdownFor(kpi) {
@@ -298,6 +301,8 @@ export default function OperationsView() {
                   caveat={
                     kpi.no === 17
                       ? `Covers ${homeTimeData?.totalPlannedEvents ?? 0} recurring home-time occurrences. Violated = an actual trip covered the date; Confirmed = no trip and a real Alvys event (Hometime/Restart/Vacation/SickOrEmergency) covers it; Unconfirmed = neither — not yet planned-day-off exceptions or approval-status filtering.${homeTimeData?.unlinkedSchedules ? ` ${homeTimeData.unlinkedSchedules} schedule(s) excluded (not linked to an Alvys driver).` : ""}`
+                      : kpi.no === 11
+                      ? `${driverUtilData?.driversConsidered ?? 0} active drivers × days in range, minus ${driverUtilData?.rosterExceptionRows ?? 0} governed roster exception row(s) (Not Eligible or a leave window). "Productive" = a day with real Alvys trip activity.${driverUtilData?.unmatchedRosterNameCount ? ` ${driverUtilData.unmatchedRosterNameCount} roster name(s) didn't match a driver: ${driverUtilData.unmatchedRosterNames.slice(0, 3).join(", ")}${driverUtilData.unmatchedRosterNameCount > 3 ? "…" : ""}.` : ""}`
                       : kpi.no === 13
                       ? `${driveHourData?.driversWithActivity ?? 0} of ${driveHourData?.driversConsidered ?? 0} active drivers had HOS activity this window, across ${driveHourData?.totalWorkingDays ?? 0} working-days. "Available capacity" = 11 legal drive hrs × working days, not a roster schedule.`
                       : kpi.no === 2

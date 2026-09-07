@@ -130,7 +130,7 @@ export const KPIS = [
     no: 11, module: "driver", name: "Driver Utilization", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Available driver-days meeting the approved minimum productive-use standard ÷ total available driver-days × 100",
     threshold: { status: "pending", green: "≥90.0% after activation", yellow: "80.0–89.9% after activation", red: "<80.0% after activation" },
-    dataStatus: "blocked", blockedReason: "Needs a governed driver-availability roster — doesn't exist yet.",
+    dataStatus: "live", unit: "%",
   },
   {
     no: 12, module: "driver", name: "Revenue Miles per Active Driver per Week", classification: "Primary Weekly KPI", type: "Lagging",
