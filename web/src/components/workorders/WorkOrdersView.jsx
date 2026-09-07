@@ -4,6 +4,7 @@ import { Card, Badge, Eyebrow, Alert, Input, Button, Select } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
 import { downloadCsv } from "../../lib/exportCsv";
 import { CATEGORIES } from "../../lib/categories";
+import { blockedOnText } from "../../lib/workOrderLane";
 import DateRangeFilter from "../DateRangeFilter";
 import WorkOrderDetailModal from "./WorkOrderDetailModal";
 
@@ -28,12 +29,6 @@ const STATUS_TABS = ["All", "Needs approval", "Open", "In Progress", "Closed", "
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-}
-
-function severityTone(s) {
-  if (s === "Unit down") return "critical";
-  if (s === "Urgent") return "brand";
-  return "neutral";
 }
 
 // Whole days only -- date_opened/date_closed are dates, not timestamps, so
@@ -159,15 +154,18 @@ export default function WorkOrdersView({ initialCategory }) {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      <div style={{
+        display: "inline-flex", flexWrap: "wrap", background: "var(--clg-smoke)",
+        borderRadius: "var(--clg-radius-md)", padding: 3, gap: 2, marginBottom: 14,
+      }}>
         {["All", ...CATEGORIES].map((c) => (
           <button
             key={c}
             onClick={() => setCategory(c)}
             style={{
-              padding: "6px 12px", fontSize: 11.5, cursor: "pointer",
-              border: "1px solid " + (category === c ? "var(--clg-royal)" : "var(--clg-reflection)"),
-              background: category === c ? "var(--clg-royal)" : "#fff",
+              padding: "6px 11px", borderRadius: 3, border: "none", cursor: "pointer",
+              fontFamily: "var(--clg-font-heading)", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap",
+              background: category === c ? "var(--clg-royal)" : "transparent",
               color: category === c ? "#fff" : "var(--clg-pewter)",
             }}
           >
@@ -192,7 +190,7 @@ export default function WorkOrdersView({ initialCategory }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
               <thead>
                 <tr>
-                  {["WO #", "Unit", "Category", "Issue", "Severity", "Vendor", "Status", "Opened", "Closed", "Cost", "Age"].map((h) => (
+                  {["WO", "Unit", "Issue", "Blocked on", "Vendor", "Cost", "Age"].map((h) => (
                     <th key={h} style={{
                       textAlign: h === "Cost" || h === "Age" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
@@ -202,63 +200,53 @@ export default function WorkOrdersView({ initialCategory }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((o, i) => (
-                  <tr
-                    key={o.id}
-                    onClick={() => setOpenId(o.id)}
-                    style={{
-                      background: i % 2 ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer",
-                      opacity: o.voided ? 0.55 : 1,
-                    }}
-                  >
-                    <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)", whiteSpace: "nowrap" }}>
-                      {o.wo_number || "—"}
-                    </td>
-                    <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                      {o.unit?.number || "—"}
-                    </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                      {o.category}
-                      {o.is_chargeback && <Badge tone="critical" style={{ marginLeft: 6 }}>Chargeback</Badge>}
-                    </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", maxWidth: 260, color: "var(--clg-text-muted)" }}>
-                      {o.complaint || o.description || "—"}
-                    </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                      <Badge tone={severityTone(o.severity)}>{o.severity}</Badge>
-                    </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: "var(--clg-text-muted)" }}>
-                      {o.vendor?.name || "—"}
-                    </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                      {o.voided ? (
-                        <Badge tone="neutral">Voided</Badge>
-                      ) : o.approval_status === "needs_approval" ? (
-                        <Badge tone="critical">Needs approval</Badge>
-                      ) : o.status}
-                    </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: "var(--clg-text-muted)", fontFamily: "var(--clg-font-mono, monospace)" }}>
-                      {o.date_opened || "—"}
-                    </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: "var(--clg-text-muted)", fontFamily: "var(--clg-font-mono, monospace)" }}>
-                      {o.date_closed || "—"}
-                    </td>
-                    <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)" }}>
-                      {money(o.cost)}
-                    </td>
-                    <td style={{
-                      padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right",
-                      fontFamily: "var(--clg-font-heading)", fontWeight: 700,
-                      color: o.status !== "Closed" ? "var(--clg-scarlet)" : "var(--clg-text-muted)",
-                    }}>
-                      {ageDays(o) != null ? `${ageDays(o)}d` : "—"}
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((o, i) => {
+                  // Closed/voided rows drop to Pewter/Cool so open work is
+                  // the only thing with contrast (CLG OS design package:
+                  // "Closed rows drop to Pewter/Cool... open work is the
+                  // only thing with contrast").
+                  const isOpen = !o.voided && o.status !== "Closed";
+                  const rowFg = isOpen ? "var(--clg-text-body)" : "var(--clg-text-muted)";
+                  const age = ageDays(o);
+                  return (
+                    <tr
+                      key={o.id}
+                      onClick={() => setOpenId(o.id)}
+                      style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer" }}
+                    >
+                      <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: isOpen ? 700 : 400, color: isOpen ? "var(--clg-ruby)" : "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)", whiteSpace: "nowrap" }}>
+                        {o.wo_number || "—"}
+                      </td>
+                      <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                        {o.unit?.number || "—"}
+                      </td>
+                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", maxWidth: 280, fontWeight: isOpen ? 600 : 400, color: rowFg }}>
+                        {o.complaint || o.description || "—"}
+                        {o.is_chargeback && <Badge tone="critical" style={{ marginLeft: 6 }}>Chargeback</Badge>}
+                      </td>
+                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: isOpen ? "var(--clg-navy)" : "var(--clg-text-muted)" }}>
+                        {blockedOnText(o)}
+                      </td>
+                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: rowFg }}>
+                        {o.vendor?.name || "—"}
+                      </td>
+                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", color: isOpen && !o.cost ? "var(--clg-mercury)" : rowFg, fontStyle: isOpen && !o.cost ? "italic" : "normal" }}>
+                        {isOpen && !o.cost ? "No estimate" : money(o.cost)}
+                      </td>
+                      <td style={{
+                        padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right",
+                        fontFamily: "var(--clg-font-heading)", fontWeight: 700,
+                        color: isOpen ? "var(--clg-scarlet)" : "var(--clg-text-muted)",
+                      }}>
+                        {age != null ? `${age}d` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={9} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>Total</td>
+                  <td colSpan={5} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>Total</td>
                   <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 700, color: "var(--clg-navy)" }}>
                     {money(totalCost)}
                   </td>
