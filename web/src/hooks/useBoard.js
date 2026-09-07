@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-
-const LANES = ["waiting_on_you", "waiting_on_vendor", "waiting_on_parts", "in_the_bay"];
-
-function laneFor(wo) {
-  if (wo.approval_status === "needs_approval") return "waiting_on_you";
-  if (wo.waiting_on_parts) return "waiting_on_parts";
-  if (wo.assigned_bay && wo.status === "In Progress") return "in_the_bay";
-  if (wo.vendor_id) return "waiting_on_vendor";
-  return "waiting_on_you";
-}
+import { LANES, laneFor } from "../lib/workOrderLane";
 
 function idleHours(unit, wo) {
   const since = unit.idle_since || wo.date_opened;
