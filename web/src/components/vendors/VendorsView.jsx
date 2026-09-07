@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Loader2, Pencil } from "lucide-react";
 import { Button, Badge, Eyebrow, Alert } from "../../ds";
 import { useVendors } from "../../hooks/useVendors";
@@ -13,16 +13,32 @@ function fmtDate(iso) {
   return iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 }
 
+function fmtDays(n) {
+  if (n == null) return "—";
+  return n < 1 ? `${Math.round(n * 24)}h` : `${n.toFixed(1)}d`;
+}
+
+// A vendor "owes an estimate" when a unit they're currently holding has no
+// cost on file yet -- the one real, computable signal for that state (no
+// separate estimate-requested timestamp exists, see useVendorActivity.js).
+function owesEstimate(holding) {
+  return holding.some((h) => !h.hasCost);
+}
+
 function VendorCard({ vendor, activity, onEdit }) {
   const jobsYtd = activity?.jobsYtd ?? 0;
   const spendYtd = activity?.spendYtd ?? 0;
   const avgTicket = jobsYtd > 0 ? spendYtd / jobsYtd : 0;
   const holding = activity?.holding ?? [];
+  const owed = owesEstimate(holding);
 
   const contactLine = [vendor.contact_name, vendor.phone || vendor.contact, vendor.contact_email].filter(Boolean).join(" · ");
 
   return (
-    <div style={{ background: "#fff", borderRadius: "var(--clg-radius-md)", boxShadow: "var(--clg-shadow-resting)", padding: 22, position: "relative" }}>
+    <div style={{
+      background: "#fff", borderRadius: "var(--clg-radius-md)", boxShadow: "var(--clg-shadow-resting)", padding: 22, position: "relative",
+      borderTop: owed ? "3px solid var(--clg-scarlet)" : undefined,
+    }}>
       <button
         onClick={onEdit} title="Edit vendor"
         style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}
@@ -30,9 +46,12 @@ function VendorCard({ vendor, activity, onEdit }) {
         <Pencil size={14} />
       </button>
 
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, paddingRight: 24, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 18, color: "var(--clg-navy)" }}>{vendor.name}</span>
-        {vendor.specialty_category && <Badge tone="neutral">{vendor.specialty_category}</Badge>}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, paddingRight: 24, flexWrap: "wrap" }}>
+        <span style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 18, color: "var(--clg-navy)" }}>{vendor.name}</span>
+          {vendor.specialty_category && <Badge tone="neutral">{vendor.specialty_category}</Badge>}
+        </span>
+        {owed && <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--clg-scarlet)", letterSpacing: "0.02em" }}>Owes an estimate</span>}
       </div>
 
       <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginTop: 10, lineHeight: 1.55 }}>
@@ -43,7 +62,7 @@ function VendorCard({ vendor, activity, onEdit }) {
             : "No jobs logged yet."}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--clg-border-subtle)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--clg-border-subtle)" }}>
         <div>
           <div style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)" }}>Jobs YTD</div>
           <div style={{ fontSize: 13, color: "var(--clg-navy)", fontWeight: 600, marginTop: 3 }}>{jobsYtd}</div>
@@ -55,6 +74,10 @@ function VendorCard({ vendor, activity, onEdit }) {
         <div>
           <div style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)" }}>Avg ticket</div>
           <div style={{ fontSize: 13, color: "var(--clg-navy)", fontWeight: 600, marginTop: 3 }}>{jobsYtd > 0 ? fmtMoney(avgTicket) : "—"}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)" }}>Avg turnaround</div>
+          <div style={{ fontSize: 13, color: "var(--clg-navy)", fontWeight: 600, marginTop: 3 }}>{fmtDays(activity?.avgTurnaroundDays)}</div>
         </div>
       </div>
 
@@ -74,6 +97,21 @@ export default function VendorsView() {
   const [editing, setEditing] = useState(null);
 
   const holdingCount = vendors.filter((v) => (byVendorId[v.id]?.holding.length ?? 0) > 0).length;
+  const owingCount = vendors.filter((v) => owesEstimate(byVendorId[v.id]?.holding ?? [])).length;
+
+  // Scoreboard order, not alphabetical: a vendor sitting on your truck with
+  // no estimate is the thing worth seeing first.
+  const sortedVendors = useMemo(() => {
+    return [...vendors].sort((a, b) => {
+      const aOwes = owesEstimate(byVendorId[a.id]?.holding ?? []) ? 0 : 1;
+      const bOwes = owesEstimate(byVendorId[b.id]?.holding ?? []) ? 0 : 1;
+      if (aOwes !== bOwes) return aOwes - bOwes;
+      const aHolding = (byVendorId[a.id]?.holding.length ?? 0) > 0 ? 0 : 1;
+      const bHolding = (byVendorId[b.id]?.holding.length ?? 0) > 0 ? 0 : 1;
+      if (aHolding !== bHolding) return aHolding - bHolding;
+      return (byVendorId[b.id]?.spendYtd ?? 0) - (byVendorId[a.id]?.spendYtd ?? 0);
+    });
+  }, [vendors, byVendorId]);
 
   return (
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1100, margin: "0 auto" }}>
@@ -85,7 +123,7 @@ export default function VendorsView() {
           </h2>
           <p style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
             {holdingCount > 0
-              ? `${holdingCount} currently holding a unit of yours.`
+              ? `${holdingCount} currently holding a unit of yours${owingCount > 0 ? `, ${owingCount} without an estimate on file` : ""}.`
               : "None currently holding a unit."}
           </p>
         </div>
@@ -121,7 +159,7 @@ export default function VendorsView() {
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
-          {vendors.map((v) => (
+          {sortedVendors.map((v) => (
             <VendorCard
               key={v.id} vendor={v} activity={byVendorId[v.id]}
               onEdit={() => { setEditing(v); setShowForm(false); }}
