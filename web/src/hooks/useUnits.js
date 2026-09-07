@@ -14,7 +14,7 @@ export function useUnits() {
       .select(
         "id, number, type, vin, is_active, current_location, created_at, odometer, can_move_load, idle_since, " +
         "last_pm_date, pm_interval_days, last_annual_inspection_date, last_midtrip_date, midtrip_interval_days, " +
-        "ownership, plate_number, current_market_value"
+        "ownership, plate_number, current_market_value, domicile, warranty_status"
       )
       .order("number", { ascending: true });
     if (err) {
