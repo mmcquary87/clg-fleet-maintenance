@@ -46,6 +46,7 @@ export const KPIS = [
     formula: "Available drivers with complete 5-day operating plans ÷ available drivers requiring work × 100",
     threshold: { status: "pending", green: "≥95.0%", yellow: "85.0–94.9%", red: "<85.0%" },
     dataStatus: "blocked", blockedReason: "Needs a 5-day planning coverage board and a governed driver-availability roster — neither exists yet.",
+    source: "No source connected.",
   },
   {
     no: 2, module: "planning", name: "72-Hour Load Assignment Stability", classification: "Primary Weekly KPI", type: "Leading",
@@ -55,24 +56,28 @@ export const KPIS = [
     // tab, not a live Alvys API) -- see alvys-assignment-stability for the
     // full methodology and stated approximations.
     dataStatus: "live", unit: "%",
+    source: "CLG's hourly Alvys backup sheet (a Google Sheet tab), not a live Alvys API pull.",
   },
   {
     no: 3, module: "planning", name: "Planned Empty Mile Percentage", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Planned empty miles ÷ total planned miles × 100",
     threshold: { status: "active", green: "≤17.0%", yellow: "17.1–18.7% (up to 10% above target)", red: ">18.7%" },
     dataStatus: "live", unit: "%",
+    source: "Alvys trips/search — planned pickups in this window, PCMiler-routed miles at planning time (not just completed trips).",
   },
   {
     no: 4, module: "planning", name: "Planned Driver Capacity Utilization", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Planned productive driving capacity assigned to revenue work ÷ realistically available productive driving capacity × 100",
     threshold: { status: "pending", green: "≥90.0%", yellow: "80.0–89.9%", red: "<80.0%" },
     dataStatus: "blocked", blockedReason: "Needs a governed driver-availability roster plus Alvys planning data — neither exists yet.",
+    source: "No source connected.",
   },
   {
     no: 5, module: "planning", name: "Order Data Accuracy", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Orders released without a material correction ÷ total accepted orders released × 100",
     threshold: { status: "pending", green: "≥98.0%", yellow: "95.0–97.9%", red: "<95.0%" },
     dataStatus: "blocked", blockedReason: "Needs Alvys order field-change history — not pulled yet.",
+    source: "No source connected.",
   },
   {
     no: "SC-01", module: "planning", name: "Order Feasibility Review Completion", classification: "Supporting Control", type: "Leading",
@@ -83,30 +88,35 @@ export const KPIS = [
     // reaching Dispatched or later is treated as reviewed-and-passed. See
     // alvys-feasibility-review for what this proxy can't catch.
     dataStatus: "live", unit: "%",
+    source: "Alvys trips/search — an order reaching Dispatched status stands in for a documented feasibility review (dispatch policy is not to dispatch infeasible loads).",
   },
   {
     no: 6, module: "fleet", name: "Revenue per Active Tractor per Week", classification: "Primary Weekly KPI — Departmental Variant", type: "Lagging",
     formula: "Total weekly operating revenue ÷ average active tractors",
     threshold: { status: "active", green: "≥$4,850", yellow: "$4,365–$4,849 (up to 10% below)", red: "<$4,365" },
     dataStatus: "live", unit: "$",
+    source: "Alvys trips/search revenue for completed trips ÷ active tractors from Samsara's vehicle roster.",
   },
   {
     no: 7, module: "fleet", name: "Empty Mile Percentage", classification: "Primary Weekly KPI — Exact Inherited Executive KPI", type: "Lagging",
     formula: "Empty miles ÷ total miles × 100",
     threshold: { status: "active", green: "<10.0%", yellow: "10.0–14.9%", red: "≥15.0%" },
     dataStatus: "live", unit: "%",
+    source: "Alvys trips/search — terminal-status (completed) trips only, distinct from KPI 3's planned-book basis.",
   },
   {
     no: 8, module: "fleet", name: "Fleet Miles per Gallon", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Total governed fleet miles ÷ total governed gallons",
     threshold: { status: "active", green: "≥6.5 MPG", yellow: "6.18–6.49 MPG (up to 5% below)", red: "<6.18 MPG" },
     dataStatus: "live", unit: "MPG",
+    source: "Samsara vehicle fuel and odometer data, fleet-wide.",
   },
   {
     no: 9, module: "fleet", name: "On-Time Pickup", classification: "Primary Weekly KPI — Exact Inherited Executive KPI", type: "Lagging",
     formula: "On-time pickups ÷ total eligible pickups × 100",
     threshold: { status: "pending", green: "≥90.0% (target 95.0%)", yellow: "80.0–89.9% (target 90.0–94.9%)", red: "<80.0% (target <90.0%)" },
     dataStatus: "live", unit: "%",
+    source: "Alvys trips/search — pickup appointment window vs. actual arrival, with KBX relief/demand transfer adjustments applied from load notes.",
   },
   {
     no: 10, module: "fleet", name: "Operating Plan Adherence", classification: "Primary Weekly KPI", type: "Lagging",
@@ -119,18 +129,21 @@ export const KPIS = [
     // deviation (schedule or driver changed after that point) and what
     // isn't checked (tractor/trailer, not tracked in this sheet).
     dataStatus: "live", unit: "%",
+    source: "Alvys trips/search — schedule + driver as of the load's first Dispatched snapshot, vs. actual. Tractor/trailer reassignment isn't tracked.",
   },
   {
     no: "DE-01", module: "fleet", name: "Projected Late Load Exposure", classification: "Daily Exception Measure", type: "Leading",
     formula: "Active loads whose latest projected arrival falls outside the appointment window",
     threshold: { status: "pending", green: "Not applicable — daily exception view", yellow: "Not applicable", red: "Priority by exception-severity rules" },
     dataStatus: "live", unit: "loads",
+    source: "Samsara-fed ETA projections — the same live feed the Tracking page reads, not range-windowed.",
   },
   {
     no: 11, module: "driver", name: "Driver Utilization", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Available driver-days meeting the approved minimum productive-use standard ÷ total available driver-days × 100",
     threshold: { status: "pending", green: "≥90.0% after activation", yellow: "80.0–89.9% after activation", red: "<80.0% after activation" },
     dataStatus: "live", unit: "%",
+    source: "Alvys trip activity cross-referenced against driver_roster exceptions (Not Eligible / leave windows).",
   },
   {
     no: 12, module: "driver", name: "Revenue Miles per Active Driver per Week", classification: "Primary Weekly KPI", type: "Lagging",
@@ -145,6 +158,7 @@ export const KPIS = [
     // single number is meaningful across segments) — see the "BY FLEET"
     // breakdown for the actual per-segment Green/Yellow/Red reads.
     dataStatus: "live", unit: "mi",
+    source: "Alvys trips/search revenue miles ÷ active drivers, broken out by driver.Fleet.Name.",
   },
   {
     no: 13, module: "driver", name: "Average Daily Drive-Hour Utilization Percentage", classification: "Primary Weekly KPI", type: "Leading",
@@ -156,24 +170,28 @@ export const KPIS = [
     // and the "working day" heuristic (a day with real driving/on-duty
     // Samsara activity, not a calendar day off).
     dataStatus: "live", unit: "%",
+    source: "Samsara HOS activity ÷ 11 legal drive hours/day, over working-days with real driving/on-duty activity.",
   },
   {
     no: 14, module: "driver", name: "Released HOS-Infeasible Plan Percentage", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Released assignments with unresolved HOS infeasibility ÷ released assignments requiring HOS validation × 100",
     threshold: { status: "pending", green: "0.0%", yellow: "Not used — any value above 0.0% is Red", red: ">0.0% (Priority 1)" },
     dataStatus: "blocked", blockedReason: "Needs Alvys release-plan history cross-referenced with Samsara HOS — not built yet.",
+    source: "No source connected.",
   },
   {
     no: 15, module: "driver", name: "On-Time Delivery", classification: "Primary Weekly KPI — Exact Inherited Executive KPI", type: "Lagging",
     formula: "On-time deliveries ÷ total eligible deliveries × 100",
     threshold: { status: "pending", green: "≥90.0% (target 95.0%)", yellow: "80.0–89.9%", red: "<80.0%" },
     dataStatus: "live", unit: "%",
+    source: "Alvys trips/search — delivery appointment window vs. actual arrival.",
   },
   {
     no: 16, module: "driver", name: "Driver Waiting and Detention Hours", classification: "Primary Weekly KPI", type: "Lagging",
     formula: "Governed waiting hours + governed detention hours ÷ average active drivers",
     threshold: { status: "pending", green: "At/below approved target", yellow: "Up to 10.0% above target", red: ">10.0% above target" },
     dataStatus: "live", unit: "hrs",
+    source: "Alvys trips/search — waiting/detention time past a stop's expected window or appointment, split by live-load vs. drop & hook.",
   },
   {
     no: 17, module: "driver", name: "Driver Schedule Adherence", classification: "Primary Weekly KPI", type: "Lagging",
@@ -186,11 +204,13 @@ export const KPIS = [
     // approval status isn't filtered on (the field is free text, not an
     // enforced state). Partial, not the full governed formula yet.
     dataStatus: "live", unit: "%",
+    source: "planned_home_time recurring schedules cross-referenced with real Alvys trip activity.",
   },
   {
     no: "SC-02", module: "driver", name: "Detention Identification and Submission Timeliness", classification: "Supporting Control", type: "Leading",
     formula: "Potential detention events completed within the approved timeframe ÷ total potential detention events × 100",
     threshold: { status: "pending", green: "100% after activation", yellow: "95.0–99.9% after activation", red: "<95.0% after activation" },
     dataStatus: "blocked", blockedReason: "This is a manual review workflow CLG hasn't stood up yet — not a data-integration gap.",
+    source: "No source connected.",
   },
 ];
