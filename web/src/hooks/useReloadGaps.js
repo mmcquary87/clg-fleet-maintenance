@@ -1,24 +1,46 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { APPROVED_TARGETS } from "../lib/opsKpis";
 
-// How far out "delivering soon" looks -- a truck whose delivery deadline
+// How far out "delivering soon" looks -- a driver whose delivery deadline
 // falls inside this window is worth checking for a next load now, before
-// it actually goes empty. Arbitrary but reasonable; adjust freely.
+// they actually go empty. Arbitrary but reasonable; adjust freely.
 const DELIVERING_SOON_HOURS = 24;
 
-// Trucks that need attention from a load-planning standpoint:
-//  - "No plan": an active, road-worthy truck with no row in
-//    unit_current_trip at all -- Alvys has no Dispatched or In Transit
-//    trip for it, so nothing is booked.
-//  - "Delivering soon": currently on a Delivery leg (already picked up)
-//    whose deadline is within DELIVERING_SOON_HOURS. This does NOT mean
-//    it has no next load -- alvys-sync-active-trips keeps only the single
-//    most relevant trip per unit (In Transit over Dispatched), so a
-//    already-booked next leg wouldn't show up here even if one exists.
-//    It's a "worth checking" flag, not proof of a gap.
+// A driver who DOES have a next trip queued isn't a gap just because one
+// exists -- if the gap between "delivered" and "next pickup" is small,
+// that's a normal reload turnaround, not something dispatch needs to chase.
+// This is the line where an existing gap becomes worth surfacing.
+const GAP_THRESHOLD_HOURS = 10;
+
+// "Too much deadhead" reuses the CLG-approved Planned Empty Mile target
+// (KPI 3, 17.0%) rather than inventing a separate number -- the same bar
+// the fleet is already held to at the network level applies to one
+// driver's next leg too.
+const EMPTY_MILE_TARGET_PCT = APPROVED_TARGETS[3]?.target ?? 17.0;
+
+function emptyMilePct(trip) {
+  if (trip.empty_miles == null || trip.total_miles == null || trip.total_miles <= 0) return null;
+  return (trip.empty_miles / trip.total_miles) * 100;
+}
+
+// Drivers who need dispatch's attention on their reload plan:
+//  - "No plan": an active driver with zero Dispatched/In Transit trips in
+//    Alvys right now -- driver-first, not unit-first, so a driver
+//    temporarily without a truck (or whose truck's Alvys asset id hasn't
+//    synced) still shows up instead of disappearing behind an idle truck.
+//  - "Reload gap": a driver's current (In Transit) trip delivers within
+//    DELIVERING_SOON_HOURS and either nothing is queued next, or the gap
+//    between that delivery and the next trip's pickup exceeds
+//    GAP_THRESHOLD_HOURS -- an actual hole in the schedule, not just "has
+//    a next load eventually."
+//  - "Long deadhead": a driver's next not-yet-picked-up trip has a planned
+//    empty-mile percentage above the CLG-approved network target -- a
+//    real load is booked, but it's an inefficient one worth a second look.
 export function useReloadGaps() {
   const [noPlan, setNoPlan] = useState([]);
-  const [deliveringSoon, setDeliveringSoon] = useState([]);
+  const [gapAhead, setGapAhead] = useState([]);
+  const [highDeadhead, setHighDeadhead] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -26,56 +48,103 @@ export function useReloadGaps() {
     setLoading(true);
     setError(null);
 
-    const { data: units, error: unitsErr } = await supabase
-      .from("units")
-      .select("id, number, type, current_location, driver_name, can_move_load")
-      .eq("type", "Truck")
-      .eq("is_active", true)
-      .or("can_move_load.is.null,can_move_load.eq.true");
+    const { data: drivers, error: driversErr } = await supabase
+      .from("drivers")
+      .select("id, name, fleet_name")
+      .eq("is_active", true);
 
-    if (unitsErr) {
-      setError(unitsErr.message);
+    if (driversErr) {
+      setError(driversErr.message);
       setNoPlan([]);
-      setDeliveringSoon([]);
+      setGapAhead([]);
+      setHighDeadhead([]);
       setLoading(false);
       return;
     }
 
     const { data: trips, error: tripsErr } = await supabase
-      .from("unit_current_trip")
-      .select("unit_id, load_number, stop_type, stop_name, stop_appointment_at, stop_window_end, driver:drivers(id, name)");
+      .from("driver_active_trips")
+      .select(
+        "driver_id, alvys_trip_id, load_number, status, unit:units(id, number), " +
+        "pickup_name, pickup_appointment_at, pickup_window_start, pickup_window_end, " +
+        "delivery_name, delivery_appointment_at, delivery_window_end, empty_miles, loaded_miles, total_miles"
+      );
 
     if (tripsErr) {
       setError(tripsErr.message);
       setNoPlan([]);
-      setDeliveringSoon([]);
+      setGapAhead([]);
+      setHighDeadhead([]);
       setLoading(false);
       return;
     }
 
-    const tripByUnitId = new Map((trips ?? []).map((t) => [t.unit_id, t]));
-    const soonCutoff = Date.now() + DELIVERING_SOON_HOURS * 3600000;
+    const tripsByDriver = new Map();
+    for (const t of trips ?? []) {
+      if (!tripsByDriver.has(t.driver_id)) tripsByDriver.set(t.driver_id, []);
+      tripsByDriver.get(t.driver_id).push(t);
+    }
+    // Ascending by pickup time -- an In Transit trip's pickup already
+    // happened (in the past) so it naturally sorts before a Dispatched
+    // trip's still-upcoming pickup, without needing a status special case.
+    for (const list of tripsByDriver.values()) {
+      list.sort((a, b) => {
+        const av = new Date(a.pickup_window_start || a.pickup_appointment_at || 0).getTime();
+        const bv = new Date(b.pickup_window_start || b.pickup_appointment_at || 0).getTime();
+        return av - bv;
+      });
+    }
 
+    const soonCutoff = Date.now() + DELIVERING_SOON_HOURS * 3600000;
     const withoutPlan = [];
-    const soon = [];
-    for (const u of units ?? []) {
-      const trip = tripByUnitId.get(u.id);
-      if (!trip) {
-        withoutPlan.push(u);
+    const gaps = [];
+    const deadheads = [];
+
+    for (const d of drivers ?? []) {
+      const driverTrips = tripsByDriver.get(d.id) ?? [];
+      if (driverTrips.length === 0) {
+        withoutPlan.push(d);
         continue;
       }
-      if (trip.stop_type !== "Delivery") continue;
-      const deadline = trip.stop_window_end || trip.stop_appointment_at;
-      if (deadline && new Date(deadline).getTime() <= soonCutoff) {
-        soon.push({ unit: u, trip, deadline });
+
+      const current = driverTrips[0];
+      const next = driverTrips[1] ?? null;
+
+      if (current.status === "In Transit") {
+        const deliveryDeadline = current.delivery_window_end || current.delivery_appointment_at;
+        if (deliveryDeadline && new Date(deliveryDeadline).getTime() <= soonCutoff) {
+          if (!next) {
+            gaps.push({ driver: d, current, next: null, deadline: deliveryDeadline, gapHours: null });
+          } else {
+            const nextPickup = next.pickup_window_start || next.pickup_appointment_at;
+            const gapHours = nextPickup
+              ? (new Date(nextPickup).getTime() - new Date(deliveryDeadline).getTime()) / 3600000
+              : null;
+            if (gapHours == null || gapHours > GAP_THRESHOLD_HOURS) {
+              gaps.push({ driver: d, current, next, deadline: deliveryDeadline, gapHours });
+            }
+          }
+        }
+      }
+
+      // The soonest not-yet-picked-up trip in this driver's queue -- "current"
+      // itself if they haven't started it yet, otherwise "next".
+      const upcoming = current.status === "Dispatched" ? current : next?.status === "Dispatched" ? next : null;
+      if (upcoming) {
+        const pct = emptyMilePct(upcoming);
+        if (pct != null && pct > EMPTY_MILE_TARGET_PCT) {
+          deadheads.push({ driver: d, trip: upcoming, emptyMilePct: pct });
+        }
       }
     }
 
-    withoutPlan.sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
-    soon.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+    withoutPlan.sort((a, b) => a.name.localeCompare(b.name));
+    gaps.sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+    deadheads.sort((a, b) => b.emptyMilePct - a.emptyMilePct);
 
     setNoPlan(withoutPlan);
-    setDeliveringSoon(soon);
+    setGapAhead(gaps);
+    setHighDeadhead(deadheads);
     setLoading(false);
   }, []);
 
@@ -83,5 +152,8 @@ export function useReloadGaps() {
     load();
   }, [load]);
 
-  return { noPlan, deliveringSoon, loading, error, reload: load, DELIVERING_SOON_HOURS };
+  return {
+    noPlan, gapAhead, highDeadhead, loading, error, reload: load,
+    DELIVERING_SOON_HOURS, GAP_THRESHOLD_HOURS, EMPTY_MILE_TARGET_PCT,
+  };
 }
