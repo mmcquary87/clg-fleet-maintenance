@@ -26,7 +26,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.69.0";
 
 const CATEGORIES = [
   "PM / Oil", "Tires", "Brakes", "Engine", "Electrical",
-  "Transmission", "Trailer / Body", "DOT Inspection", "Other",
+  "Transmission", "Trailer / Body", "DOT Inspection", "Tow", "Other",
 ];
 
 const EXTRACT_TOOL = {
