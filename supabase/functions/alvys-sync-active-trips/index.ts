@@ -39,6 +39,14 @@
 // longer on an active trip gets its row deleted so the Tracking page
 // doesn't show a stale destination forever.
 //
+// Also populates driver_active_trips (20260908010000_driver_active_trips.sql)
+// from this same fetch — one row per (driver, active trip), independent of
+// whether the trip's truck matched a synced unit, and keeping both the
+// pickup and delivery leg's stop info + planned mileage so the Reloads
+// page can compute driver-level gaps and deadhead instead of unit-level
+// ones. Also a full snapshot (delete anything not in this run, then
+// upsert), same reasoning as unit_current_trip above.
+//
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets + service role.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -102,6 +110,18 @@ function currentStopOf(stops: any[]) {
   return list.find((s: any) => !s.DepartedAt) ?? list[list.length - 1] ?? null;
 }
 
+// Same convention as alvys-sync-loads/alvys-trips-report: the first
+// Pickup stop and the last Delivery stop (a multi-stop load can have more
+// than one of either, but the first pickup and final delivery are the leg
+// boundaries that matter for a deadhead/gap calc).
+function firstStopOf(stops: any[], type: string) {
+  return (stops ?? []).find((s: any) => s.StopType === type);
+}
+function lastStopOf(stops: any[], type: string) {
+  const matches = (stops ?? []).filter((s: any) => s.StopType === type);
+  return matches[matches.length - 1];
+}
+
 // StopWindow.End of "9999-12-31..." means "no real close time", not a
 // literal 8000-years-out deadline — same convention as an open pickup
 // window in the sample data.
@@ -151,17 +171,51 @@ Deno.serve(async (req) => {
     // (actually moving right now) beats "Dispatched" (not yet picked up).
     const STATUS_PRIORITY: Record<string, number> = { "In Transit": 2, "Dispatched": 1 };
     const rowByUnitId = new Map<string, any>();
+    const driverRowByKey = new Map<string, any>();
     let skippedNoTruckMatch = 0;
     for (const t of trips) {
       const truckAssetId = t.Truck?.Id;
       const unitId = truckAssetId ? unitIdByAssetId.get(truckAssetId) : undefined;
+      const driverId = t.Driver1?.Id && knownDriverIds.has(t.Driver1.Id) ? t.Driver1.Id : null;
+
+      // Driver-keyed row (driver_active_trips) — independent of a truck
+      // match, unlike unit_current_trip below. Every active trip for a
+      // known driver is kept (not collapsed to one per driver), so the
+      // Reloads page can see a current leg and an already-queued next one
+      // at the same time.
+      if (driverId) {
+        const pickup = firstStopOf(t.Stops, "Pickup");
+        const delivery = lastStopOf(t.Stops, "Delivery");
+        driverRowByKey.set(`${driverId}:${t.Id}`, {
+          driver_id: driverId,
+          alvys_trip_id: t.Id,
+          load_number: t.LoadNumber ?? null,
+          unit_id: unitId ?? null,
+          status: t.Status,
+          pickup_name: pickup?.CompanyName
+            ? `${pickup.CompanyName} (${pickup?.Address?.City ?? ""}, ${pickup?.Address?.State ?? ""})`
+            : pickup?.Address ? `${pickup.Address.City ?? ""}, ${pickup.Address.State ?? ""}` : null,
+          pickup_appointment_at: pickup?.AppointmentDate ?? null,
+          pickup_window_start: pickup?.StopWindow?.Begin ?? null,
+          pickup_window_end: realDeadline(pickup?.StopWindow?.End),
+          delivery_name: delivery?.CompanyName
+            ? `${delivery.CompanyName} (${delivery?.Address?.City ?? ""}, ${delivery?.Address?.State ?? ""})`
+            : delivery?.Address ? `${delivery.Address.City ?? ""}, ${delivery.Address.State ?? ""}` : null,
+          delivery_appointment_at: delivery?.AppointmentDate ?? null,
+          delivery_window_end: realDeadline(delivery?.StopWindow?.End),
+          empty_miles: toNumber(t.EmptyMileage?.Distance?.Value),
+          loaded_miles: toNumber(t.LoadedMileage?.Distance?.Value),
+          total_miles: toNumber(t.TotalMileage?.Distance?.Value),
+          synced_at: new Date().toISOString(),
+        });
+      }
+
       if (!unitId) { skippedNoTruckMatch += 1; continue; }
 
       const existing = rowByUnitId.get(unitId);
       if (existing && (STATUS_PRIORITY[existing.status] ?? 0) >= (STATUS_PRIORITY[t.Status] ?? 0)) continue;
 
       const stop = currentStopOf(t.Stops);
-      const driverId = t.Driver1?.Id && knownDriverIds.has(t.Driver1.Id) ? t.Driver1.Id : null;
 
       rowByUnitId.set(unitId, {
         unit_id: unitId,
@@ -183,6 +237,7 @@ Deno.serve(async (req) => {
       });
     }
     const rows = [...rowByUnitId.values()];
+    const driverRows = [...driverRowByKey.values()];
 
     // Full snapshot: drop any unit's row that isn't in this run's active
     // set (its trip delivered/cancelled since the last sync), then upsert
@@ -203,9 +258,30 @@ Deno.serve(async (req) => {
       upserted = rows.length;
     }
 
+    // Full snapshot for driver_active_trips too — drop any trip that isn't
+    // in this run's active set (delivered/cancelled since the last sync),
+    // then upsert what's actually active now. Global rather than per-
+    // driver since a driver can legitimately go from N active trips to 0.
+    const activeTripIds = driverRows.map((r) => r.alvys_trip_id);
+    if (activeTripIds.length > 0) {
+      const { error: delErr } = await supabase.from("driver_active_trips").delete().not("alvys_trip_id", "in", `(${activeTripIds.join(",")})`);
+      if (delErr) throw delErr;
+    } else {
+      const { error: delErr } = await supabase.from("driver_active_trips").delete().neq("driver_id", "");
+      if (delErr) throw delErr;
+    }
+
+    let driverTripsUpserted = 0;
+    if (driverRows.length > 0) {
+      const { error } = await supabase.from("driver_active_trips").upsert(driverRows, { onConflict: "driver_id,alvys_trip_id" });
+      if (error) throw error;
+      driverTripsUpserted = driverRows.length;
+    }
+
     return new Response(JSON.stringify({
       tripsFound: trips.length,
       unitsUpserted: upserted,
+      driverTripsUpserted,
       skippedNoTruckMatch,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
