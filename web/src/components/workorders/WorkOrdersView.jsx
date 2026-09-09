@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Loader2, Search, Download } from "lucide-react";
 import { Card, Badge, Eyebrow, Alert, Input, Button, Select } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
+import { useWorkOrderStats } from "../../hooks/useWorkOrderStats";
 import { downloadCsv } from "../../lib/exportCsv";
 import { CATEGORIES } from "../../lib/categories";
 import { blockedOnText } from "../../lib/workOrderLane";
@@ -47,7 +48,8 @@ function ageDays(o) {
 
 export default function WorkOrdersView({ initialCategory }) {
   const [range, setRange] = useState(null);
-  const { orders, loading, error, reload } = useAllWorkOrders(range);
+  const { orders, loading, loadingMore, hasMore, loadMore, error, reload } = useAllWorkOrders(range);
+  const { stats } = useWorkOrderStats(range);
   const [tab, setTab] = useState("All");
   const [category, setCategory] = useState(initialCategory || "All");
   const [unit, setUnit] = useState("All");
@@ -58,14 +60,16 @@ export default function WorkOrdersView({ initialCategory }) {
     return ["All", ...Array.from(new Set(orders.map((o) => o.unit?.number).filter(Boolean))).sort()];
   }, [orders]);
 
-  const tabCounts = useMemo(() => ({
-    All: orders.length,
-    "Needs approval": orders.filter((o) => !o.voided && o.approval_status === "needs_approval").length,
-    Open: orders.filter((o) => !o.voided && o.status === "Open").length,
-    "In Progress": orders.filter((o) => !o.voided && o.status === "In Progress").length,
-    Closed: orders.filter((o) => !o.voided && o.status === "Closed").length,
-    Voided: orders.filter((o) => o.voided).length,
-  }), [orders]);
+  // The true counts for this date range, independent of how many rows are
+  // actually loaded into `orders` -- see useWorkOrderStats.
+  const tabCounts = {
+    All: stats.total,
+    "Needs approval": stats.needsApproval,
+    Open: stats.open,
+    "In Progress": stats.inProgress,
+    Closed: stats.closed,
+    Voided: stats.voided,
+  };
 
   const filtered = useMemo(() => {
     return orders
@@ -108,10 +112,11 @@ export default function WorkOrdersView({ initialCategory }) {
         <div>
           <Eyebrow tone="brand">Work Orders</Eyebrow>
           <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>
-            {filtered.length} order{filtered.length === 1 ? "" : "s"}
+            {tabCounts.All} order{tabCounts.All === 1 ? "" : "s"}
           </h2>
           <p style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
             {openCount} open, {tabCounts.Closed} closed. Open items are sorted by who's blocking them, then by age.
+            {hasMore && ` Showing the ${orders.length.toLocaleString()} most recent below — load more to reach older ones.`}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -257,6 +262,18 @@ export default function WorkOrdersView({ initialCategory }) {
           </div>
         )}
       </Card>
+
+      {hasMore && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginTop: 16 }}>
+          <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}
+            iconLeft={loadingMore ? <Loader2 size={14} className="spin" /> : null}>
+            {loadingMore ? "Loading…" : `Load ${Math.min(500, tabCounts.All - orders.length).toLocaleString()} more`}
+          </Button>
+          <span style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>
+            {orders.length.toLocaleString()} of {tabCounts.All.toLocaleString()} loaded — totals above already reflect all of them, the table and CSV export don't until you load more.
+          </span>
+        </div>
+      )}
 
       {openNoCostCount > 0 && (
         <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 14, lineHeight: 1.6, maxWidth: 760 }}>
