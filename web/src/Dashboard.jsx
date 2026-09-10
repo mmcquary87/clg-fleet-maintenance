@@ -100,7 +100,7 @@ export default function Dashboard({ session }) {
           {tab === "operations" && <OperationsView />}
           {tab === "units" && <UnitsView canViewAssetLifecycle={profile?.role !== "mechanic"} />}
           {tab === "vendors" && <VendorsView />}
-          {tab === "insurance" && !isMechanic && <InsuranceView />}
+          {tab === "insurance" && !isMechanic && <InsuranceView onGoToUnits={() => setTab("units")} />}
           {tab === "roster" && <RosterView session={session} />}
           {tab === "hometime" && <HomeTimeView session={session} />}
           {tab === "mechanic" && canUseMechanicQueue && <MechanicView />}
