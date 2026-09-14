@@ -22,10 +22,15 @@
 // -- mirrors alvys-trips-report's plannedEmptyMilePct methodology (KPI 3),
 // which also counts any non-Cancelled trip in the pickup window as
 // "planned" rather than restricting to completed/terminal statuses. Day
-// range comes ONLY from scheduled/target fields (PickupDate,
-// ScheduledDeliveryAt/DeliveryDate) -- deliberately NOT from Stops'
-// ArrivedAt/DepartedAt actuals the way KPI 11's tripDayRange falls back to,
-// since this KPI measures the plan, not what actually happened to it.
+// range comes ONLY from scheduled/target fields (PickupDate, DeliveryDate)
+// -- deliberately NOT from Stops' ArrivedAt/DepartedAt actuals the way KPI
+// 11's tripDayRange falls back to, since this KPI measures the plan, not
+// what actually happened to it. Confirmed via alvys-explore-trip-duration's
+// real trip dump (2026-09-14) that PickupDate/DeliveryDate exist on every
+// trip regardless of status; ScheduledDeliveryAt (referenced as a fallback
+// by alvys-driver-utilization/home-time-adherence) does NOT appear on the
+// live trips/search response at all -- harmless there since DeliveryDate
+// covers it, but not claimed as a real field here.
 //
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets + service role
 // (to read our own drivers/driver_roster tables).
@@ -98,7 +103,7 @@ function addDays(dateStr: string, days: number) {
 // entirely rather than guessing a single day.
 function plannedTripDayRange(t: any): { start: string; end: string } | null {
   const start = (t.PickupDate || "").slice(0, 10);
-  const end = (t.ScheduledDeliveryAt || t.DeliveryDate || start).slice(0, 10);
+  const end = (t.DeliveryDate || start).slice(0, 10);
   if (!start) return null;
   return { start, end: end || start };
 }
