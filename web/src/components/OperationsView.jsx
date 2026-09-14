@@ -8,6 +8,7 @@ import { useTracking } from "../hooks/useTracking";
 import { useHomeTimeAdherence } from "../hooks/useHomeTimeAdherence";
 import { useDriveHourUtilization } from "../hooks/useDriveHourUtilization";
 import { useDriverUtilization } from "../hooks/useDriverUtilization";
+import { usePlannedDriverCapacity } from "../hooks/usePlannedDriverCapacity";
 import { useAssignmentStability } from "../hooks/useAssignmentStability";
 import { useFeasibilityReview } from "../hooks/useFeasibilityReview";
 import { usePlanAdherence } from "../hooks/usePlanAdherence";
@@ -133,6 +134,7 @@ export default function OperationsView() {
   const { data: homeTimeData, loading: homeTimeLoading, error: homeTimeError } = useHomeTimeAdherence(range);
   const { data: driveHourData, loading: driveHourLoading, error: driveHourError } = useDriveHourUtilization(range);
   const { data: driverUtilData, loading: driverUtilLoading, error: driverUtilError } = useDriverUtilization(range);
+  const { data: plannedCapacityData, loading: plannedCapacityLoading, error: plannedCapacityError } = usePlannedDriverCapacity(range);
   const { data: stabilityData, loading: stabilityLoading, error: stabilityError } = useAssignmentStability(range);
   const { data: feasibilityData, loading: feasibilityLoading, error: feasibilityError } = useFeasibilityReview(range);
   const { data: adherenceData, loading: adherenceLoading, error: adherenceError } = usePlanAdherence(range);
@@ -153,6 +155,7 @@ export default function OperationsView() {
     17: { value: homeTimeData?.adherencePct ?? null, loading: homeTimeLoading, error: homeTimeError },
     13: { value: driveHourData?.utilizationPct ?? null, loading: driveHourLoading, error: driveHourError },
     11: { value: driverUtilData?.driverUtilizationPct ?? null, loading: driverUtilLoading, error: driverUtilError },
+    4: { value: plannedCapacityData?.plannedCapacityUtilizationPct ?? null, loading: plannedCapacityLoading, error: plannedCapacityError },
   };
 
   function breakdownFor(kpi) {
@@ -213,6 +216,8 @@ export default function OperationsView() {
         return `Covers ${homeTimeData?.totalPlannedEvents ?? 0} recurring home-time occurrences. Violated = an actual trip covered the date; Confirmed = no trip and a real Alvys event (Hometime/Restart/Vacation/SickOrEmergency) covers it; Unconfirmed = neither — not yet planned-day-off exceptions or approval-status filtering.${homeTimeData?.unlinkedSchedules ? ` ${homeTimeData.unlinkedSchedules} schedule(s) excluded (not linked to an Alvys driver).` : ""}`;
       case 11:
         return `${driverUtilData?.driversConsidered ?? 0} active drivers × days in range, minus ${driverUtilData?.rosterExceptionRows ?? 0} governed roster exception row(s) (Not Eligible or a leave window). "Productive" = a day with real Alvys trip activity.${driverUtilData?.unmatchedRosterNameCount ? ` ${driverUtilData.unmatchedRosterNameCount} roster name(s) didn't match a driver: ${driverUtilData.unmatchedRosterNames.slice(0, 3).join(", ")}${driverUtilData.unmatchedRosterNameCount > 3 ? "…" : ""}.` : ""}`;
+      case 4:
+        return `Day-level proxy, not the framework's literal hours formula — Alvys has no planned drive-time field, only distance. "Planned" = a day touched by any non-Cancelled trip's scheduled pickup/delivery window, against the same governed roster availability as KPI 11 (${plannedCapacityData?.rosterExceptionRows ?? 0} exception row(s)).${plannedCapacityData?.unmatchedRosterNameCount ? ` ${plannedCapacityData.unmatchedRosterNameCount} roster name(s) didn't match a driver.` : ""}`;
       case 13:
         return `${driveHourData?.driversWithActivity ?? 0} of ${driveHourData?.driversConsidered ?? 0} active drivers had HOS activity this window, across ${driveHourData?.totalWorkingDays ?? 0} working-days. "Available capacity" = 11 legal drive hrs × working days, not a roster schedule.`;
       case 2:
@@ -245,6 +250,8 @@ export default function OperationsView() {
         return driveHourData ? `${driveHourData.driversWithActivity} OF ${driveHourData.driversConsidered}` : null;
       case 11:
         return driverUtilData ? `${driverUtilData.driversConsidered} DRIVERS` : null;
+      case 4:
+        return plannedCapacityData ? `${plannedCapacityData.plannedDriverDays} OF ${plannedCapacityData.availableDriverDays} DAYS` : null;
       case 16:
         return tripsData ? "BY LOADING TYPE" : null;
       default:

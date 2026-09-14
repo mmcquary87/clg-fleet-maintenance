@@ -69,8 +69,12 @@ export const KPIS = [
     no: 4, module: "planning", name: "Planned Driver Capacity Utilization", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Planned productive driving capacity assigned to revenue work ÷ realistically available productive driving capacity × 100",
     threshold: { status: "pending", green: "≥90.0%", yellow: "80.0–89.9%", red: "<80.0%" },
-    dataStatus: "blocked", blockedReason: "Needs a governed driver-availability roster plus Alvys planning data — neither exists yet.",
-    source: "No source connected.",
+    // Day-level proxy, not the framework's literal hours-based formula --
+    // confirmed via alvys-explore-trip-duration (2026-09-14) that Alvys
+    // never exposes a planned drive-time field on a trip, only distance.
+    // See alvys-planned-driver-capacity for the full reasoning.
+    dataStatus: "live", unit: "%",
+    source: "Governed driver_roster availability × planned Alvys trip activity (day-level, not hours — Alvys has no planned drive-time field).",
   },
   {
     no: 5, module: "planning", name: "Order Data Accuracy", classification: "Primary Weekly KPI", type: "Leading",
