@@ -80,7 +80,16 @@ export const KPIS = [
     no: 5, module: "planning", name: "Order Data Accuracy", classification: "Primary Weekly KPI", type: "Leading",
     formula: "Orders released without a material correction ÷ total accepted orders released × 100",
     threshold: { status: "pending", green: "≥98.0%", yellow: "95.0–97.9%", red: "<95.0%" },
-    dataStatus: "blocked", blockedReason: "Needs Alvys order field-change history — not pulled yet.",
+    // Checked (2026-09-14) both plausible sources before giving up: the
+    // live trips/search API exposes no per-field change-history/audit
+    // endpoint (only UpdatedAt/UpdatedBy -- when something last changed,
+    // not what) and CLG's hourly Alvys backup sheet (used by KPI 2/10)
+    // only captures Schedule/driver/status, not order content (weight,
+    // commodity, rate, equipment, customer requirements) -- nothing to
+    // diff a "material correction" against. Stays blocked until Alvys
+    // exposes real change history, CLG's backup sheet gains richer
+    // columns, or CLG stands up a manual order-review log.
+    dataStatus: "blocked", blockedReason: "Needs Alvys order field-change history — confirmed not available via the live API or CLG's existing backup sheet.",
     source: "No source connected.",
   },
   {
