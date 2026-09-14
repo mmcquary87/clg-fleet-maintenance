@@ -16,18 +16,19 @@ const EXPORT_COLUMNS = [
   { label: "Description", value: (r) => r.complaint || r.description },
   { label: "Invoice / ref #", value: (r) => r.invoice_ref },
   { label: "PO number", value: (r) => r.po_number },
-  { label: "Amount", value: (r) => Number(r.cost) || 0 },
+  { label: "Repair cost", value: (r) => Number(r.cost) || 0 },
+  { label: "Billed to driver", value: (r) => r.billedAmount },
 ];
 
 export default function DeductionsView({ range }) {
   const { records, loading, error } = useDeductions(range);
-  const total = records.reduce((s, r) => s + (Number(r.cost) || 0), 0);
+  const total = records.reduce((s, r) => s + r.billedAmount, 0);
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>
-          {records.length} deduction{records.length === 1 ? "" : "s"} · {money(total)} total
+          {records.length} deduction{records.length === 1 ? "" : "s"} · {money(total)} billed
         </div>
         <Button
           variant="outline" size="sm" iconLeft={<Download size={14} />}
@@ -55,9 +56,9 @@ export default function DeductionsView({ range }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
               <thead>
                 <tr>
-                  {["Driver", "Unit", "Date", "Vendor", "Category", "Description", "Amount"].map((h) => (
+                  {["Driver", "Unit", "Date", "Vendor", "Category", "Description", "Repair cost", "Billed"].map((h) => (
                     <th key={h} style={{
-                      textAlign: h === "Amount" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
+                      textAlign: h === "Repair cost" || h === "Billed" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
                       color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
                     }}>{h}</th>
@@ -83,8 +84,16 @@ export default function DeductionsView({ range }) {
                     <td style={{ padding: "10px 14px", color: "var(--clg-text-muted)", maxWidth: 260, borderBottom: "1px solid var(--clg-border-subtle)" }}>
                       {r.complaint || r.description || "—"}
                     </td>
-                    <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                    <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
                       {money(r.cost)}
+                    </td>
+                    <td style={{ padding: "10px 14px", textAlign: "right", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                      <div style={{ fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600 }}>{money(r.billedAmount)}</div>
+                      {r.isOwnerOperator && (
+                        <Badge tone={r.flatRateApplied ? "brand" : "critical"} style={{ marginTop: 4 }}>
+                          {r.flatRateApplied ? "Flat rate" : "Flat rate not set"}
+                        </Badge>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -92,6 +101,9 @@ export default function DeductionsView({ range }) {
               <tfoot>
                 <tr>
                   <td colSpan={6} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "var(--clg-navy)" }}>Total</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-muted)" }}>
+                    {money(records.reduce((s, r) => s + (Number(r.cost) || 0), 0))}
+                  </td>
                   <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 700, color: "var(--clg-navy)" }}>
                     {money(total)}
                   </td>

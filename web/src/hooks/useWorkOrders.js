@@ -8,6 +8,7 @@ function toRecord(row) {
     id: row.id,
     unit: row.unit?.number ?? "Unassigned",
     unitType: row.unit?.type ?? null,
+    unitOwnership: row.unit?.ownership ?? null,
     category: row.category,
     vendor: row.vendor?.name ?? "—",
     cost: Number(row.cost) || 0,
@@ -41,7 +42,7 @@ export function useWorkOrders(range) {
         let query = supabase
           .from("work_orders")
           .select(
-            "id, category, cost, date_closed, invoice_ref, description, unit:units(number, type), vendor:vendors(name)"
+            "id, category, cost, date_closed, invoice_ref, description, unit:units(number, type, ownership), vendor:vendors(name)"
           )
           .eq("status", "Closed")
           .eq("voided", false)
