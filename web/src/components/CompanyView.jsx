@@ -104,6 +104,20 @@ export default function CompanyView({ records, range, onGoToWorkOrders, onGoToUn
 
   const noOdometerCount = units.filter((u) => u.is_active && !u.odometer).length;
 
+  // CLG-owned vs. leased (Penske/Hale) equipment split -- units.ownership
+  // defaults to "owned", so this is the actual cost CLG carries on its own
+  // fleet, separate from equipment it's only leasing (2026-09-14: CLG asked
+  // to see spend on company-owned equipment specifically, distinct from
+  // what's billed back to a driver via a chargeback -- see Deductions).
+  const companyOwnedTotal = useMemo(
+    () => records.filter((r) => r.unitOwnership === "owned").reduce((s, r) => s + r.cost, 0),
+    [records]
+  );
+  const leasedTotal = useMemo(
+    () => records.filter((r) => r.unitOwnership && r.unitOwnership !== "owned").reduce((s, r) => s + r.cost, 0),
+    [records]
+  );
+
   // Tractors/Trailers split -- real, from units.type (Truck/Trailer), not a
   // blended average across two assets with very different cost profiles.
   const truckRecords = useMemo(() => records.filter((r) => r.unitType === "Truck"), [records]);
@@ -161,6 +175,11 @@ export default function CompanyView({ records, range, onGoToWorkOrders, onGoToUn
             <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.65)", marginTop: 8 }}>
               Tractors {fmtMoney(truckTotal)} · Trailers {fmtMoney(trailerTotal)}
             </div>
+            {leasedTotal > 0 && (
+              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>
+                Company-owned equipment {fmtMoney(companyOwnedTotal)} · Leased (Penske/Hale) {fmtMoney(leasedTotal)}
+              </div>
+            )}
           </div>
           <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.22)" }} />
           <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
