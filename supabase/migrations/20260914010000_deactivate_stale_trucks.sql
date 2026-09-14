@@ -10,28 +10,40 @@
 -- deliberately truck-only: most trailers don't carry telematics hardware,
 -- so a null samsara_synced_at is normal and expected for real trailers.
 --
--- Two entries in the never-synced set ("Parts", "Trailer 100143") are
--- outright garbage data entries, not real trucks -- handled separately
--- below (deletion) rather than deactivation, and only after confirming
--- they carry no fault_events/dvir_defects history worth preserving (both
--- tables cascade-delete on unit removal, unlike work_orders which
--- restricts it).
+-- Two entries in the never-synced set ("Parts", "Trailer 100143") looked
+-- like garbage data entries, not real trucks. Checked before deleting
+-- them (2026-09-14): "Parts" has 9 real work orders attached, "Trailer
+-- 100143" has 1 -- someone's been logging real repair cost against these
+-- bad unit entries. Deleting would fail anyway (work_orders.unit_id is
+-- "on delete restrict"), and would be wrong even if it succeeded -- that
+-- cost history is real. Deactivated instead (Step 3), same as the rest of
+-- this cleanup, so the history stays intact but they stop counting as
+-- active fleet.
 --
--- Run each numbered step in order. Steps 1 and 3 are read-only review
--- steps -- confirm the row count/list looks right before running the
--- write step that follows it.
+-- Run each numbered step in order. Step 1 is a read-only review step --
+-- confirm the list looks right before running the write step that follows.
 
 -- =============================================================================
 -- Step 1 (review): trucks this will deactivate. Confirm this list is what
 -- you expect before running Step 2 -- a truck that's real but brand new
 -- (no Samsara device installed yet) would show up here too and should be
 -- excluded by hand if so.
+--
+-- Scoped to alvys_asset_id is not null -- i.e. trucks alvys-sync-equipment
+-- actually manages -- same as its own auto-deactivation logic. Correction
+-- (2026-09-14): alvys_synced_at is a dead column, never written by any
+-- edge function, so it's NULL for every unit regardless of real status --
+-- alvys_asset_id is the real "is this an Alvys-managed truck" signal.
+-- A truck with alvys_asset_id null (manually created, or a leased-import
+-- row) is intentionally excluded here, same as the sync function excludes
+-- it from auto-deactivation.
 -- =============================================================================
-select number, year, make, model, vin, samsara_synced_at, alvys_synced_at
+select number, year, make, model, vin, samsara_synced_at, alvys_asset_id
 from units
 where is_active = true
   and type = 'Truck'
   and samsara_synced_at is null
+  and alvys_asset_id is not null
   and number not in ('Parts', 'Trailer 100143')
 order by number;
 
@@ -45,25 +57,32 @@ set is_active = false
 where is_active = true
   and type = 'Truck'
   and samsara_synced_at is null
+  and alvys_asset_id is not null
   and number not in ('Parts', 'Trailer 100143');
 
 -- =============================================================================
--- Step 3 (review): confirm neither garbage entry has fault/DVIR history
--- that would be lost. If either returns a non-zero count, stop and tell me
--- before running Step 4 -- deleting the unit would cascade-delete that
--- history (fault_events/dvir_defects both reference units on delete
--- cascade), and we'd want to deactivate instead of delete in that case.
+-- Step 3 (write): "Parts" (9 work orders) and "Trailer 100143" (1 work
+-- order) both carry real cost history -- confirmed 2026-09-14, see note
+-- above. Deactivate rather than delete, same reasoning as Step 2.
 -- =============================================================================
-select u.number,
-       (select count(*) from work_orders wo where wo.unit_id = u.id) as work_order_count,
-       (select count(*) from fault_events fe where fe.unit_id = u.id) as fault_event_count,
-       (select count(*) from dvir_defects dd where dd.unit_id = u.id) as dvir_defect_count
-from units u
-where u.number in ('Parts', 'Trailer 100143');
+update units
+set is_active = false
+where number in ('Parts', 'Trailer 100143');
 
 -- =============================================================================
--- Step 4 (write): delete the garbage entries -- only run this if Step 3
--- showed zero work orders (the FK would block the delete anyway if not)
--- and you're comfortable losing any fault/DVIR rows it also showed.
+-- Step 4 (recovery, run once): the very first version of Step 2 given out
+-- was missing the "alvys_asset_id is not null" condition -- it was run
+-- as-is against production before the correction above was made. That
+-- earlier run would have also deactivated any manually-created or
+-- leased-import truck (no alvys_asset_id) that also had no Samsara sync,
+-- which was never the intent. This restores exactly that subset back to
+-- active. Safe to run even if nothing was actually caught by the mistake
+-- (matches zero rows in that case).
 -- =============================================================================
-delete from units where number in ('Parts', 'Trailer 100143');
+update units
+set is_active = true
+where is_active = false
+  and type = 'Truck'
+  and samsara_synced_at is null
+  and alvys_asset_id is null
+  and number not in ('Parts', 'Trailer 100143');
