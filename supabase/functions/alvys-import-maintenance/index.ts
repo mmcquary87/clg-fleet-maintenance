@@ -1,11 +1,21 @@
 // Fleet Maintenance System — Alvys maintenance record import
 //
-// Pulls all maintenance records from Alvys and upserts them into our
-// `work_orders` table as Closed (already-completed) work orders. Alvys's
-// "Category" field is free text (e.g. "rfi tire replaced"), not our fixed
-// 9-category enum, so this classifies it with a keyword heuristic.
+// Pulls all maintenance records from Alvys and inserts any not already in
+// our `work_orders` table as Closed (already-completed) work orders.
+// Alvys's "Category" field is free text (e.g. "rfi tire replaced"), not
+// our fixed 9-category enum, so this classifies it with a keyword
+// heuristic.
 //
-// Safe to re-run — idempotent upsert by work_orders.alvys_maintenance_id.
+// INSERT-ONLY by work_orders.alvys_maintenance_id -- deliberately not an
+// upsert (2026-09-17). This now runs on a 15-minute pg_cron schedule
+// (20260917020000_alvys_maintenance_sync_schedule.sql), same as
+// samsara-sync, and an upsert would silently overwrite any manual
+// correction made after import (category, cost, vendor, status, dates)
+// back to Alvys's raw values on every run. Insert-only means a record
+// already in our system is never touched again by this function, no
+// matter how it's since been edited here -- only genuinely new Alvys
+// records get pulled in.
+//
 // Run alvys-sync-equipment FIRST so units already exist to attach to.
 //
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets + service role.
@@ -97,7 +107,15 @@ Deno.serve(async (req) => {
     );
 
     const token = await getAlvysToken();
-    const records = await fetchAllMaintenance(token);
+    const allRecords = await fetchAllMaintenance(token);
+
+    // Insert-only: skip anything already pulled in on a previous run (see
+    // header comment) so this is safe to run unattended on a schedule.
+    const { data: existingRows, error: existingErr } = await supabase
+      .from("work_orders").select("alvys_maintenance_id").not("alvys_maintenance_id", "is", null);
+    if (existingErr) throw existingErr;
+    const existingIds = new Set(existingRows.map((r: any) => r.alvys_maintenance_id));
+    const records = allRecords.filter((r) => !existingIds.has(r.Id));
 
     // Resolve units: match by alvys_asset_id first, fall back to number.
     const { data: units, error: unitsErr } = await supabase.from("units").select("id, number, alvys_asset_id");
@@ -164,20 +182,20 @@ Deno.serve(async (req) => {
       })
       .filter((r) => r.unit_id);
 
-    let upserted = 0;
+    let inserted = 0;
     for (const batch of chunk(rows, 500)) {
-      const { error: upsertErr } = await supabase
-        .from("work_orders")
-        .upsert(batch, { onConflict: "alvys_maintenance_id" });
-      if (upsertErr) throw upsertErr;
-      upserted += batch.length;
+      const { error: insertErr } = await supabase.from("work_orders").insert(batch);
+      if (insertErr) throw insertErr;
+      inserted += batch.length;
     }
 
     return new Response(JSON.stringify({
-      recordsFound: records.length,
+      recordsFoundInAlvys: allRecords.length,
+      alreadyImported: allRecords.length - records.length,
+      newRecordsThisRun: records.length,
       unitsCreatedForOrphans: missingUnits.size,
       vendorsCreated: missingVendorNames.length,
-      workOrdersUpserted: upserted,
+      workOrdersInserted: inserted,
       skippedNoAsset: records.length - rows.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
