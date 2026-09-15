@@ -300,8 +300,29 @@ function InsuranceRatesPanel() {
 // row (see DESIGN_QUEUE.md's "Sage Intacct integration" item). category
 // here is plain text, not a DB enum -- kept in sync with CATEGORIES by
 // hand, same as everywhere else that list is duplicated.
+// Matches CLG's real chart of accounts (confirmed 2026-09-16), not our
+// own 10-category taxonomy -- their GL structure splits by asset type
+// (Truck/Trailer) and transaction type (Inspection / Tires / Repairs &
+// Maintenance [Company or Owner-Operator, trucks only] / Parts), which
+// cuts across categories rather than matching them one-to-one. See
+// intacctExport.js for how a work order's category collapses into one of
+// these buckets. No trailer parts account was given -- trailer parts
+// default to the Trailer Repairs & Maint. account in the export unless
+// filled in here.
+const GL_FIELDS = [
+  { key: "truck_inspection_account", label: "Truck — Inspection" },
+  { key: "truck_tires_account", label: "Truck — Tires" },
+  { key: "truck_repairs_company_account", label: "Truck — Repairs & Maint. (Company)" },
+  { key: "truck_repairs_owner_operator_account", label: "Truck — Repairs & Maint. (Owner-Operator)" },
+  { key: "truck_parts_account", label: "Truck — Parts" },
+  { key: "trailer_inspection_account", label: "Trailer — Inspection" },
+  { key: "trailer_tires_account", label: "Trailer — Tires" },
+  { key: "trailer_repairs_account", label: "Trailer — Repairs & Maint." },
+  { key: "trailer_parts_account", label: "Trailer — Parts (optional, defaults to Repairs & Maint. if blank)" },
+];
+
 function IntacctExportSettingsPanel() {
-  const [accounts, setAccounts] = useState([]); // [{ category, gl_account_number }]
+  const [glMap, setGlMap] = useState(null);
   const [defaultTerms, setDefaultTerms] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -310,18 +331,18 @@ function IntacctExportSettingsPanel() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from("wo_category_gl_accounts").select("category, gl_account_number"),
+      supabase.from("gl_account_map").select(GL_FIELDS.map((f) => f.key).join(", ")).single(),
       supabase.from("app_settings").select("default_payment_terms").single(),
-    ]).then(([accountsRes, settingsRes]) => {
-      const byCategory = new Map((accountsRes.data ?? []).map((r) => [r.category, r.gl_account_number ?? ""]));
-      setAccounts(CATEGORIES.map((cat) => ({ category: cat, gl_account_number: byCategory.get(cat) ?? "" })));
+    ]).then(([glRes, settingsRes]) => {
+      const row = glRes.data ?? {};
+      setGlMap(Object.fromEntries(GL_FIELDS.map((f) => [f.key, row[f.key] ?? ""])));
       setDefaultTerms(settingsRes.data?.default_payment_terms ?? "");
       setLoaded(true);
     });
   }, []);
 
-  const setAccountNumber = (category, value) => {
-    setAccounts((prev) => prev.map((r) => (r.category === category ? { ...r, gl_account_number: value } : r)));
+  const setField = (key, value) => {
+    setGlMap((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
   };
 
@@ -329,15 +350,14 @@ function IntacctExportSettingsPanel() {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const [accountsErr, settingsErr] = await Promise.all([
-      supabase.from("wo_category_gl_accounts")
-        .upsert(accounts.map((r) => ({ category: r.category, gl_account_number: r.gl_account_number.trim() || null })), { onConflict: "category" })
-        .then(({ error: err }) => err),
+    const cleaned = Object.fromEntries(GL_FIELDS.map((f) => [f.key, glMap[f.key].trim() || null]));
+    const [glErr, settingsErr] = await Promise.all([
+      supabase.from("gl_account_map").update(cleaned).eq("id", true).then(({ error: err }) => err),
       supabase.from("app_settings").update({ default_payment_terms: defaultTerms.trim() || null }).eq("id", true)
         .then(({ error: err }) => err),
     ]);
     setSaving(false);
-    if (accountsErr || settingsErr) setError((accountsErr || settingsErr).message);
+    if (glErr || settingsErr) setError((glErr || settingsErr).message);
     else setSaved(true);
   };
 
@@ -345,19 +365,16 @@ function IntacctExportSettingsPanel() {
     <Card>
       <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Sage Intacct export</h3>
       <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
-        GL account number per work order category, and the default payment terms applied to every exported bill
-        (lets Intacct compute the due date instead of this app guessing at day-count math). A category left blank
-        is skipped by the export rather than sent with a missing account number.
+        GL account numbers from CLG's real chart of accounts, split by asset type and transaction type — not by
+        work order category directly. The Owner-Operator column only applies to a truck marked "Assigned to
+        owner-operator" on its Units page entry. A blank account is skipped by the export rather than sent with
+        a missing account number.
       </p>
       {error && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 16 }}>{error}</Alert>}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 20px", marginBottom: 16 }}>
-        {accounts.map((r) => (
-          <Field key={r.category} label={r.category}>
-            <Input
-              disabled={!loaded} placeholder="GL account #"
-              value={r.gl_account_number}
-              onChange={(e) => setAccountNumber(r.category, e.target.value)}
-            />
+        {loaded && GL_FIELDS.map((f) => (
+          <Field key={f.key} label={f.label}>
+            <Input placeholder="GL account #" value={glMap[f.key]} onChange={(e) => setField(f.key, e.target.value)} />
           </Field>
         ))}
       </div>

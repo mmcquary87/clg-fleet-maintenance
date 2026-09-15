@@ -10,12 +10,19 @@ function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 }
 
-// Sage Intacct AP Bills export -- see intacctExport.js for the column
-// mapping and DESIGN_QUEUE.md's "Sage Intacct integration" item for the
-// full design. Eligible = Closed, non-voided, vendor-billed, has a real
-// cost, and hasn't already been exported (exported_to_intacct_at is
-// null) -- filtered by date_closed via the same DateRangeFilter used
-// everywhere else in this app.
+const GL_FIELDS = [
+  "truck_inspection_account", "truck_tires_account", "truck_repairs_company_account",
+  "truck_repairs_owner_operator_account", "truck_parts_account", "trailer_inspection_account",
+  "trailer_tires_account", "trailer_repairs_account", "trailer_parts_account",
+];
+
+// Sage Intacct AP Bills export -- see intacctExport.js for the full
+// eligibility/GL-routing logic and DESIGN_QUEUE.md's "Sage Intacct
+// integration" item for the design. Closed, non-voided work orders that
+// haven't been exported before, filtered by date_closed. A work order
+// with no vendor attached at all (a pure in-house job) is always
+// skipped -- Intacct requires a real vendor on every bill, and an
+// employee's labor is wages, not an AP payable.
 export default function IntacctExportModal({ onClose }) {
   const [range, setRange] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,11 +40,13 @@ export default function IntacctExportModal({ onClose }) {
 
     (async () => {
       let query = supabase.from("work_orders")
-        .select("id, wo_number, category, cost, date_closed, invoice_ref, complaint, description, vendor:vendors(id, name, intacct_vendor_id)")
+        .select(
+          "id, wo_number, category, cost, date_closed, invoice_ref, complaint, description, " +
+          "vendor:vendors(id, name, intacct_vendor_id), unit:units(type, owner_operator_assigned), " +
+          "parts:work_order_parts(quantity, unit_cost)"
+        )
         .eq("status", "Closed")
         .eq("voided", false)
-        .not("vendor_id", "is", null)
-        .gt("cost", 0)
         .is("exported_to_intacct_at", null)
         .order("date_closed", { ascending: true });
       if (range?.start) query = query.gte("date_closed", range.start);
@@ -45,7 +54,7 @@ export default function IntacctExportModal({ onClose }) {
 
       const [ordersRes, glRes, settingsRes] = await Promise.all([
         query,
-        supabase.from("wo_category_gl_accounts").select("category, gl_account_number"),
+        supabase.from("gl_account_map").select(GL_FIELDS.join(", ")).single(),
         supabase.from("app_settings").select("default_payment_terms").single(),
       ]);
       if (cancelled) return;
@@ -55,10 +64,10 @@ export default function IntacctExportModal({ onClose }) {
         return;
       }
 
-      const glAccountByCategory = new Map((glRes.data ?? []).map((r) => [r.category, r.gl_account_number]));
+      const glMap = glRes.data ?? {};
       const batchTitle = `CLG Fleet Maintenance ${new Date().toISOString().slice(0, 10)}`;
       const { eligible: e, skipped: s } = buildIntacctBillRows(ordersRes.data ?? [], {
-        glAccountByCategory, defaultTerms: settingsRes.data?.default_payment_terms, batchTitle,
+        glMap, defaultTerms: settingsRes.data?.default_payment_terms, batchTitle,
       });
       setEligible(e);
       setSkipped(s);
@@ -68,7 +77,7 @@ export default function IntacctExportModal({ onClose }) {
     return () => { cancelled = true; };
   }, [range?.start, range?.end]);
 
-  const totalAmount = eligible.reduce((s, { order }) => s + (Number(order.cost) || 0), 0);
+  const totalAmount = eligible.reduce((s, { row }) => s + (Number(row.AMOUNT) || 0), 0);
 
   const runExport = async () => {
     setExporting(true);
@@ -79,7 +88,7 @@ export default function IntacctExportModal({ onClose }) {
         eligible.map((e) => e.row),
         INTACCT_EXPORT_CSV_COLUMNS
       );
-      const ids = eligible.map((e) => e.order.id);
+      const ids = [...new Set(eligible.map((e) => e.order.id))];
       const { error: updateErr } = await supabase.from("work_orders")
         .update({ exported_to_intacct_at: new Date().toISOString() })
         .in("id", ids);
@@ -101,7 +110,7 @@ export default function IntacctExportModal({ onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "var(--clg-surface-card)", borderRadius: "var(--clg-radius-md)", width: "100%", maxWidth: 720,
+          background: "var(--clg-surface-card)", borderRadius: "var(--clg-radius-md)", width: "100%", maxWidth: 760,
           maxHeight: "85vh", overflowY: "auto", boxShadow: "var(--clg-shadow-lg, 0 12px 40px rgba(0,0,0,.25))",
         }}
       >
@@ -112,7 +121,8 @@ export default function IntacctExportModal({ onClose }) {
 
         <div style={{ padding: 24 }}>
           <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 14 }}>
-            Closed, vendor-billed work orders with a real cost that haven't been exported before. Filters by date closed.
+            Closed work orders with a real vendor invoice that haven't been exported before. Filters by date closed.
+            In-house jobs (no vendor attached) are always excluded — their labor is wages, not an AP bill.
           </p>
           <DateRangeFilter onChange={setRange} />
 
@@ -132,7 +142,7 @@ export default function IntacctExportModal({ onClose }) {
               <div style={{ marginTop: 16, display: "flex", gap: 28 }}>
                 <div>
                   <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--clg-text-muted)" }}>Ready to export</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: "var(--clg-navy)" }}>{eligible.length} · {money(totalAmount)}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: "var(--clg-navy)" }}>{eligible.length} line{eligible.length === 1 ? "" : "s"} · {money(totalAmount)}</div>
                 </div>
                 {skipped.length > 0 && (
                   <div>
@@ -157,7 +167,7 @@ export default function IntacctExportModal({ onClose }) {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                     <thead>
                       <tr>
-                        {["WO", "Vendor", "Category", "Amount"].map((h) => (
+                        {["WO", "Vendor", "GL account", "Amount"].map((h) => (
                           <th key={h} style={{
                             textAlign: h === "Amount" ? "right" : "left", padding: "6px 10px", fontSize: 10.5,
                             textTransform: "uppercase", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)",
@@ -166,13 +176,13 @@ export default function IntacctExportModal({ onClose }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {eligible.map(({ order }) => (
-                        <tr key={order.id}>
+                      {eligible.map(({ order, row }, i) => (
+                        <tr key={`${order.id}-${row.LINE_NO}-${i}`}>
                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{order.wo_number || "—"}</td>
                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{order.vendor?.name}</td>
-                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{order.category}</td>
+                          <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--clg-border-subtle)", fontFamily: "var(--clg-font-mono, monospace)" }}>{row.ACCT_NO}</td>
                           <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)" }}>
-                            {money(order.cost)}
+                            {money(row.AMOUNT)}
                           </td>
                         </tr>
                       ))}
@@ -183,7 +193,7 @@ export default function IntacctExportModal({ onClose }) {
 
               <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
                 <Button size="sm" onClick={runExport} disabled={exporting || eligible.length === 0} iconLeft={exporting ? <Loader2 size={13} className="spin" /> : <FileDown size={13} />}>
-                  {exporting ? "Exporting…" : `Download CSV & mark ${eligible.length} exported`}
+                  {exporting ? "Exporting…" : `Download CSV & mark ${new Set(eligible.map((e) => e.order.id)).size} exported`}
                 </Button>
                 <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
               </div>

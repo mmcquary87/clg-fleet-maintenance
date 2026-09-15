@@ -57,6 +57,7 @@ function UnitPanel({ unit, activity, faults, isMobile, onOpenFull, onToggleActiv
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-royal)" }}>
         {unit.type}{!unit.is_active && " · Inactive"}
         {OWNERSHIP_BADGE[unit.ownership] && <Badge tone="brand" style={{ marginLeft: 4 }}>{OWNERSHIP_BADGE[unit.ownership]}</Badge>}
+        {unit.owner_operator_assigned && <Badge tone="outline" style={{ marginLeft: 4 }}>O/O</Badge>}
       </div>
       <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 26, color: "var(--clg-navy)", marginTop: 4 }}>
         {unit.number}
@@ -142,6 +143,7 @@ function UnitRow({ unit, activity, faults, selected, isTrailer, isMobile, onSele
             <ConditionDot condition={condition} />
             <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, color: "var(--clg-navy)" }}>{unit.number}</span>
             {OWNERSHIP_BADGE[unit.ownership] && <Badge tone="brand">{OWNERSHIP_BADGE[unit.ownership]}</Badge>}
+            {unit.owner_operator_assigned && <Badge tone="outline">O/O</Badge>}
           </span>
           {flagBadge}
         </div>
@@ -169,6 +171,7 @@ function UnitRow({ unit, activity, faults, selected, isTrailer, isMobile, onSele
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, color: "var(--clg-navy)" }}>{unit.number}</span>
           {OWNERSHIP_BADGE[unit.ownership] && <Badge tone="brand">{OWNERSHIP_BADGE[unit.ownership]}</Badge>}
+          {unit.owner_operator_assigned && <Badge tone="outline">O/O</Badge>}
         </div>
         <div style={{ fontSize: 11, color: "var(--clg-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {isTrailer ? unit.vin || "—" : unit.current_location || "—"}
