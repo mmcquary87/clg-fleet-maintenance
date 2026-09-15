@@ -199,7 +199,12 @@ Deno.serve(async (req) => {
       skippedNoAsset: records.length - rows.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err instanceof Error ? err.message : err) }), {
+    const message = err instanceof Error
+      ? err.message
+      : (err && typeof err === "object" && "message" in err)
+        ? String((err as { message: unknown }).message)
+        : JSON.stringify(err);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
