@@ -3,6 +3,7 @@ import { Loader2, Navigation, Info, Search } from "lucide-react";
 import { Alert, Input } from "../../ds";
 import { useTracking, ASSUMED_MPH } from "../../hooks/useTracking";
 import TrackingTable from "./TrackingTable";
+import CheckCallBoard from "./CheckCallBoard";
 import UnitDrawer from "../shared/UnitDrawer";
 
 function isSameDay(a, b) {
@@ -135,6 +136,8 @@ export default function TrackingView() {
         >
           Refresh now
         </button>
+
+        {!loading && <CheckCallBoard trackingRows={rows} />}
       </div>
 
       {openUnitId && <UnitDrawer unitId={openUnitId} onClose={() => setOpenUnitId(null)} />}
