@@ -15,7 +15,7 @@ import ChargebackDriverPicker from "../shared/ChargebackDriverPicker";
 const SEVERITIES = ["Routine", "Urgent", "Unit down"];
 // Plain frontend list, not a DB enum -- see the payment_method column
 // comment in 20260915010000_work_order_payment_status.sql for why.
-const PAYMENT_METHODS = ["Check", "ACH / Wire", "Credit Card", "Company Account", "Net Terms", "Other"];
+const PAYMENT_METHODS = ["Check", "EFS", "Comcheck", "ACH / Wire", "Credit Card", "Company Account", "Net Terms", "Other"];
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
