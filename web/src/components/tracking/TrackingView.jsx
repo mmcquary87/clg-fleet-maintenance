@@ -44,8 +44,42 @@ function FilterChips({ active, onChange }) {
   );
 }
 
+// Two sub-views within the one Tracking nav item (CLG, 2026-09-15: "bring
+// the GPS/ETA/HOS data into this and have it all combined into 1 tab") --
+// the live ETA table and the check-call board are both dense, long lists,
+// and stacking them on one continuous scroll made the board hard to find
+// below 30+ driver rows (2026-09-17). Splitting into sub-tabs keeps them
+// under the single Tracking entry CLG asked for while giving each its own
+// scroll.
+const SUB_TABS = [
+  { key: "live", label: "Live tracking" },
+  { key: "checkcalls", label: "Check calls" },
+];
+
+function SubTabs({ active, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--clg-border-subtle)" }}>
+      {SUB_TABS.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          style={{
+            fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 12.5, letterSpacing: "0.04em",
+            padding: "10px 16px", background: "none", cursor: "pointer", marginBottom: -1,
+            border: "none", borderBottom: active === t.key ? "2px solid var(--clg-royal)" : "2px solid transparent",
+            color: active === t.key ? "var(--clg-royal)" : "var(--clg-text-muted)",
+          }}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function TrackingView() {
   const { rows, groups, total, loading, error, reload } = useTracking();
+  const [subTab, setSubTab] = useState("live");
   const [activeFilter, setActiveFilter] = useState(null);
   const [query, setQuery] = useState("");
   const [openUnitId, setOpenUnitId] = useState(null);
@@ -68,76 +102,84 @@ export default function TrackingView() {
 
   return (
     <div style={{ fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)" }}>
-      <div style={{
-        background: "var(--clg-navy)", color: "#fff", padding: "20px 28px",
-        display: "flex", alignItems: "center", gap: 40, flexWrap: "wrap",
-      }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--clg-mercury)", display: "flex", alignItems: "center", gap: 6 }}>
-            <Navigation size={12} /> Drivers in transit
+      {subTab === "live" && (
+        <div style={{
+          background: "var(--clg-navy)", color: "#fff", padding: "20px 28px",
+          display: "flex", alignItems: "center", gap: 40, flexWrap: "wrap",
+        }}>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--clg-mercury)", display: "flex", alignItems: "center", gap: 6 }}>
+              <Navigation size={12} /> Drivers in transit
+            </div>
+            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 36, lineHeight: 1 }}>
+              {total}
+            </div>
           </div>
-          <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 36, lineHeight: 1 }}>
-            {total}
+          <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,.18)" }} />
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--clg-mercury)" }}>Needs attention</div>
+            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 36, lineHeight: 1, color: "var(--clg-scarlet)" }}>
+              {groups.attention.length}
+            </div>
+          </div>
+          <div
+            title={`Position refreshes every 15 minutes from Samsara. Drive time still needed assumes ${ASSUMED_MPH} mph straight-line until Google Maps traffic-aware routing is connected — but the projected arrival factors in any mandatory HOS reset the driver's remaining drive-clock requires (a conservative 10-hour reset by default; expand a row for the split-sleeper-berth best case, per 49 CFR 395.1(g)).`}
+            style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, color: "var(--clg-reflection)", cursor: "help" }}
+          >
+            <Info size={15} />
+            <span style={{ fontSize: 11.5 }}>How this is calculated</span>
           </div>
         </div>
-        <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,.18)" }} />
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--clg-mercury)" }}>Needs attention</div>
-          <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 36, lineHeight: 1, color: "var(--clg-scarlet)" }}>
-            {groups.attention.length}
-          </div>
-        </div>
-        <div
-          title={`Position refreshes every 15 minutes from Samsara. Drive time still needed assumes ${ASSUMED_MPH} mph straight-line until Google Maps traffic-aware routing is connected — but the projected arrival factors in any mandatory HOS reset the driver's remaining drive-clock requires (a conservative 10-hour reset by default; expand a row for the split-sleeper-berth best case, per 49 CFR 395.1(g)).`}
-          style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, color: "var(--clg-reflection)", cursor: "help" }}
-        >
-          <Info size={15} />
-          <span style={{ fontSize: 11.5 }}>How this is calculated</span>
-        </div>
-      </div>
+      )}
 
       <div style={{ padding: "20px 28px", maxWidth: 1280, margin: "0 auto" }}>
-        {error && <Alert tone="critical" title="Couldn't load tracking data" style={{ marginBottom: 16 }}>{error}</Alert>}
+        <SubTabs active={subTab} onChange={setSubTab} />
 
-        {loading ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "40px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
-            <Loader2 size={16} className="spin" /> Loading tracking data…
-          </div>
-        ) : total === 0 ? (
-          <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>
-            No drivers currently have an active trip on file.
-          </div>
-        ) : (
+        {subTab === "live" ? (
           <>
-            <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ position: "relative", maxWidth: 320 }}>
-                <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
-                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Look up a driver or unit…" style={{ paddingLeft: 30 }} />
-              </div>
-              <FilterChips active={activeFilter} onChange={setActiveFilter} />
-            </div>
+            {error && <Alert tone="critical" title="Couldn't load tracking data" style={{ marginBottom: 16 }}>{error}</Alert>}
 
-            {visibleRows.length === 0 ? (
-              <div style={{
-                border: "1px dashed var(--clg-mercury)", padding: "16px 12px", fontSize: 12,
-                color: "var(--clg-pewter)", textAlign: "center", background: "var(--clg-surface-subtle)",
-              }}>
-                {query.trim() ? "No driver or unit matches that search." : "Nothing matches this filter right now."}
+            {loading ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "40px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
+                <Loader2 size={16} className="spin" /> Loading tracking data…
+              </div>
+            ) : total === 0 ? (
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>
+                No drivers currently have an active trip on file.
               </div>
             ) : (
-              <TrackingTable rows={visibleRows} onOpenUnit={setOpenUnitId} />
+              <>
+                <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ position: "relative", maxWidth: 320 }}>
+                    <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
+                    <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Look up a driver or unit…" style={{ paddingLeft: 30 }} />
+                  </div>
+                  <FilterChips active={activeFilter} onChange={setActiveFilter} />
+                </div>
+
+                {visibleRows.length === 0 ? (
+                  <div style={{
+                    border: "1px dashed var(--clg-mercury)", padding: "16px 12px", fontSize: 12,
+                    color: "var(--clg-pewter)", textAlign: "center", background: "var(--clg-surface-subtle)",
+                  }}>
+                    {query.trim() ? "No driver or unit matches that search." : "Nothing matches this filter right now."}
+                  </div>
+                ) : (
+                  <TrackingTable rows={visibleRows} onOpenUnit={setOpenUnitId} />
+                )}
+              </>
             )}
+
+            <button
+              onClick={reload}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "16px 0 0", fontSize: 11.5, color: "var(--clg-royal)", textDecoration: "underline" }}
+            >
+              Refresh now
+            </button>
           </>
+        ) : (
+          !loading && <CheckCallBoard trackingRows={rows} />
         )}
-
-        <button
-          onClick={reload}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: "16px 0 0", fontSize: 11.5, color: "var(--clg-royal)", textDecoration: "underline" }}
-        >
-          Refresh now
-        </button>
-
-        {!loading && <CheckCallBoard trackingRows={rows} />}
       </div>
 
       {openUnitId && <UnitDrawer unitId={openUnitId} onClose={() => setOpenUnitId(null)} />}
