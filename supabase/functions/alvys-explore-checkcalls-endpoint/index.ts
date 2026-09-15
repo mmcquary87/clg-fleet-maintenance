@@ -59,22 +59,33 @@ async function tryGet(path: string, token: string) {
   return { status: res.status, bodySnippet: text.slice(0, 1000) };
 }
 
+// Confirmed via a first probe run: our existing credentials already have
+// access (200, not 401/403), and the real identifier is Alvys's internal
+// GUID Id -- TripNumber 404s. Three randomly-sampled trips all came back
+// `[]`, which just means those particular trips have no calls logged, not
+// that access is broken. This target trip is the one CLG's own screenshot
+// showed with 15 real check-call history entries (driver Bryan Smith,
+// multiple dispatchers, Sep 15-16 timestamps) -- confirming populated
+// data comes back, not just an empty array, is the real remaining test.
+const TARGET_TRIP_NUMBER = "1013600";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const token = await getAlvysToken();
 
-    // Pull a handful of real, currently-active trips via the endpoint we
-    // already know works, so we have real trip identifiers to test the
-    // check-calls endpoint against instead of guessing.
+    // Wide net -- fetch enough recent trips to have a real shot at
+    // including the target trip number, then filter client-side (trips/
+    // search doesn't expose a documented TripNumbers filter param the way
+    // loads/search exposes LoadNumbers).
     const now = new Date();
     const start = new Date(now.getTime() - 14 * 24 * 3600 * 1000).toISOString();
     const end = new Date(now.getTime() + 14 * 24 * 3600 * 1000).toISOString();
     const tripsRes = await fetch(`${ALVYS_API_BASE}/trips/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ Page: 0, PageSize: 20, PickupDateRange: { Start: start, End: end } }),
+      body: JSON.stringify({ Page: 0, PageSize: 500, PickupDateRange: { Start: start, End: end } }),
     });
     const tripsText = await tripsRes.text();
     let tripsJson: any;
@@ -82,20 +93,29 @@ Deno.serve(async (req) => {
     if (!tripsRes.ok) throw new Error(`trips/search failed (${tripsRes.status}): ${tripsText.slice(0, 500)}`);
 
     const trips: any[] = tripsJson.Items ?? [];
+    const target = trips.find((t) => t.TripNumber === TARGET_TRIP_NUMBER || t.LoadNumber === TARGET_TRIP_NUMBER);
     const sample = trips.slice(0, 3);
 
     const attempts: Record<string, any> = {};
     for (const trip of sample) {
-      const label = `TripNumber ${trip.TripNumber} (Id ${trip.Id})`;
-      // Try both identifiers -- the spec's {tripId} is ambiguous between
-      // Alvys's internal GUID Id and the human-readable TripNumber.
-      attempts[`${label} — by Id`] = await tryGet(`trips/${trip.Id}/check-calls`, token);
-      attempts[`${label} — by TripNumber`] = await tryGet(`trips/${trip.TripNumber}/check-calls`, token);
+      attempts[`TripNumber ${trip.TripNumber} (Id ${trip.Id})`] = await tryGet(`trips/${trip.Id}/check-calls`, token);
+    }
+
+    let targetResult: any = { found: false };
+    if (target) {
+      targetResult = {
+        found: true,
+        TripNumber: target.TripNumber,
+        Id: target.Id,
+        result: await tryGet(`trips/${target.Id}/check-calls`, token),
+      };
     }
 
     return new Response(JSON.stringify({
+      totalTripsSearched: trips.length,
       tripsSampled: sample.map((t) => ({ Id: t.Id, TripNumber: t.TripNumber, LoadNumber: t.LoadNumber, Status: t.Status })),
       attempts,
+      targetTrip: targetResult,
     }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
