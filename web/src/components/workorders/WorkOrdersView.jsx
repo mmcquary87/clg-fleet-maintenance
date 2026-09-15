@@ -24,6 +24,10 @@ const EXPORT_COLUMNS = [
   { label: "PO number", value: (o) => o.po_number },
   { label: "Chargeback", value: (o) => (o.is_chargeback ? "Yes" : "No") },
   { label: "Chargeback driver", value: (o) => o.chargeback_driver_name },
+  { label: "Payment status", value: (o) => (o.payment_status === "paid" ? "Paid" : "Unpaid") },
+  { label: "Payment method", value: (o) => o.payment_method },
+  { label: "Paid on", value: (o) => o.paid_at },
+  { label: "Payment ref", value: (o) => o.payment_reference },
 ];
 
 const STATUS_TABS = ["All", "Needs approval", "Open", "In Progress", "Closed", "Voided"];
@@ -195,7 +199,7 @@ export default function WorkOrdersView({ initialCategory }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
               <thead>
                 <tr>
-                  {["WO", "Unit", "Issue", "Blocked on", "Vendor", "Cost", "Age"].map((h) => (
+                  {["WO", "Unit", "Issue", "Blocked on", "Vendor", "Cost", "Payment", "Age"].map((h) => (
                     <th key={h} style={{
                       textAlign: h === "Cost" || h === "Age" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
@@ -238,6 +242,15 @@ export default function WorkOrdersView({ initialCategory }) {
                       <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", color: isOpen && !o.cost ? "var(--clg-mercury)" : rowFg, fontStyle: isOpen && !o.cost ? "italic" : "normal" }}>
                         {isOpen && !o.cost ? "No estimate" : money(o.cost)}
                       </td>
+                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                        {!o.cost ? (
+                          <span style={{ color: "var(--clg-mercury)", fontStyle: "italic" }}>—</span>
+                        ) : (
+                          <Badge tone={o.payment_status === "paid" ? "brand" : "outline"}>
+                            {o.payment_status === "paid" ? "Paid" : "Unpaid"}
+                          </Badge>
+                        )}
+                      </td>
                       <td style={{
                         padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right",
                         fontFamily: "var(--clg-font-heading)", fontWeight: 700,
@@ -255,6 +268,7 @@ export default function WorkOrdersView({ initialCategory }) {
                   <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 700, color: "var(--clg-navy)" }}>
                     {money(totalCost)}
                   </td>
+                  <td />
                   <td />
                 </tr>
               </tfoot>

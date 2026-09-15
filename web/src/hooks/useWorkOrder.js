@@ -8,6 +8,7 @@ const FULL_SELECT = `
   promised_back, warranty_recovery_amount, receipt_path, source, samsara_reference_id,
   alvys_maintenance_id, created_at, updated_at, is_chargeback, chargeback_driver_name,
   voided, voided_at, voided_reason, labor_hours,
+  payment_status, payment_method, payment_reference, paid_at,
   unit:units(id, number, type, vin, driver_name, current_location),
   vendor:vendors(id, name, contact_name, contact_email),
   parts:work_order_parts(id, part_name, quantity, unit_cost, created_at)
