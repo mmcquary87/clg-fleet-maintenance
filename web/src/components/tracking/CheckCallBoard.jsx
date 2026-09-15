@@ -218,7 +218,7 @@ export default function CheckCallBoard({ trackingRows }) {
   }
 
   return (
-    <div style={{ marginTop: 32 }}>
+    <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 4, flexWrap: "wrap", gap: 12 }}>
         <div>
           <Eyebrow tone="brand">Tracking</Eyebrow>
