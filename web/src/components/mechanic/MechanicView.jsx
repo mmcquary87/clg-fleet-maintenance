@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { Wrench, ChevronLeft, Plus, Trash2, Loader2, Search } from "lucide-react";
+import { Wrench, ChevronLeft, Plus, Trash2, Loader2, Search, ClipboardCheck } from "lucide-react";
 import { Button, Input, Badge, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import { CATEGORIES } from "../../lib/categories";
 import { useMechanicQueue } from "../../hooks/useMechanicQueue";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import EmptyState from "../EmptyState";
+import TractorInspectionForm from "./TractorInspectionForm";
 
 const fieldLabelStyle = { fontSize: 13, fontWeight: 700, color: "var(--clg-navy)", marginBottom: 6 };
 const backButtonStyle = {
@@ -37,6 +38,8 @@ export default function MechanicView() {
   const { orders, loading, error, reload } = useMechanicQueue();
   const [selectedId, setSelectedId] = useState(null);
   const [creatingNew, setCreatingNew] = useState(false);
+  const [inspecting, setInspecting] = useState(false);
+  const [filedNotice, setFiledNotice] = useState(null);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -58,23 +61,47 @@ export default function MechanicView() {
     );
   }
 
+  if (inspecting) {
+    return (
+      <TractorInspectionForm
+        onCancel={() => setInspecting(false)}
+        onFiled={(id, raisedCount) => {
+          setInspecting(false);
+          setFiledNotice(
+            raisedCount > 0
+              ? `Inspection filed — ${raisedCount} work order${raisedCount === 1 ? "" : "s"} raised.`
+              : "Inspection filed — nothing needed attention."
+          );
+          reload();
+        }}
+      />
+    );
+  }
+
   if (selectedId) {
     return <RepairSheet workOrderId={selectedId} onBack={() => { setSelectedId(null); reload(); }} />;
   }
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
         <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 22, color: "var(--clg-navy)" }}>
           Mechanic queue
         </div>
-        <Button size="md" iconLeft={<Plus size={15} />} onClick={() => setCreatingNew(true)}>
-          New job
-        </Button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button size="md" variant="outline" iconLeft={<ClipboardCheck size={15} />} onClick={() => setInspecting(true)}>
+            Tractor inspection
+          </Button>
+          <Button size="md" iconLeft={<Plus size={15} />} onClick={() => setCreatingNew(true)}>
+            New job
+          </Button>
+        </div>
       </div>
       <div style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
         Tap a job below to log what you found, the parts you used, and your time — or start a new one if it isn't on the board yet.
       </div>
+
+      {filedNotice && <Alert tone="brand" style={{ marginBottom: 16 }}>{filedNotice}</Alert>}
 
       <div style={{ position: "relative", marginBottom: 16 }}>
         <Search size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--clg-text-muted)" }} />
