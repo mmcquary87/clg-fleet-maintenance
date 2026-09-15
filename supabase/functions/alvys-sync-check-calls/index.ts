@@ -102,18 +102,24 @@ Deno.serve(async (req) => {
 
     let checkCallsFound = 0;
     let upserted = 0;
-    let tripsWithErrors = 0;
     const rows: any[] = [];
+    const errors: any[] = [];
 
     for (const tripId of tripIds) {
       const res = await fetch(`${ALVYS_API_BASE}/trips/${tripId}/check-calls`, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) { tripsWithErrors += 1; continue; }
+      if (!res.ok) {
+        errors.push({ tripId, status: res.status, body: (await res.text()).slice(0, 300) });
+        continue;
+      }
       const text = await res.text();
       let json: any;
-      try { json = JSON.parse(text); } catch { tripsWithErrors += 1; continue; }
+      try { json = JSON.parse(text); } catch {
+        errors.push({ tripId, status: res.status, parseError: true, body: text.slice(0, 300) });
+        continue;
+      }
       const entries: any[] = Array.isArray(json) ? json : [];
       checkCallsFound += entries.length;
       for (const entry of entries) rows.push(mapCheckCall(entry, unitIdByTripId.get(tripId) ?? null));
@@ -127,9 +133,10 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       activeTripsPolled: tripIds.length,
-      tripsWithErrors,
+      tripsWithErrors: errors.length,
       checkCallsFound,
       upserted,
+      errors,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error
