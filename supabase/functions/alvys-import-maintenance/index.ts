@@ -107,7 +107,14 @@ Deno.serve(async (req) => {
     );
 
     const token = await getAlvysToken();
-    const allRecords = await fetchAllMaintenance(token);
+    const rawRecords = await fetchAllMaintenance(token);
+
+    // Alvys's paged results can include the same record twice if new
+    // records are added in Alvys while this is still paging through
+    // (page boundaries shift mid-fetch) -- de-dupe by Id so a single run
+    // never tries to insert the same alvys_maintenance_id twice in one
+    // batch, which the unique constraint correctly rejects.
+    const allRecords = [...new Map(rawRecords.map((r) => [r.Id, r])).values()];
 
     // Insert-only: skip anything already pulled in on a previous run (see
     // header comment) so this is safe to run unattended on a schedule.
