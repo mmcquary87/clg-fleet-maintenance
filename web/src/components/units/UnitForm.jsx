@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, Loader2 } from "lucide-react";
-import { Card, Field, Input, Select, Button, Alert } from "../../ds";
+import { Card, Field, Input, Select, Toggle, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 
 export default function UnitForm({ onCancel, onSaved }) {
@@ -8,6 +8,7 @@ export default function UnitForm({ onCancel, onSaved }) {
   const [type, setType] = useState("Truck");
   const [vin, setVin] = useState("");
   const [ownership, setOwnership] = useState("owned");
+  const [ownerOperatorAssigned, setOwnerOperatorAssigned] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -20,6 +21,7 @@ export default function UnitForm({ onCancel, onSaved }) {
       type,
       vin: vin.trim() || null,
       ownership,
+      owner_operator_assigned: type === "Truck" ? ownerOperatorAssigned : false,
     });
     setSubmitting(false);
     if (err) {
@@ -58,6 +60,19 @@ export default function UnitForm({ onCancel, onSaved }) {
             <Input value={vin} onChange={(e) => setVin(e.target.value)} placeholder="Vehicle ID number" />
           </Field>
         </div>
+
+        {type === "Truck" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <Toggle checked={ownerOperatorAssigned} onChange={setOwnerOperatorAssigned} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--clg-text-heading)" }}>Assigned to owner-operator</div>
+              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>
+                Independent of ownership above — covers a lease-purchase truck CLG still holds title to but an
+                owner-operator currently drives. Routes this truck's repair costs to the Owner-Operator GL account.
+              </div>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>

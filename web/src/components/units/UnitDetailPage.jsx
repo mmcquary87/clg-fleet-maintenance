@@ -71,6 +71,22 @@ export default function UnitDetailPage({ unitId, onBack, canViewAssetLifecycle }
         <Badge tone={OWNERSHIP_TONE[unit.ownership] || "neutral"}>{OWNERSHIP_LABEL[unit.ownership] || "CLG-owned"}</Badge>
         {!unit.is_active && <Badge tone="critical">Inactive</Badge>}
         {unit.plate_number && <Badge tone="neutral">Plate {unit.plate_number}</Badge>}
+        {unit.type === "Truck" && (
+          <button
+            onClick={() => handleSave({ owner_operator_assigned: !unit.owner_operator_assigned })}
+            disabled={saving}
+            title="Routes this truck's repair costs to the Owner-Operator GL account instead of Company"
+            style={{
+              border: "1px solid " + (unit.owner_operator_assigned ? "var(--clg-royal)" : "var(--clg-border-default)"),
+              background: unit.owner_operator_assigned ? "var(--clg-royal)" : "#fff",
+              color: unit.owner_operator_assigned ? "#fff" : "var(--clg-text-muted)",
+              borderRadius: "var(--clg-radius-pill)", padding: "4px 10px", fontSize: 11, fontWeight: 700,
+              letterSpacing: "0.04em", textTransform: "uppercase", cursor: "pointer",
+            }}
+          >
+            {unit.owner_operator_assigned ? "O/O assigned" : "+ Mark O/O"}
+          </button>
+        )}
       </div>
       <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 18 }}>
         {[unit.type, unit.year && unit.make && unit.model ? `${unit.year} ${unit.make} ${unit.model}` : null, unit.vin]
