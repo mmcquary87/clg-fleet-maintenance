@@ -97,6 +97,30 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// PostgREST caps an unbounded select at a default row limit (1000) --
+// with well over 1000 work_orders now carrying an alvys_maintenance_id,
+// a plain .select() here silently truncated the existing-id set, so
+// already-imported records looked "new" and collided with the unique
+// constraint on insert. Page through explicitly so this always sees
+// every existing id, however many there are.
+async function fetchAllExistingMaintenanceIds(supabase: ReturnType<typeof createClient>): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const pageSize = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("work_orders")
+      .select("alvys_maintenance_id")
+      .not("alvys_maintenance_id", "is", null)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    for (const row of data as any[]) ids.add(row.alvys_maintenance_id);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return ids;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -118,10 +142,7 @@ Deno.serve(async (req) => {
 
     // Insert-only: skip anything already pulled in on a previous run (see
     // header comment) so this is safe to run unattended on a schedule.
-    const { data: existingRows, error: existingErr } = await supabase
-      .from("work_orders").select("alvys_maintenance_id").not("alvys_maintenance_id", "is", null);
-    if (existingErr) throw existingErr;
-    const existingIds = new Set(existingRows.map((r: any) => r.alvys_maintenance_id));
+    const existingIds = await fetchAllExistingMaintenanceIds(supabase);
     const records = allRecords.filter((r) => !existingIds.has(r.Id));
 
     // Resolve units: match by alvys_asset_id first, fall back to number.
