@@ -5,6 +5,8 @@ import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../hooks/useAuth";
 import { useProfile } from "../../hooks/useProfile";
 import { EQUIPMENT_ITEMS, WALKAROUND_ITEMS, DOCUMENT_ITEMS, ALL_CHECK_ITEMS, countChecked } from "../../lib/tractorInspectionItems";
+import PhotoCapture from "../shared/PhotoCapture";
+import SignaturePad from "../shared/SignaturePad";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -25,6 +27,7 @@ function emptyForm(unitNumber = "") {
     fuel_level: "", coolant_level: "", oil_level: "", wiper_fluid_level: "", brake_fluid_level: "",
     cab_notes: "", exterior_notes: "", damage_defects_notes: "",
     driver_signature_name: "", clg_signature_name: "",
+    driver_signature_data: null, clg_signature_data: null,
     correction_dates: "",
   };
   for (const item of ALL_CHECK_ITEMS) base[item.key] = null;
@@ -54,17 +57,24 @@ function SectionCard({ title, count, children, style }) {
   );
 }
 
-function CheckRow({ item, value, onChange }) {
+function CheckRow({ item, value, onChange, photos, onPhotosChange }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-      <div style={{ minWidth: 0, borderLeft: value === false ? "3px solid var(--clg-scarlet)" : "3px solid transparent", paddingLeft: 8 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--clg-text-heading)" }}>{item.label}</div>
-        {item.sublabel && <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{item.sublabel}</div>}
+    <div style={{ padding: "10px 0", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div style={{ minWidth: 0, borderLeft: value === false ? "3px solid var(--clg-scarlet)" : "3px solid transparent", paddingLeft: 8 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--clg-text-heading)" }}>{item.label}</div>
+          {item.sublabel && <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{item.sublabel}</div>}
+        </div>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <button type="button" onClick={() => onChange(true)} style={pillStyle(value === true, "good")}>{item.goodLabel || "Yes"}</button>
+          <button type="button" onClick={() => onChange(false)} style={pillStyle(value === false, "bad")}>{item.badLabel || "No"}</button>
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <button type="button" onClick={() => onChange(true)} style={pillStyle(value === true, "good")}>{item.goodLabel || "Yes"}</button>
-        <button type="button" onClick={() => onChange(false)} style={pillStyle(value === false, "bad")}>{item.badLabel || "No"}</button>
-      </div>
+      {item.hasPhoto && (
+        <div style={{ marginTop: 10, paddingLeft: 8 }}>
+          <PhotoCapture photos={photos} onChange={onPhotosChange} />
+        </div>
+      )}
     </div>
   );
 }
@@ -93,6 +103,8 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
   const [unitStats, setUnitStats] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [cellTabletPhotos, setCellTabletPhotos] = useState([]);
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
   const setInput = (key) => (e) => set(key)(e.target.value);
@@ -134,7 +146,8 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
   const checkedCount = countChecked(form);
   const needsAttention = ALL_CHECK_ITEMS.filter((item) => form[item.key] === false);
   const totalItems = ALL_CHECK_ITEMS.length;
-  const missingSignature = !form.driver_signature_name.trim() || !form.clg_signature_name.trim();
+  const missingSignature = !form.driver_signature_name.trim() || !form.driver_signature_data
+    || !form.clg_signature_name.trim() || !form.clg_signature_data;
 
   const buildInsertPayload = (status) => {
     const { unit_number, ...rest } = form; // eslint-disable-line no-unused-vars
@@ -162,6 +175,21 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
         .select("id")
         .single();
       if (err) throw err;
+
+      const allPhotos = [
+        ...photos.map((p) => ({ ...p, note: null })),
+        ...cellTabletPhotos.map((p) => ({ ...p, note: "Mount for cell / tablet" })),
+      ];
+      for (const p of allPhotos) {
+        const path = `${unitId}/tractor-inspections/${inspection.id}/${crypto.randomUUID()}-${p.file.name}`;
+        const { error: uploadErr } = await supabase.storage.from("unit-documents").upload(path, p.file);
+        if (uploadErr) throw uploadErr;
+        const { error: docErr } = await supabase.from("unit_documents").insert({
+          unit_id: unitId, tractor_inspection_id: inspection.id, doc_type: "tractor_inspection_photo",
+          storage_path: path, file_name: p.file.name, note: p.note, uploaded_by: session?.user?.id ?? null,
+        });
+        if (docErr) throw docErr;
+      }
 
       let raisedCount = 0;
       if (status === "filed" && needsAttention.length > 0) {
@@ -246,7 +274,11 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
 
           <SectionCard title="Equipment on the tractor" count={EQUIPMENT_ITEMS.length}>
             {EQUIPMENT_ITEMS.map((item) => (
-              <CheckRow key={item.key} item={item} value={form[item.key]} onChange={set(item.key)} />
+              <CheckRow
+                key={item.key} item={item} value={form[item.key]} onChange={set(item.key)}
+                photos={item.hasPhoto ? cellTabletPhotos : undefined}
+                onPhotosChange={item.hasPhoto ? setCellTabletPhotos : undefined}
+              />
             ))}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginTop: 14 }}>
               <Field label="Prepass transponder #"><Input value={form.prepass_transponder_number} onChange={setInput("prepass_transponder_number")} /></Field>
@@ -305,14 +337,35 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
             </div>
           </SectionCard>
 
+          <SectionCard title="Photos">
+            <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>
+              Document overall condition or anything called out above — a live camera shot or a file from the device.
+            </div>
+            <PhotoCapture photos={photos} onChange={setPhotos} />
+          </SectionCard>
+
           <SectionCard title="Signatures">
             <div style={{ fontSize: 12.5, color: "var(--clg-text-body)", marginBottom: 14 }}>
               By signing, I affirm I received the tractor with the equipment listed above. I inspected the vehicle
               and confirm all items are in good, proper working condition unless otherwise indicated.
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-              <Field label="Driver"><Input value={form.driver_signature_name} onChange={setInput("driver_signature_name")} placeholder="Type name to sign" /></Field>
-              <Field label="CLG"><Input value={form.clg_signature_name} onChange={setInput("clg_signature_name")} placeholder="Type name to sign" /></Field>
+              <div>
+                <Field label="Driver — print name" style={{ marginBottom: 10 }}>
+                  <Input value={form.driver_signature_name} onChange={setInput("driver_signature_name")} placeholder="Print name" />
+                </Field>
+                <Field label="Signature">
+                  <SignaturePad value={form.driver_signature_data} onChange={set("driver_signature_data")} />
+                </Field>
+              </div>
+              <div>
+                <Field label="CLG — print name" style={{ marginBottom: 10 }}>
+                  <Input value={form.clg_signature_name} onChange={setInput("clg_signature_name")} placeholder="Print name" />
+                </Field>
+                <Field label="Signature">
+                  <SignaturePad value={form.clg_signature_data} onChange={set("clg_signature_data")} />
+                </Field>
+              </div>
             </div>
           </SectionCard>
 
