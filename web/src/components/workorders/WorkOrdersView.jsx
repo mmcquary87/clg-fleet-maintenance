@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Loader2, Search, Download } from "lucide-react";
+import { Loader2, Search, Download, FileUp } from "lucide-react";
 import { Card, Badge, Eyebrow, Alert, Input, Button, Select } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
 import { useWorkOrderStats } from "../../hooks/useWorkOrderStats";
@@ -8,6 +8,7 @@ import { CATEGORIES } from "../../lib/categories";
 import { blockedOnText } from "../../lib/workOrderLane";
 import DateRangeFilter from "../DateRangeFilter";
 import WorkOrderDetailModal from "./WorkOrderDetailModal";
+import IntacctExportModal from "./IntacctExportModal";
 
 const EXPORT_COLUMNS = [
   { label: "WO #", value: (o) => o.wo_number },
@@ -50,7 +51,7 @@ function ageDays(o) {
   return daysBetween(o.date_opened, new Date().toISOString().slice(0, 10));
 }
 
-export default function WorkOrdersView({ initialCategory }) {
+export default function WorkOrdersView({ initialCategory, isAdmin }) {
   const [range, setRange] = useState(null);
   const { orders, loading, loadingMore, hasMore, loadMore, error, reload } = useAllWorkOrders(range);
   const { stats } = useWorkOrderStats(range);
@@ -59,6 +60,7 @@ export default function WorkOrdersView({ initialCategory }) {
   const [unit, setUnit] = useState("All");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [intacctExportOpen, setIntacctExportOpen] = useState(false);
 
   const unitOptions = useMemo(() => {
     return ["All", ...Array.from(new Set(orders.map((o) => o.unit?.number).filter(Boolean))).sort()];
@@ -138,8 +140,15 @@ export default function WorkOrdersView({ initialCategory }) {
           >
             Export CSV
           </Button>
+          {isAdmin && (
+            <Button variant="outline" size="sm" iconLeft={<FileUp size={14} />} onClick={() => setIntacctExportOpen(true)}>
+              Export to Intacct
+            </Button>
+          )}
         </div>
       </div>
+
+      {intacctExportOpen && <IntacctExportModal onClose={() => setIntacctExportOpen(false)} />}
 
       <div style={{ marginBottom: 14 }}>
         <DateRangeFilter onChange={setRange} />
