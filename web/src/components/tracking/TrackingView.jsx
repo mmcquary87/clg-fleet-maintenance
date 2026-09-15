@@ -178,7 +178,7 @@ export default function TrackingView() {
             </button>
           </>
         ) : (
-          !loading && <CheckCallBoard trackingRows={rows} />
+          <CheckCallBoard />
         )}
       </div>
 
