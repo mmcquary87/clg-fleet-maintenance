@@ -88,7 +88,7 @@ export default function Dashboard({ session }) {
           {tab === "board" && <Board onGoToUnits={() => setTab("units")} />}
           {tab === "tracking" && <TrackingView />}
           {tab === "reloads" && <ReloadsView />}
-          {tab === "workorders" && <WorkOrdersView initialCategory={woInitialCategory} />}
+          {tab === "workorders" && <WorkOrdersView initialCategory={woInitialCategory} isAdmin={isAdmin} />}
           {tab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
           {tab === "spend" && (
             <SpendView

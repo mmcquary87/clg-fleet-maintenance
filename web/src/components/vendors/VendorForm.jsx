@@ -12,6 +12,7 @@ export default function VendorForm({ vendor, onCancel, onSaved }) {
   const [phone, setPhone] = useState(vendor?.phone ?? "");
   const [address, setAddress] = useState(vendor?.address ?? "");
   const [notes, setNotes] = useState(vendor?.notes ?? "");
+  const [intacctVendorId, setIntacctVendorId] = useState(vendor?.intacct_vendor_id ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,6 +28,7 @@ export default function VendorForm({ vendor, onCancel, onSaved }) {
       phone: phone.trim() || null,
       address: address.trim() || null,
       notes: notes.trim() || null,
+      intacct_vendor_id: intacctVendorId.trim() || null,
     };
     const { error: err } = vendor
       ? await supabase.from("vendors").update(fields).eq("id", vendor.id)
@@ -74,6 +76,9 @@ export default function VendorForm({ vendor, onCancel, onSaved }) {
           </Field>
           <Field label="Address">
             <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="City, State" />
+          </Field>
+          <Field label="Sage Intacct Vendor ID" help="Optional — enables including this vendor in the Intacct AP export">
+            <Input value={intacctVendorId} onChange={(e) => setIntacctVendorId(e.target.value)} placeholder="e.g. RUSHTRUCK" />
           </Field>
           <Field label="Notes" help="Account #, terms, anything worth remembering" style={{ gridColumn: "1 / -1" }}>
             <textarea

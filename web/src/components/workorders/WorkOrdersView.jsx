@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Loader2, Search, Download } from "lucide-react";
+import { Loader2, Search, Download, FileUp } from "lucide-react";
 import { Card, Badge, Eyebrow, Alert, Input, Button, Select } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
 import { useWorkOrderStats } from "../../hooks/useWorkOrderStats";
@@ -8,6 +8,7 @@ import { CATEGORIES } from "../../lib/categories";
 import { blockedOnText } from "../../lib/workOrderLane";
 import DateRangeFilter from "../DateRangeFilter";
 import WorkOrderDetailModal from "./WorkOrderDetailModal";
+import IntacctExportModal from "./IntacctExportModal";
 
 const EXPORT_COLUMNS = [
   { label: "WO #", value: (o) => o.wo_number },
@@ -24,6 +25,10 @@ const EXPORT_COLUMNS = [
   { label: "PO number", value: (o) => o.po_number },
   { label: "Chargeback", value: (o) => (o.is_chargeback ? "Yes" : "No") },
   { label: "Chargeback driver", value: (o) => o.chargeback_driver_name },
+  { label: "Payment status", value: (o) => (o.payment_status === "paid" ? "Paid" : "Unpaid") },
+  { label: "Payment method", value: (o) => o.payment_method },
+  { label: "Paid on", value: (o) => o.paid_at },
+  { label: "Payment ref", value: (o) => o.payment_reference },
 ];
 
 const STATUS_TABS = ["All", "Needs approval", "Open", "In Progress", "Closed", "Voided"];
@@ -46,7 +51,7 @@ function ageDays(o) {
   return daysBetween(o.date_opened, new Date().toISOString().slice(0, 10));
 }
 
-export default function WorkOrdersView({ initialCategory }) {
+export default function WorkOrdersView({ initialCategory, isAdmin }) {
   const [range, setRange] = useState(null);
   const { orders, loading, loadingMore, hasMore, loadMore, error, reload } = useAllWorkOrders(range);
   const { stats } = useWorkOrderStats(range);
@@ -55,6 +60,7 @@ export default function WorkOrdersView({ initialCategory }) {
   const [unit, setUnit] = useState("All");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [intacctExportOpen, setIntacctExportOpen] = useState(false);
 
   const unitOptions = useMemo(() => {
     return ["All", ...Array.from(new Set(orders.map((o) => o.unit?.number).filter(Boolean))).sort()];
@@ -134,8 +140,15 @@ export default function WorkOrdersView({ initialCategory }) {
           >
             Export CSV
           </Button>
+          {isAdmin && (
+            <Button variant="outline" size="sm" iconLeft={<FileUp size={14} />} onClick={() => setIntacctExportOpen(true)}>
+              Export to Intacct
+            </Button>
+          )}
         </div>
       </div>
+
+      {intacctExportOpen && <IntacctExportModal onClose={() => setIntacctExportOpen(false)} />}
 
       <div style={{ marginBottom: 14 }}>
         <DateRangeFilter onChange={setRange} />
@@ -195,7 +208,7 @@ export default function WorkOrdersView({ initialCategory }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
               <thead>
                 <tr>
-                  {["WO", "Unit", "Issue", "Blocked on", "Vendor", "Cost", "Age"].map((h) => (
+                  {["WO", "Unit", "Issue", "Blocked on", "Vendor", "Cost", "Payment", "Age"].map((h) => (
                     <th key={h} style={{
                       textAlign: h === "Cost" || h === "Age" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
@@ -238,6 +251,15 @@ export default function WorkOrdersView({ initialCategory }) {
                       <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", color: isOpen && !o.cost ? "var(--clg-mercury)" : rowFg, fontStyle: isOpen && !o.cost ? "italic" : "normal" }}>
                         {isOpen && !o.cost ? "No estimate" : money(o.cost)}
                       </td>
+                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                        {!o.cost ? (
+                          <span style={{ color: "var(--clg-mercury)", fontStyle: "italic" }}>—</span>
+                        ) : (
+                          <Badge tone={o.payment_status === "paid" ? "brand" : "outline"}>
+                            {o.payment_status === "paid" ? "Paid" : "Unpaid"}
+                          </Badge>
+                        )}
+                      </td>
                       <td style={{
                         padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right",
                         fontFamily: "var(--clg-font-heading)", fontWeight: 700,
@@ -255,6 +277,7 @@ export default function WorkOrdersView({ initialCategory }) {
                   <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 700, color: "var(--clg-navy)" }}>
                     {money(totalCost)}
                   </td>
+                  <td />
                   <td />
                 </tr>
               </tfoot>

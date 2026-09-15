@@ -295,6 +295,85 @@ function InsuranceRatesPanel() {
   );
 }
 
+// GL account per work order category + default AP payment terms -- what
+// the Sage Intacct export needs to fill in ACCT_NO and TERM_NAME on every
+// row (see DESIGN_QUEUE.md's "Sage Intacct integration" item). category
+// here is plain text, not a DB enum -- kept in sync with CATEGORIES by
+// hand, same as everywhere else that list is duplicated.
+function IntacctExportSettingsPanel() {
+  const [accounts, setAccounts] = useState([]); // [{ category, gl_account_number }]
+  const [defaultTerms, setDefaultTerms] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("wo_category_gl_accounts").select("category, gl_account_number"),
+      supabase.from("app_settings").select("default_payment_terms").single(),
+    ]).then(([accountsRes, settingsRes]) => {
+      const byCategory = new Map((accountsRes.data ?? []).map((r) => [r.category, r.gl_account_number ?? ""]));
+      setAccounts(CATEGORIES.map((cat) => ({ category: cat, gl_account_number: byCategory.get(cat) ?? "" })));
+      setDefaultTerms(settingsRes.data?.default_payment_terms ?? "");
+      setLoaded(true);
+    });
+  }, []);
+
+  const setAccountNumber = (category, value) => {
+    setAccounts((prev) => prev.map((r) => (r.category === category ? { ...r, gl_account_number: value } : r)));
+    setSaved(false);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    const [accountsErr, settingsErr] = await Promise.all([
+      supabase.from("wo_category_gl_accounts")
+        .upsert(accounts.map((r) => ({ category: r.category, gl_account_number: r.gl_account_number.trim() || null })), { onConflict: "category" })
+        .then(({ error: err }) => err),
+      supabase.from("app_settings").update({ default_payment_terms: defaultTerms.trim() || null }).eq("id", true)
+        .then(({ error: err }) => err),
+    ]);
+    setSaving(false);
+    if (accountsErr || settingsErr) setError((accountsErr || settingsErr).message);
+    else setSaved(true);
+  };
+
+  return (
+    <Card>
+      <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Sage Intacct export</h3>
+      <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
+        GL account number per work order category, and the default payment terms applied to every exported bill
+        (lets Intacct compute the due date instead of this app guessing at day-count math). A category left blank
+        is skipped by the export rather than sent with a missing account number.
+      </p>
+      {error && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 16 }}>{error}</Alert>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 20px", marginBottom: 16 }}>
+        {accounts.map((r) => (
+          <Field key={r.category} label={r.category}>
+            <Input
+              disabled={!loaded} placeholder="GL account #"
+              value={r.gl_account_number}
+              onChange={(e) => setAccountNumber(r.category, e.target.value)}
+            />
+          </Field>
+        ))}
+      </div>
+      <Field label="Default payment terms" help='e.g. "Net 30" — must match a real Intacct AP term name' style={{ maxWidth: 240, marginBottom: 16 }}>
+        <Input disabled={!loaded} placeholder="Not configured" value={defaultTerms} onChange={(e) => { setDefaultTerms(e.target.value); setSaved(false); }} />
+      </Field>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <Button size="sm" onClick={save} disabled={saving || !loaded} iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {saved && <span style={{ fontSize: 12.5, color: "var(--clg-royal)", fontWeight: 600 }}>Saved</span>}
+      </div>
+    </Card>
+  );
+}
+
 function UsersPanel() {
   const { users, loading, error, setCanEditRoster, setCanVoidWorkOrders } = useUsersAdmin();
   const [toggleError, setToggleError] = useState(null);
@@ -456,6 +535,10 @@ export default function SettingsView() {
 
       <div style={{ marginTop: 32 }}>
         <InsuranceRatesPanel />
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        <IntacctExportSettingsPanel />
       </div>
 
       <div style={{ marginTop: 32 }}>

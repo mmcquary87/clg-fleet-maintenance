@@ -13,6 +13,9 @@ import FileDropzone from "../shared/FileDropzone";
 import ChargebackDriverPicker from "../shared/ChargebackDriverPicker";
 
 const SEVERITIES = ["Routine", "Urgent", "Unit down"];
+// Plain frontend list, not a DB enum -- see the payment_method column
+// comment in 20260915010000_work_order_payment_status.sql for why.
+const PAYMENT_METHODS = ["Check", "ACH / Wire", "Credit Card", "Company Account", "Net Terms", "Other"];
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -97,6 +100,11 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const [voidReason, setVoidReason] = useState("");
   const [voidBusy, setVoidBusy] = useState(false);
   const [voidError, setVoidError] = useState(null);
+
+  const [editingPayment, setEditingPayment] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ method: PAYMENT_METHODS[0], reference: "", paidAt: todayIso() });
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
   const [pendingFile, setPendingFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
@@ -210,6 +218,54 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       setVoidError(err.message);
     } finally {
       setVoidBusy(false);
+    }
+  };
+
+  const openPaymentForm = () => {
+    setStatusError(null);
+    setClosing(false);
+    setEditingDetails(false);
+    setVoiding(false);
+    setPaymentForm({ method: PAYMENT_METHODS[0], reference: "", paidAt: todayIso() });
+    setPaymentError(null);
+    setEditingPayment(true);
+  };
+
+  const confirmPayment = async () => {
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      const { error: updateErr } = await supabase.from("work_orders").update({
+        payment_status: "paid",
+        payment_method: paymentForm.method,
+        payment_reference: paymentForm.reference.trim() || null,
+        paid_at: paymentForm.paidAt,
+      }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+      setEditingPayment(false);
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setPaymentError(err.message);
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
+  const reopenPayment = async () => {
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      const { error: updateErr } = await supabase.from("work_orders").update({
+        payment_status: "unpaid", payment_method: null, payment_reference: null, paid_at: null,
+      }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setPaymentError(err.message);
+    } finally {
+      setPaymentBusy(false);
     }
   };
 
@@ -432,8 +488,13 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                   ) : (
                     <Badge tone="neutral">{order.status}</Badge>
                   )}
+                  {!order.voided && (
+                    <Badge tone={order.payment_status === "paid" ? "brand" : "outline"}>
+                      {order.payment_status === "paid" ? "Paid" : "Unpaid"}
+                    </Badge>
+                  )}
                 </div>
-                {!closing && !editingDetails && !voiding && !order.voided && (
+                {!closing && !editingDetails && !voiding && !editingPayment && !order.voided && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                     <Button size="sm" variant="outline" iconLeft={<Pencil size={12} />} onClick={openDetailsForm} disabled={statusBusy}>
                       Edit details
@@ -463,6 +524,15 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                         Reopen
                       </Button>
                     )}
+                    {order.payment_status === "paid" ? (
+                      <Button size="sm" variant="outline" iconLeft={paymentBusy ? <Loader2 size={12} className="spin" /> : <RotateCcw size={12} />} onClick={reopenPayment} disabled={paymentBusy}>
+                        Reopen payment
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={openPaymentForm} disabled={statusBusy}>
+                        Mark as paid
+                      </Button>
+                    )}
                     {canVoidWorkOrders && (
                       <Button size="sm" variant="outline" iconLeft={<Ban size={12} />} onClick={openVoidForm} disabled={statusBusy}>
                         Void
@@ -479,6 +549,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 )}
                 {statusError && !closing && !editingDetails && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 8 }}>{statusError}</div>}
                 {voidError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 8 }}>{voidError}</div>}
+                {paymentError && !editingPayment && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 8 }}>{paymentError}</div>}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 {shopHeadsUpMailto(order) && (
@@ -516,6 +587,51 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                       Confirm void
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setVoiding(false)} disabled={voidBusy}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!editingPayment && order.payment_status === "paid" && (
+                <Alert tone="brand" title="Paid">
+                  {order.payment_method}{order.paid_at ? ` on ${order.paid_at}` : ""}
+                  {order.payment_reference ? ` · Ref ${order.payment_reference}` : ""}
+                </Alert>
+              )}
+
+              {editingPayment && (
+                <div style={{ border: "1px solid var(--clg-royal)", borderRadius: "var(--clg-radius-md)", padding: 16, background: "var(--clg-surface-subtle)" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-royal)", marginBottom: 12 }}>
+                    Mark as paid
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <FormField label="Method">
+                      <Select
+                        value={paymentForm.method}
+                        onChange={(e) => setPaymentForm((f) => ({ ...f, method: e.target.value }))}
+                        options={PAYMENT_METHODS.map((m) => ({ value: m, label: m }))}
+                      />
+                    </FormField>
+                    <FormField label="Date paid">
+                      <Input type="date" value={paymentForm.paidAt} onChange={(e) => setPaymentForm((f) => ({ ...f, paidAt: e.target.value }))} />
+                    </FormField>
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <FormField label="Reference # (optional)">
+                      <Input
+                        value={paymentForm.reference}
+                        onChange={(e) => setPaymentForm((f) => ({ ...f, reference: e.target.value }))}
+                        placeholder="Check #, confirmation #, last 4 of card"
+                      />
+                    </FormField>
+                  </div>
+                  {paymentError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 10 }}>{paymentError}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <Button size="sm" onClick={confirmPayment} disabled={paymentBusy} iconLeft={paymentBusy ? <Loader2 size={13} className="spin" /> : null}>
+                      Save
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingPayment(false)} disabled={paymentBusy}>
                       Cancel
                     </Button>
                   </div>
