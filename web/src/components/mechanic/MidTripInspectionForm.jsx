@@ -278,30 +278,33 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
           .eq("id", unitId);
         if (unitErr) throw unitErr;
 
-        // Reuses the existing work_orders chargeback mechanism (same
-        // is_chargeback/chargeback_driver_id fields NewWorkOrderForm and
-        // WorkOrderDetailModal use) so this flat fee shows up in the
-        // existing Deductions report and Spend/Intacct export for free,
-        // rather than a parallel ledger. Closed immediately -- there's no
-        // repair to work, just a fee to bill.
-        if (isChargeback) {
-          const { error: feeErr } = await supabase.from("work_orders").insert({
-            unit_id: unitId,
-            category: "Mid-Trip Inspection",
-            description: "Mid-trip inspection fee",
-            cost: midtripFeeAmount ?? 0,
-            status: "Closed",
-            date_opened: form.inspected_at,
-            date_closed: form.inspected_at,
-            intake_source: "manual",
-            source: "manual",
-            is_chargeback: true,
-            chargeback_driver_name: chargebackDriver.trim() || null,
-            chargeback_driver_id: chargebackDriverId,
-            mid_trip_inspection_id: inspectionId,
-          });
-          if (feeErr) throw feeErr;
-        }
+        // Always raises the flat mid-trip fee as its own Closed work order
+        // -- every unit that gets a mid-trip inspection carries the cost
+        // (Spend/Cost-per-mile reporting), truck or trailer, whether or
+        // not it's billed back to a driver, and with no vendor (it's an
+        // in-house fee, not a repair). Reuses the existing work_orders
+        // chargeback mechanism (same is_chargeback/chargeback_driver_id
+        // fields NewWorkOrderForm and WorkOrderDetailModal use) only to
+        // flag *who pays* it, so it shows up in the existing Deductions
+        // report and Spend/Intacct export for free rather than a parallel
+        // ledger. Closed immediately -- there's no repair to work, just a
+        // fee to record.
+        const { error: feeErr } = await supabase.from("work_orders").insert({
+          unit_id: unitId,
+          category: "Mid-Trip Inspection",
+          description: "Mid-trip inspection fee",
+          cost: midtripFeeAmount ?? 0,
+          status: "Closed",
+          date_opened: form.inspected_at,
+          date_closed: form.inspected_at,
+          intake_source: "manual",
+          source: "manual",
+          is_chargeback: isChargeback,
+          chargeback_driver_name: isChargeback ? (chargebackDriver.trim() || null) : null,
+          chargeback_driver_id: isChargeback ? chargebackDriverId : null,
+          mid_trip_inspection_id: inspectionId,
+        });
+        if (feeErr) throw feeErr;
       }
 
       onFiled(inspectionId, status);
@@ -546,10 +549,10 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
           )}
 
           {unitId && (
-            <SectionCard title="Chargeback">
+            <SectionCard title="Mid-trip fee">
               <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>
-                Flat fee of {moneyFmt(midtripFeeAmount)} for this mid-trip inspection, applied the same way
-                regardless of who it's charged back to.
+                A flat {moneyFmt(midtripFeeAmount)} fee is recorded against this unit's cost for every mid-trip
+                inspection filed — truck or trailer, no vendor. Optionally bill it back to a driver below.
               </div>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--clg-text-body)", cursor: "pointer", marginBottom: isChargeback ? 12 : 0 }}>
                 <input type="checkbox" checked={isChargeback} onChange={(e) => setIsChargeback(e.target.checked)} />
@@ -587,12 +590,14 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
                 {checkedCount} / {totalItems} items checked
               </div>
             )}
-            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: isChargeback ? 4 : 14 }}>
+            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 4 }}>
               {missingSignature ? "Mechanic signature outstanding" : "Signed"}
             </div>
-            {isChargeback && (
-              <div style={{ fontSize: 11.5, color: missingChargebackDriver ? "var(--clg-scarlet)" : "var(--clg-text-muted)", marginBottom: 14 }}>
-                {missingChargebackDriver ? "Billed-to driver required" : `Bills ${moneyFmt(midtripFeeAmount)} to ${chargebackDriver}`}
+            {unitId && (
+              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: isChargeback ? 4 : 14 }}>
+                {isChargeback
+                  ? (missingChargebackDriver ? "Billed-to driver required" : `Bills ${moneyFmt(midtripFeeAmount)} to ${chargebackDriver}`)
+                  : `Fee: ${moneyFmt(midtripFeeAmount)} to unit cost`}
               </div>
             )}
             <Button
