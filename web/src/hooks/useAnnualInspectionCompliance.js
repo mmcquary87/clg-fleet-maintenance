@@ -11,14 +11,18 @@ import { supabase } from "../lib/supabaseClient";
 // fake status.
 //
 // The expiration date itself comes from unit_maintenance_due (kind =
-// 'dot_inspection', basis = 'alvys_certificate') -- alvys-sync-dot-
-// inspections parses the real expiration date straight off each unit's
-// uploaded DOT inspection certificate in Alvys, so this is the actual
-// due date, not an estimate from units.last_annual_inspection_date +
-// a fixed interval. That sync has only been run once (2026-09-01,
-// before the fleet grew to its current size) and isn't scheduled --
-// re-running it periodically would pick up units added since and any
-// units that previously hit a rate-limit error.
+// 'dot_inspection'). basis = 'alvys_field' is the current, authoritative
+// source -- alvys-sync-equipment reads InspectionExpirationDate (trucks) /
+// InspectionExpiresAt (trailers) directly off Alvys's own truck/trailer
+// record, the same search response it already fetches every 6 hours.
+// basis = 'alvys_certificate' is the older, now-superseded source
+// (alvys-sync-dot-inspections parsed a date out of an uploaded
+// document's free-text label instead) -- kept in this filter only so
+// rows haven't yet been overwritten by an equipment sync still show
+// something rather than nothing; confirmed less reliable (034003 showed
+// 2026-09-23 from a certificate parse when Alvys's own field says
+// 2027-09-09) and will disappear entirely once every unit has synced
+// under the new basis.
 const RED_WINDOW_DAYS = 14; // overdue or < 14 days
 const YELLOW_WINDOW_DAYS = 29; // 14-29 days
 
@@ -54,7 +58,7 @@ export function useAnnualInspectionCompliance() {
         .from("unit_maintenance_due")
         .select("due_date, unit:units(id, number, type, is_active, annual_inspection_notes)")
         .eq("kind", "dot_inspection")
-        .eq("basis", "alvys_certificate"),
+        .in("basis", ["alvys_field", "alvys_certificate"]),
       supabase.from("units").select("id", { count: "exact", head: true }).in("type", ["Truck", "Trailer"]),
       supabase.from("unit_maintenance_due").select("id", { count: "exact", head: true }).eq("kind", "dot_inspection").eq("basis", "no_document_on_file"),
     ]);
