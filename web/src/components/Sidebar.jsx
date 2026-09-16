@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   LayoutGrid, MapPin, RefreshCw, BarChart3, ClipboardList, CircleDollarSign, Truck, Briefcase, User, Wrench,
-  Settings, LogOut, ChevronsLeft, ChevronsRight, Shield,
+  Settings, LogOut, ChevronsLeft, ChevronsRight, Shield, ClipboardCheck,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -29,6 +29,7 @@ const NAV_GROUPS = [
       { id: "units", label: "Units", Icon: Truck },
       { id: "vendors", label: "Vendors", Icon: Briefcase },
       { id: "insurance", label: "Insurance", Icon: Shield },
+      { id: "annualCompliance", label: "Annual Inspections", Icon: ClipboardCheck },
     ],
   },
   // "Home time" is intentionally not in nav (2026-09-04, CLG) -- a Power BI
