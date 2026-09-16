@@ -16,6 +16,7 @@ import TrackingView from "./components/tracking/TrackingView";
 import ReloadsView from "./components/reloads/ReloadsView";
 import MechanicView from "./components/mechanic/MechanicView";
 import InsuranceView from "./components/insurance/InsuranceView";
+import AnnualInspectionComplianceView from "./components/compliance/AnnualInspectionComplianceView";
 import CopilotWidget from "./components/copilot/CopilotWidget";
 import "./ds/tokens.css";
 
@@ -33,6 +34,7 @@ const PAGE_META = {
   units: { group: "Fleet", page: "Units" },
   vendors: { group: "Fleet", page: "Vendors" },
   insurance: { group: "Fleet", page: "Insurance" },
+  annualCompliance: { group: "Fleet", page: "Annual Inspections" },
   roster: { group: "Drivers", page: "Drivers" },
   hometime: { group: "Drivers", page: "Home time" },
   mechanic: { group: "Shop", page: "Mechanic queue" },
@@ -101,6 +103,7 @@ export default function Dashboard({ session }) {
           {tab === "units" && <UnitsView canViewAssetLifecycle={profile?.role !== "mechanic"} />}
           {tab === "vendors" && <VendorsView />}
           {tab === "insurance" && !isMechanic && <InsuranceView onGoToUnits={() => setTab("units")} />}
+          {tab === "annualCompliance" && <AnnualInspectionComplianceView onGoToWorkOrders={goToWorkOrders} onGoToUnits={() => setTab("units")} />}
           {tab === "roster" && <RosterView session={session} />}
           {tab === "hometime" && <HomeTimeView session={session} />}
           {tab === "mechanic" && canUseMechanicQueue && <MechanicView />}
