@@ -1,12 +1,12 @@
-// Fleet Maintenance System — annual PM safety check checklist definitions.
+// Fleet Maintenance System — mid-trip PM safety check checklist definitions.
 //
 // Two vehicle-type variants transcribed from CLG's paper "PM Safety
-// Check" forms (uploaded 2026-09-18). Each item's `status` on the record
-// is one of "ok" | "fail" (tractor) or "ok" | "defect_repaired"
-// (trailer) | null (unchecked) -- unlike tractorInspectionItems.js, none
-// of these carry a `category`/`severity` mapping, because filing an
-// annual inspection does not raise work orders (per CLG, 2026-09-18) --
-// it's a record only.
+// Check" forms -- the Tractor Midtrip and Trailer Midtrip forms (uploaded
+// 2026-09-18). Each item's `status` on the record is one of "ok" | "fail"
+// (tractor) or "ok" | "defect_repaired" (trailer) | null (unchecked) --
+// unlike tractorInspectionItems.js, none of these carry a
+// `category`/`severity` mapping, because filing a mid-trip inspection
+// does not raise work orders (per CLG, 2026-09-18) -- it's a record only.
 
 export const TRACTOR_WALKAROUND_ITEMS = [
   { key: "gauges_instrument_panel", label: "Gauges & instrument panel" },
