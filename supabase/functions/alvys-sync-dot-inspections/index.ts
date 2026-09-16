@@ -1,5 +1,18 @@
 // Fleet Maintenance System — Annual DOT Inspection due dates from Alvys
 //
+// SUPERSEDED (2026-09-18) -- alvys-sync-equipment now reads
+// InspectionExpirationDate (trucks) / InspectionExpiresAt (trailers)
+// directly off Alvys's own truck/trailer record (unit_maintenance_due
+// basis='alvys_field'), the same trucks/trailers search response it
+// already fetches on its own 6-hour schedule. That's a real structured
+// field -- more reliable than this function's document-label parsing
+// below, which was confirmed to pick the wrong document for at least one
+// unit (trailer 034003: this function said 2026-09-23, Alvys's own field
+// says 2027-09-09) -- and it comes for free with no extra per-unit API
+// calls, avoiding the rate-limit trouble described below entirely. No
+// longer scheduled (see the migration that unschedules its cron job).
+// Left in place for reference/rollback, not deleted.
+//
 // Per CLG's direction (2026-09-01), this is sourced from Alvys instead of
 // Samsara's generic PM schedule: GET trucks/{id}/documents (confirmed
 // working against the real account) returns each unit's uploaded

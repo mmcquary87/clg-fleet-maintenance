@@ -6,17 +6,40 @@
 // units.alvys_asset_id is set so future runs update in place.
 //
 // Also keeps is_active in sync: this function only ever fetches Alvys's
-// currently-ACTIVE equipment (IsActive:true / Status:["Active"]), so it is
-// authoritative for is_active on any unit it has previously synced (i.e.
-// carries an alvys_asset_id) -- confirmed necessary 2026-09-09 after a
-// units.is_active audit found 100+ retired/swapped trucks and trailers
-// still flagged active because nothing had ever flipped that flag off. A
-// previously-synced unit missing from this run's active-equipment fetch
-// has left Alvys's active roster (sold, retired, swapped) and is marked
-// inactive; one that reappears is marked active again. Units this sync
-// has never touched (alvys_asset_id is null -- manually created via
-// intake, or the Penske/Hale leased-equipment import) are left alone --
-// this sync isn't authoritative for those.
+// currently-ACTIVE equipment, so it is authoritative for is_active on any
+// unit it has previously synced (i.e. carries an alvys_asset_id) --
+// confirmed necessary 2026-09-09 after a units.is_active audit found 100+
+// retired/swapped trucks and trailers still flagged active because
+// nothing had ever flipped that flag off. A previously-synced unit
+// missing from this run's active-equipment fetch has left Alvys's active
+// roster (sold, retired, swapped) and is marked inactive; one that
+// reappears is marked active again. Units this sync has never touched
+// (alvys_asset_id is null -- manually created via intake, or the Penske/
+// Hale leased-equipment import) are left alone -- this sync isn't
+// authoritative for those.
+//
+// trucks/search and trailers/search both filter on { Status: ["Active"] }
+// -- trucks/search used to filter on { IsActive: true } instead, which
+// Alvys silently ignores (confirmed 2026-09-18: that request returned all
+// 132 trucks on the account, active and inactive together, against a real
+// ~45 active trucks) -- every truck was getting marked is_active: true
+// unconditionally as a result, the root cause behind at least one unit
+// (9482) showing wrongly Active on the Annual Inspection Compliance
+// console. Every truck record does carry its own top-level Status field
+// (confirmed via alvys-explore-truck-spec), same shape trailers already
+// used correctly.
+//
+// Also captures each unit's real DOT inspection expiration date --
+// InspectionExpirationDate (trucks) / InspectionExpiresAt (trailers) --
+// directly off this same trucks/trailers search response, into
+// unit_maintenance_due (kind='dot_inspection', basis='alvys_field').
+// Confirmed 2026-09-18 to be more reliable than alvys-sync-dot-
+// inspections' old approach of parsing a date out of an uploaded
+// document's free-text AttachmentType label via a separate per-unit
+// GET .../documents call -- that approach picked the wrong document for
+// at least one trailer (034003: showed 2026-09-23, Alvys's own real
+// field says 2027-09-09). alvys-sync-dot-inspections is superseded by
+// this and no longer scheduled (see the migration that unschedules it).
 //
 // Safe to re-run — idempotent upsert by number/alvys_asset_id.
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets + service role
@@ -82,7 +105,7 @@ Deno.serve(async (req) => {
 
     const token = await getAlvysToken();
     const [trucks, trailers] = await Promise.all([
-      fetchAllPages(token, "trucks/search", { IsActive: true }),
+      fetchAllPages(token, "trucks/search", { Status: ["Active"] }),
       fetchAllPages(token, "trailers/search", { Status: ["Active"] }),
     ]);
 
@@ -90,12 +113,12 @@ Deno.serve(async (req) => {
       ...trucks.map((t) => ({
         number: t.TruckNum, type: "Truck", vin: t.VinNumber ?? null, alvys_asset_id: t.Id,
         year: t.Year ?? null, make: t.Make ?? null, model: t.Model ?? null, fuel_type: t.FuelType ?? null,
-        is_active: true,
+        is_active: true, inspection_due_date: t.InspectionExpirationDate ?? null,
       })),
       ...trailers.map((t) => ({
         number: t.TrailerNum, type: "Trailer", vin: t.VinNum ?? null, alvys_asset_id: t.Id,
         year: t.Year ?? null, make: t.Make ?? null, model: t.EquipmentType ?? null, fuel_type: null,
-        is_active: true,
+        is_active: true, inspection_due_date: t.InspectionExpiresAt ?? null,
       })),
     ].filter((u) => u.number);
     const activeNumbers = new Set(alvysUnits.map((u) => u.number.toLowerCase()));
@@ -124,11 +147,11 @@ Deno.serve(async (req) => {
       .map((u: any) => u.id);
 
     if (toInsert.length > 0) {
-      const { error: insErr } = await supabase.from("units").insert(toInsert);
+      const { error: insErr } = await supabase.from("units").insert(toInsert.map(({ inspection_due_date, ...fields }) => fields));
       if (insErr) throw insErr;
     }
     for (const u of toUpdate) {
-      const { id, ...fields } = u;
+      const { id, inspection_due_date, ...fields } = u;
       const { error: updErr } = await supabase.from("units").update(fields).eq("id", id);
       if (updErr) throw updErr;
     }
@@ -137,12 +160,37 @@ Deno.serve(async (req) => {
       if (deactErr) throw deactErr;
     }
 
+    // Re-fetch ids fresh rather than trust insert-order matching -- covers
+    // both branches (toInsert didn't have one yet, toUpdate's is already
+    // known but this keeps the two paths identical) in one pass.
+    const { data: withIds, error: idsErr } = await supabase.from("units").select("id, number").in(
+      "number", alvysUnits.map((u) => u.number)
+    );
+    if (idsErr) throw idsErr;
+    const idByNumber = new Map(withIds.map((u: any) => [u.number.toLowerCase(), u.id]));
+
+    const dueRows = alvysUnits
+      .filter((u) => u.inspection_due_date && idByNumber.has(u.number.toLowerCase()))
+      .map((u) => ({
+        unit_id: idByNumber.get(u.number.toLowerCase()),
+        kind: "dot_inspection",
+        label: "Annual DOT Inspection",
+        due_date: u.inspection_due_date,
+        basis: "alvys_field",
+        synced_at: new Date().toISOString(),
+      }));
+    if (dueRows.length > 0) {
+      const { error: dueErr } = await supabase.from("unit_maintenance_due").upsert(dueRows, { onConflict: "unit_id,kind" });
+      if (dueErr) throw dueErr;
+    }
+
     return new Response(JSON.stringify({
       trucksFound: trucks.length,
       trailersFound: trailers.length,
       unitsCreated: toInsert.length,
       unitsUpdated: toUpdate.length,
       unitsDeactivated: toDeactivate.length,
+      inspectionDatesSynced: dueRows.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err instanceof Error ? err.message : err) }), {
