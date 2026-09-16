@@ -127,7 +127,12 @@ function markAllOk(list) {
 // orders -- it's a record of the periodic safety check only (per CLG,
 // 2026-09-18); anyone who finds something that needs fixing opens a work
 // order separately.
-export default function MidTripInspectionForm({ onCancel, onFiled }) {
+//
+// `draftId` resumes a previously saved draft (see useDraftMidTripInspections)
+// -- loads its row into this same form and, once loaded, `save` updates
+// that row in place instead of inserting a new one, so re-saving as draft
+// (or filing) doesn't leave the original draft behind as an orphan.
+export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
   const { session } = useAuth();
   const { profile } = useProfile(session?.user?.id);
   const [form, setForm] = useState(emptyForm());
@@ -144,12 +149,51 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
   const [chargebackDriver, setChargebackDriver] = useState("");
   const [chargebackDriverId, setChargebackDriverId] = useState(null);
   const [midtripFeeAmount, setMidtripFeeAmount] = useState(null);
+  const [recordId, setRecordId] = useState(null);
+  const [loadingDraft, setLoadingDraft] = useState(!!draftId);
 
   useEffect(() => {
     supabase.from("app_settings").select("midtrip_chargeback_amount").single().then(({ data }) => {
       setMidtripFeeAmount(data?.midtrip_chargeback_amount ?? null);
     });
   }, []);
+
+  useEffect(() => {
+    if (!draftId) return;
+    let cancelled = false;
+    supabase.from("mid_trip_inspections").select("*, unit:units(number)").eq("id", draftId).single().then(({ data }) => {
+      if (cancelled || !data) { setLoadingDraft(false); return; }
+      setRecordId(data.id);
+      setUnitId(data.unit_id);
+      setUnitType(data.unit_type);
+      setForm({
+        unit_number: data.unit?.number ?? "",
+        inspected_at: data.inspected_at,
+        driver_name: data.driver_name ?? "",
+        mileage: data.mileage != null ? String(data.mileage) : "",
+        vin: data.vin ?? "",
+        pm_service_level: data.pm_service_level ?? "",
+        overall_result: data.overall_result ?? null,
+        trailer_year: data.trailer_year ?? "",
+        trailer_make: data.trailer_make ?? "",
+        abs_equipped: data.abs_equipped,
+        failed_items_repaired: data.failed_items_repaired,
+        reinspected_and_passed: data.reinspected_and_passed,
+        reinspection_date: data.reinspection_date ?? "",
+        defect_repair_details: data.defect_repair_details ?? "",
+        mechanic_name: data.mechanic_name ?? "",
+        mechanic_signature_data: data.mechanic_signature_data ?? null,
+        service_facility_name: data.service_facility_name ?? "CLG Transportation LLC",
+        service_facility_address: data.service_facility_address ?? "4100 Southpoint Dr E, Ste 3, Jacksonville, FL 32216",
+        service_facility_phone: data.service_facility_phone ?? "904-404-8787",
+      });
+      setChecklist(data.checklist ?? []);
+      setTireGrid(data.tire_grid ?? []);
+      setBrakeGrid(data.brake_grid ?? []);
+      setLoadingDraft(false);
+    });
+    return () => { cancelled = true; };
+  }, [draftId]);
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
   const setInput = (key) => (e) => set(key)(e.target.value);
@@ -158,9 +202,11 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
     const number = form.unit_number.trim();
     if (!number) return;
     setLooking(true);
-    setUnitId(null);
-    setUnitType(null);
     const { data } = await supabase.from("units").select("id, number, type, vin").ilike("number", number).maybeSingle();
+    // Same unit as already loaded (e.g. tabbing through a resumed draft's
+    // Unit # field without changing it) -- don't reset the checklist/grids
+    // that were just loaded from the draft.
+    if (data?.id === unitId) { setLooking(false); return; }
     setUnitId(data?.id ?? null);
     setUnitNotFound(!data);
     setUnitType(data?.type ?? null);
@@ -212,12 +258,20 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
     setSaving(true);
     setError(null);
     try {
-      const { data: inspection, error: err } = await supabase
-        .from("mid_trip_inspections")
-        .insert(buildInsertPayload(status))
-        .select("id")
-        .single();
-      if (err) throw err;
+      let inspectionId = recordId;
+      if (recordId) {
+        const { error: err } = await supabase.from("mid_trip_inspections").update(buildInsertPayload(status)).eq("id", recordId);
+        if (err) throw err;
+      } else {
+        const { data: inspection, error: err } = await supabase
+          .from("mid_trip_inspections")
+          .insert(buildInsertPayload(status))
+          .select("id")
+          .single();
+        if (err) throw err;
+        inspectionId = inspection.id;
+        setRecordId(inspection.id);
+      }
 
       // Keep the roster's PM-compliance due/overdue badge (maintenanceSchedule.js)
       // in sync with this form -- the same field a "DOT Inspection" work order
@@ -251,19 +305,23 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
             is_chargeback: true,
             chargeback_driver_name: chargebackDriver.trim() || null,
             chargeback_driver_id: chargebackDriverId,
-            mid_trip_inspection_id: inspection.id,
+            mid_trip_inspection_id: inspectionId,
           });
           if (feeErr) throw feeErr;
         }
       }
 
-      onFiled(inspection.id);
+      onFiled(inspectionId, status);
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
   };
+
+  if (loadingDraft) {
+    return <div style={{ padding: 40, display: "flex", justifyContent: "center", color: "var(--clg-text-muted)" }}><Loader2 size={18} className="spin" /></div>;
+  }
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 16px 80px" }}>

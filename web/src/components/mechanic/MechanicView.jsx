@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { Wrench, ChevronLeft, Plus, Trash2, Loader2, Search, ClipboardCheck, AlertTriangle } from "lucide-react";
+import { Wrench, ChevronLeft, Plus, Trash2, Loader2, Search, ClipboardCheck, AlertTriangle, FileEdit } from "lucide-react";
 import { Button, Input, Badge, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import { CATEGORIES } from "../../lib/categories";
 import { useMechanicQueue } from "../../hooks/useMechanicQueue";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import { useFailedMidTripInspections } from "../../hooks/useFailedMidTripInspections";
+import { useDraftMidTripInspections } from "../../hooks/useDraftMidTripInspections";
 import EmptyState from "../EmptyState";
 import TractorInspectionForm from "./TractorInspectionForm";
 import MidTripInspectionForm from "./MidTripInspectionForm";
@@ -40,11 +41,13 @@ function emptyPartRow() {
 export default function MechanicView() {
   const { orders, loading, error, reload } = useMechanicQueue();
   const { inspections: failedMidTrips, loading: failedMidTripsLoading, reload: reloadFailedMidTrips } = useFailedMidTripInspections();
+  const { drafts: midTripDrafts, loading: midTripDraftsLoading, reload: reloadMidTripDrafts } = useDraftMidTripInspections();
   const [selectedId, setSelectedId] = useState(null);
   const [reinspectingInsp, setReinspectingInsp] = useState(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const [inspecting, setInspecting] = useState(false);
   const [midTripInspecting, setMidTripInspecting] = useState(false);
+  const [resumingDraftId, setResumingDraftId] = useState(null);
   const [filedNotice, setFiledNotice] = useState(null);
   const [query, setQuery] = useState("");
 
@@ -84,14 +87,17 @@ export default function MechanicView() {
     );
   }
 
-  if (midTripInspecting) {
+  if (midTripInspecting || resumingDraftId) {
     return (
       <MidTripInspectionForm
-        onCancel={() => setMidTripInspecting(false)}
-        onFiled={() => {
+        draftId={resumingDraftId}
+        onCancel={() => { setMidTripInspecting(false); setResumingDraftId(null); }}
+        onFiled={(id, status) => {
           setMidTripInspecting(false);
-          setFiledNotice("Mid-trip inspection filed.");
+          setResumingDraftId(null);
+          setFiledNotice(status === "draft" ? "Mid-trip inspection saved as draft." : "Mid-trip inspection filed.");
           reload();
+          reloadMidTripDrafts();
         }}
       />
     );
@@ -168,6 +174,41 @@ export default function MechanicView() {
                   </div>
                 </div>
                 <Badge tone="critical">{insp.overall_result === "Fail" ? "Fail" : "Defect found"}</Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!midTripDraftsLoading && midTripDrafts.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <FileEdit size={15} style={{ color: "var(--clg-text-muted)" }} />
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--clg-navy)" }}>
+              Draft mid-trip inspections
+            </div>
+            <Badge tone="neutral">{midTripDrafts.length}</Badge>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {midTripDrafts.map((draft) => (
+              <button
+                key={draft.id}
+                onClick={() => setResumingDraftId(draft.id)}
+                style={{
+                  textAlign: "left", cursor: "pointer", border: "1px solid var(--clg-border-default)",
+                  borderRadius: "var(--clg-radius-md)", background: "#fff", padding: "12px 16px",
+                  display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+                }}
+              >
+                <div>
+                  <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)" }}>
+                    Unit {draft.unit?.number ?? "—"}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)" }}>
+                    Started {draft.inspected_at} {draft.mechanic_name ? `· ${draft.mechanic_name}` : ""}
+                  </div>
+                </div>
+                <Badge tone="neutral">Resume draft</Badge>
               </button>
             ))}
           </div>
