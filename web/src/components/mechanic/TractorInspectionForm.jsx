@@ -121,7 +121,7 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
     (async () => {
       const [openRes, lastInspRes, closedRes] = await Promise.all([
         supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("voided", false).neq("status", "Closed"),
-        supabase.from("tractor_inspections").select("inspected_at").eq("unit_id", unitId).eq("status", "filed").order("inspected_at", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("tractor_inspections").select("inspected_at, damage_diagram_markers").eq("unit_id", unitId).eq("status", "filed").order("inspected_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.from("work_orders").select("cost, date_closed").eq("unit_id", unitId).eq("voided", false).eq("status", "Closed"),
       ]);
       if (cancelled) return;
@@ -133,6 +133,15 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
         lastInspection: lastInspRes.data?.inspected_at ?? null,
         ytdSpend,
       });
+      // Carry forward the last filed inspection's damage markers as
+      // pre-existing (hollow) -- whatever was marked found-today there is
+      // now just standing damage until someone removes it here. Only
+      // seeds once per unit lookup, so it doesn't clobber markers already
+      // added in this session.
+      const priorMarkers = lastInspRes.data?.damage_diagram_markers;
+      if (Array.isArray(priorMarkers) && priorMarkers.length > 0) {
+        setDamageMarkers(priorMarkers.map((m) => ({ ...m, preExisting: true })));
+      }
     })();
     return () => { cancelled = true; };
   }, [unitId]);
@@ -140,6 +149,7 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
   const checkedCount = countChecked(form);
   const needsAttention = ALL_CHECK_ITEMS.filter((item) => form[item.key] === false);
   const totalItems = ALL_CHECK_ITEMS.length;
+  const newDamageMarkers = damageMarkers.filter((m) => !m.preExisting);
   const missingSignature = !form.driver_signature_name.trim() || !form.driver_signature_data
     || !form.clg_signature_name.trim() || !form.clg_signature_data;
 
@@ -182,22 +192,38 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
         if (docErr) throw docErr;
       }
 
+      const checklistRows = needsAttention.map((item) => ({
+        unit_id: unitId,
+        category: item.category,
+        complaint: `${item.label}${item.sublabel ? " — " + item.sublabel : ""} — marked as needing attention on this inspection`,
+        severity: item.severity || "Routine",
+        status: "Open",
+        intake_source: "manual",
+        source: "manual",
+        date_opened: form.inspected_at,
+        tractor_inspection_id: inspection.id,
+      }));
+      // Only damage found THIS session raises a work order -- a
+      // pre-existing marker carried forward is already on someone's
+      // record (or was already worked, in which case it should have been
+      // removed from the diagram, not re-filed here).
+      const damageRows = newDamageMarkers.map((m) => ({
+        unit_id: unitId,
+        category: "Trailer / Body",
+        complaint: `${m.part || "Damage"}${m.note ? " — " + m.note : ""} — marked on the ${m.view.toLowerCase()} diagram during this inspection`,
+        severity: "Routine",
+        status: "Open",
+        intake_source: "manual",
+        source: "manual",
+        date_opened: form.inspected_at,
+        tractor_inspection_id: inspection.id,
+      }));
+
       let raisedCount = 0;
-      if (status === "filed" && needsAttention.length > 0) {
-        const rows = needsAttention.map((item) => ({
-          unit_id: unitId,
-          category: item.category,
-          complaint: `${item.label}${item.sublabel ? " — " + item.sublabel : ""} — marked as needing attention on this inspection`,
-          severity: item.severity || "Routine",
-          status: "Open",
-          intake_source: "manual",
-          source: "manual",
-          date_opened: form.inspected_at,
-          tractor_inspection_id: inspection.id,
-        }));
-        const { error: woErr } = await supabase.from("work_orders").insert(rows);
+      if (status === "filed" && (checklistRows.length > 0 || damageRows.length > 0)) {
+        const { error: woErr } = await supabase.from("work_orders").insert([...checklistRows, ...damageRows]);
         if (woErr) throw woErr;
-        raisedCount = rows.length;
+        raisedCount = checklistRows.length + damageRows.length;
       }
       onFiled(inspection.id, raisedCount);
     } catch (err) {
@@ -316,17 +342,24 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
             ))}
           </SectionCard>
 
-          <SectionCard title="Defects & cleanliness">
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
+          <SectionCard
+            title="Body damage"
+            count={damageMarkers.length}
+          >
+            <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 14 }}>
+              Click any view to mark a point of damage. Hollow markers carried forward from the last inspection;
+              solid markers are new today and raise a work order on filing.
+            </div>
+            <TruckDamageDiagram markers={damageMarkers} onChange={setDamageMarkers} />
+          </SectionCard>
+
+          <SectionCard title="Cleanliness">
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <Field label="Cab"><Input value={form.cab_notes} onChange={setInput("cab_notes")} placeholder="e.g. Clean. Driver-side floor mat worn through at the heel, not a defect." /></Field>
               <Field label="Exterior"><Input value={form.exterior_notes} onChange={setInput("exterior_notes")} /></Field>
-              <Field label="Damage / defects to correct"><Input value={form.damage_defects_notes} onChange={setInput("damage_defects_notes")} /></Field>
-            </div>
-            <div style={{ borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-brand)", marginBottom: 10 }}>
-                Mark damage on the truck
-              </div>
-              <TruckDamageDiagram markers={damageMarkers} onChange={setDamageMarkers} />
+              <Field label="Other defects to correct" help="Anything not captured on the diagram above.">
+                <Input value={form.damage_defects_notes} onChange={setInput("damage_defects_notes")} />
+              </Field>
             </div>
           </SectionCard>
 
@@ -371,17 +404,23 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
         </div>
 
         <div style={{ position: "sticky", top: 16 }}>
-          <Card style={{ marginBottom: 16, borderTop: "3px solid " + (needsAttention.length > 0 ? "var(--clg-scarlet)" : "var(--clg-royal)") }}>
-            {needsAttention.length > 0 ? (
+          <Card style={{ marginBottom: 16, borderTop: "3px solid " + (needsAttention.length + newDamageMarkers.length > 0 ? "var(--clg-scarlet)" : "var(--clg-royal)") }}>
+            {needsAttention.length + newDamageMarkers.length > 0 ? (
               <>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-scarlet)", marginBottom: 8 }}>
-                  Raises {needsAttention.length} work order{needsAttention.length === 1 ? "" : "s"} on filing
+                  Raises {needsAttention.length + newDamageMarkers.length} work order{needsAttention.length + newDamageMarkers.length === 1 ? "" : "s"} on filing
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                   {needsAttention.map((item) => (
                     <div key={item.key} style={{ background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-sm)", padding: "8px 10px" }}>
                       <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--clg-navy)" }}>{item.label}</div>
                       <div style={{ fontSize: 11, color: "var(--clg-text-muted)" }}>Marked as needing attention on this inspection</div>
+                    </div>
+                  ))}
+                  {newDamageMarkers.map((m) => (
+                    <div key={m.id} style={{ background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-sm)", padding: "8px 10px" }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--clg-navy)" }}>{m.part || "Damage"} — {m.view}</div>
+                      <div style={{ fontSize: 11, color: "var(--clg-text-muted)" }}>{m.note || "Marked on the diagram this inspection"}</div>
                     </div>
                   ))}
                 </div>
@@ -391,6 +430,9 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
             )}
             <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 4 }}>
               {totalItems - checkedCount} item{totalItems - checkedCount === 1 ? "" : "s"} still unchecked
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 4 }}>
+              {damageMarkers.length} damage point{damageMarkers.length === 1 ? "" : "s"} on file ({newDamageMarkers.length} found today)
             </div>
             <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 14 }}>
               {missingSignature ? "Signature outstanding" : "Both signatures on file"}
