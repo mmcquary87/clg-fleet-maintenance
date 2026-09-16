@@ -119,7 +119,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
   const [brakeGrid, setBrakeGrid] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [isChargeback, setIsChargeback] = useState(false);
+  const [unitOwnerOperatorAssigned, setUnitOwnerOperatorAssigned] = useState(false);
   const [chargebackDriver, setChargebackDriver] = useState("");
   const [chargebackDriverId, setChargebackDriverId] = useState(null);
   const [midtripFeeAmount, setMidtripFeeAmount] = useState(null);
@@ -139,10 +139,11 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
     setLooking(true);
     setUnitId(null);
     setUnitType(null);
-    const { data } = await supabase.from("units").select("id, number, type, vin").ilike("number", number).maybeSingle();
+    const { data } = await supabase.from("units").select("id, number, type, vin, owner_operator_assigned").ilike("number", number).maybeSingle();
     setUnitId(data?.id ?? null);
     setUnitNotFound(!data);
     setUnitType(data?.type ?? null);
+    setUnitOwnerOperatorAssigned(data?.owner_operator_assigned ?? false);
     if (data?.type === "Trailer") {
       setChecklist(checklistFor(TRAILER_ALL_CHECK_ITEMS));
       setTireGrid(tireGridFor(TRAILER_TIRE_POSITIONS));
@@ -160,6 +161,13 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
   const checkedCount = countChecked(checklist);
   const totalItems = checklist.length;
   const missingSignature = !form.mechanic_name.trim() || !form.mechanic_signature_data;
+  // Owner-operator/lease-purchase units are always charged the flat
+  // mid-trip fee, company units never are -- units.owner_operator_assigned
+  // is the same authoritative per-unit flag GL routing already relies on
+  // (20260916010000_owner_operator_unit_flag_and_gl_map.sql), replacing a
+  // mechanic having to remember to check a box every time.
+  const mustCharge = unitId != null && unitOwnerOperatorAssigned;
+  const missingChargebackDriver = mustCharge && !chargebackDriver.trim();
 
   const buildInsertPayload = (status) => {
     const { unit_number, ...rest } = form; // eslint-disable-line no-unused-vars
@@ -182,6 +190,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
 
   const save = async (status) => {
     if (!unitId) { setError("Look up a real unit number first."); return; }
+    if (status === "filed" && missingChargebackDriver) { setError("This is an owner-operator/lease-purchase unit — enter who the mid-trip fee is billed to."); return; }
     setSaving(true);
     setError(null);
     try {
@@ -210,7 +219,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
         // existing Deductions report and Spend/Intacct export for free,
         // rather than a parallel ledger. Closed immediately -- there's no
         // repair to work, just a fee to bill.
-        if (isChargeback) {
+        if (mustCharge) {
           const { error: feeErr } = await supabase.from("work_orders").insert({
             unit_id: unitId,
             category: "DOT Inspection",
@@ -469,19 +478,23 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
 
           {unitId && (
             <SectionCard title="Chargeback">
-              <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>
-                Flat fee of {moneyFmt(midtripFeeAmount)} for this mid-trip inspection, applied the same way
-                regardless of who it's charged back to.
-              </div>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--clg-text-body)", cursor: "pointer", marginBottom: isChargeback ? 12 : 0 }}>
-                <input type="checkbox" checked={isChargeback} onChange={(e) => setIsChargeback(e.target.checked)} />
-                Charge back to driver
-              </label>
-              {isChargeback && (
-                <ChargebackDriverPicker
-                  name={chargebackDriver}
-                  onChange={(name, driverId) => { setChargebackDriver(name); setChargebackDriverId(driverId); }}
-                />
+              {mustCharge ? (
+                <>
+                  <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>
+                    This is an owner-operator/lease-purchase unit — the flat {moneyFmt(midtripFeeAmount)} mid-trip fee
+                    is always billed, no matter who it's billed to.
+                  </div>
+                  <Field label="Billed to" required>
+                    <ChargebackDriverPicker
+                      name={chargebackDriver}
+                      onChange={(name, driverId) => { setChargebackDriver(name); setChargebackDriverId(driverId); }}
+                    />
+                  </Field>
+                </>
+              ) : (
+                <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)" }}>
+                  Company driver/equipment — no charge for this mid-trip inspection.
+                </div>
               )}
             </SectionCard>
           )}
@@ -494,12 +507,17 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
                 {checkedCount} / {totalItems} items checked
               </div>
             )}
-            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 14 }}>
+            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: mustCharge ? 4 : 14 }}>
               {missingSignature ? "Mechanic signature outstanding" : "Signed"}
             </div>
+            {mustCharge && (
+              <div style={{ fontSize: 11.5, color: missingChargebackDriver ? "var(--clg-scarlet)" : "var(--clg-text-muted)", marginBottom: 14 }}>
+                {missingChargebackDriver ? "Billed-to driver required" : `Bills ${moneyFmt(midtripFeeAmount)} to ${chargebackDriver}`}
+              </div>
+            )}
             <Button
               onClick={() => save("filed")}
-              disabled={saving || !unitId}
+              disabled={saving || !unitId || missingChargebackDriver}
               iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}
               style={{ width: "100%", marginBottom: 8 }}
             >
