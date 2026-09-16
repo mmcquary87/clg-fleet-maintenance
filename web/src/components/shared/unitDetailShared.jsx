@@ -42,13 +42,21 @@ export function statusLabel(status) {
 
 // The Annual Inspection milestone is entirely manual -- last_annual_
 // inspection_date only updates when someone closes an "Annual" work order
-// in this app, so it can silently disagree with the real certificate on
-// file. This surfaces that real answer (synced from Alvys documents)
-// alongside it rather than replacing the milestone tracker, since that's
-// the only kind currently populated by a sync (see useUnitDetail.js).
+// in this app, so it can silently disagree with the real expiration on
+// file in Alvys. This surfaces that real answer alongside it rather than
+// replacing the milestone tracker (see useUnitDetail.js for the query).
+// basis='alvys_field' (current) reads InspectionExpirationDate/
+// InspectionExpiresAt straight off the unit's own Alvys record --
+// basis='alvys_certificate' is the older, less reliable source (a date
+// parsed out of an uploaded document's free-text label) that's being
+// phased out as alvys-sync-equipment re-syncs each unit onto the newer
+// basis; still handled here so a not-yet-re-synced unit shows something.
 export function alvysDotInspectionNote(maintenanceDue) {
   const row = (maintenanceDue ?? []).find((d) => d.kind === "dot_inspection");
   if (!row) return null;
+  if (row.basis === "alvys_field" && row.due_date) {
+    return { tone: "brand", text: `Alvys — expires ${row.due_date}` };
+  }
   if (row.basis === "alvys_certificate" && row.due_date) {
     return { tone: "brand", text: `Alvys certificate on file — expires ${row.due_date}` };
   }
@@ -58,7 +66,16 @@ export function alvysDotInspectionNote(maintenanceDue) {
   return null;
 }
 
-export function MilestoneRow({ milestone, unit, onSave, saving }) {
+// The real due date to show for "Next due" -- prefers Alvys's own answer
+// over computing one from the manual last_annual_inspection_date/365-day
+// fields, since those are usually empty (nothing in this app requires
+// filling them in) while Alvys's real expiration is now reliably synced.
+export function alvysDotDueDate(maintenanceDue) {
+  const row = (maintenanceDue ?? []).find((d) => d.kind === "dot_inspection" && (d.basis === "alvys_field" || d.basis === "alvys_certificate"));
+  return row?.due_date ?? null;
+}
+
+export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
   const interval = milestone.fixedInterval ?? unit[milestone.intervalField];
   const [lastDate, setLastDate] = useState(unit[milestone.lastField] || "");
   const [intervalDays, setIntervalDays] = useState(milestone.intervalField ? (unit[milestone.intervalField] ?? "") : "");
@@ -68,7 +85,12 @@ export function MilestoneRow({ milestone, unit, onSave, saving }) {
     setIntervalDays(milestone.intervalField ? (unit[milestone.intervalField] ?? "") : "");
   }, [unit, milestone]);
 
-  const next = nextDueDate(unit[milestone.lastField], interval);
+  // dueOverride (a real answer from Alvys, when we have one) wins over the
+  // computed last-done + interval date -- that computation only produces
+  // a real value once someone's filled in "Last done" here manually,
+  // which most units never get, while Alvys's own answer is reliably synced.
+  const computedNext = nextDueDate(unit[milestone.lastField], interval);
+  const next = dueOverride ?? computedNext;
   const status = dueStatus(next);
 
   const dirty = lastDate !== (unit[milestone.lastField] || "")
@@ -126,10 +148,12 @@ export function MaintenanceSchedule({ unit, maintenanceDue, onSave, saving }) {
   return (
     <>
       {MILESTONES.map((m) => {
-        const dotNote = m.key === "annual" ? alvysDotInspectionNote(maintenanceDue) : null;
+        const isAnnual = m.key === "annual";
+        const dotNote = isAnnual ? alvysDotInspectionNote(maintenanceDue) : null;
+        const dueOverride = isAnnual && !unit[m.lastField] ? alvysDotDueDate(maintenanceDue) : null;
         return (
           <div key={m.key}>
-            <MilestoneRow milestone={m} unit={unit} onSave={onSave} saving={saving} />
+            <MilestoneRow milestone={m} unit={unit} onSave={onSave} saving={saving} dueOverride={dueOverride} />
             {dotNote && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 0 0", fontSize: 12 }}>
                 <Badge tone={dotNote.tone}>Alvys</Badge>
