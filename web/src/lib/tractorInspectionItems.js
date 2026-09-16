@@ -22,7 +22,7 @@ export const EQUIPMENT_ITEMS = [
   { key: "warning_triangles", label: "Three warning triangles", sublabel: "Side box", category: "Other" },
   { key: "kingpin_lock_key", label: "King pin lock and key", category: "Other" },
   { key: "circle_lock_key", label: "Circle lock and key", category: "Other" },
-  { key: "cell_tablet_mount", label: "Mount for cell / tablet", sublabel: "Photo required", category: "Other", hasPhoto: true },
+  { key: "cell_tablet_mount", label: "Mount for cell / tablet", sublabel: "Photo required — see Photos below", category: "Other" },
   { key: "inverter", label: "Inverter", sublabel: "Works and clean", category: "Electrical" },
   { key: "refrigerator", label: "Refrigerator", sublabel: "Works and clean", category: "Electrical" },
   { key: "apu", label: "APU", sublabel: "If applicable — works", category: "Engine" },

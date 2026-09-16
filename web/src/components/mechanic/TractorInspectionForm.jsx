@@ -7,6 +7,7 @@ import { useProfile } from "../../hooks/useProfile";
 import { EQUIPMENT_ITEMS, WALKAROUND_ITEMS, DOCUMENT_ITEMS, ALL_CHECK_ITEMS, countChecked } from "../../lib/tractorInspectionItems";
 import PhotoCapture from "../shared/PhotoCapture";
 import SignaturePad from "../shared/SignaturePad";
+import TruckDamageDiagram from "../shared/TruckDamageDiagram";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -57,24 +58,17 @@ function SectionCard({ title, count, children, style }) {
   );
 }
 
-function CheckRow({ item, value, onChange, photos, onPhotosChange }) {
+function CheckRow({ item, value, onChange }) {
   return (
-    <div style={{ padding: "10px 0", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <div style={{ minWidth: 0, borderLeft: value === false ? "3px solid var(--clg-scarlet)" : "3px solid transparent", paddingLeft: 8 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--clg-text-heading)" }}>{item.label}</div>
-          {item.sublabel && <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{item.sublabel}</div>}
-        </div>
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <button type="button" onClick={() => onChange(true)} style={pillStyle(value === true, "good")}>{item.goodLabel || "Yes"}</button>
-          <button type="button" onClick={() => onChange(false)} style={pillStyle(value === false, "bad")}>{item.badLabel || "No"}</button>
-        </div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+      <div style={{ minWidth: 0, borderLeft: value === false ? "3px solid var(--clg-scarlet)" : "3px solid transparent", paddingLeft: 8 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--clg-text-heading)" }}>{item.label}</div>
+        {item.sublabel && <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{item.sublabel}</div>}
       </div>
-      {item.hasPhoto && (
-        <div style={{ marginTop: 10, paddingLeft: 8 }}>
-          <PhotoCapture photos={photos} onChange={onPhotosChange} />
-        </div>
-      )}
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <button type="button" onClick={() => onChange(true)} style={pillStyle(value === true, "good")}>{item.goodLabel || "Yes"}</button>
+        <button type="button" onClick={() => onChange(false)} style={pillStyle(value === false, "bad")}>{item.badLabel || "No"}</button>
+      </div>
     </div>
   );
 }
@@ -104,7 +98,7 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [photos, setPhotos] = useState([]);
-  const [cellTabletPhotos, setCellTabletPhotos] = useState([]);
+  const [damageMarkers, setDamageMarkers] = useState([]);
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
   const setInput = (key) => (e) => set(key)(e.target.value);
@@ -156,6 +150,7 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
       ...rest,
       unit_id: unitId,
       odometer: form.odometer.trim() === "" ? null : Number(form.odometer),
+      damage_diagram_markers: damageMarkers,
       status,
       filed_by: status === "filed" ? (profile?.full_name || session?.user?.email || null) : null,
       filed_at: status === "filed" ? now : null,
@@ -176,17 +171,13 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
         .single();
       if (err) throw err;
 
-      const allPhotos = [
-        ...photos.map((p) => ({ ...p, note: null })),
-        ...cellTabletPhotos.map((p) => ({ ...p, note: "Mount for cell / tablet" })),
-      ];
-      for (const p of allPhotos) {
+      for (const p of photos) {
         const path = `${unitId}/tractor-inspections/${inspection.id}/${crypto.randomUUID()}-${p.file.name}`;
         const { error: uploadErr } = await supabase.storage.from("unit-documents").upload(path, p.file);
         if (uploadErr) throw uploadErr;
         const { error: docErr } = await supabase.from("unit_documents").insert({
           unit_id: unitId, tractor_inspection_id: inspection.id, doc_type: "tractor_inspection_photo",
-          storage_path: path, file_name: p.file.name, note: p.note, uploaded_by: session?.user?.id ?? null,
+          storage_path: path, file_name: p.file.name, uploaded_by: session?.user?.id ?? null,
         });
         if (docErr) throw docErr;
       }
@@ -274,14 +265,10 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
 
           <SectionCard title="Equipment on the tractor" count={EQUIPMENT_ITEMS.length}>
             {EQUIPMENT_ITEMS.map((item) => (
-              <CheckRow
-                key={item.key} item={item} value={form[item.key]} onChange={set(item.key)}
-                photos={item.hasPhoto ? cellTabletPhotos : undefined}
-                onPhotosChange={item.hasPhoto ? setCellTabletPhotos : undefined}
-              />
+              <CheckRow key={item.key} item={item} value={form[item.key]} onChange={set(item.key)} />
             ))}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginTop: 14 }}>
-              <Field label="Prepass transponder #"><Input value={form.prepass_transponder_number} onChange={setInput("prepass_transponder_number")} /></Field>
+              <Field label="Prepass #"><Input value={form.prepass_transponder_number} onChange={setInput("prepass_transponder_number")} /></Field>
               <Field label="Love's RFID #"><Input value={form.loves_rfid_number} onChange={setInput("loves_rfid_number")} /></Field>
               <Field label="Kill switch location"><Input value={form.kill_switch_location} onChange={setInput("kill_switch_location")} /></Field>
             </div>
@@ -330,10 +317,16 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
           </SectionCard>
 
           <SectionCard title="Defects & cleanliness">
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
               <Field label="Cab"><Input value={form.cab_notes} onChange={setInput("cab_notes")} placeholder="e.g. Clean. Driver-side floor mat worn through at the heel, not a defect." /></Field>
               <Field label="Exterior"><Input value={form.exterior_notes} onChange={setInput("exterior_notes")} /></Field>
               <Field label="Damage / defects to correct"><Input value={form.damage_defects_notes} onChange={setInput("damage_defects_notes")} /></Field>
+            </div>
+            <div style={{ borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-brand)", marginBottom: 10 }}>
+                Mark damage on the truck
+              </div>
+              <TruckDamageDiagram markers={damageMarkers} onChange={setDamageMarkers} />
             </div>
           </SectionCard>
 

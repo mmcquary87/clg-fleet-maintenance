@@ -44,6 +44,10 @@ async function getAlvysToken(): Promise<string> {
   return (await res.json()).access_token;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function toNumber(value: unknown) {
   if (value == null) return null;
   const n = Number(value);
@@ -102,21 +106,44 @@ Deno.serve(async (req) => {
 
     let checkCallsFound = 0;
     let upserted = 0;
-    let tripsWithErrors = 0;
     const rows: any[] = [];
+    const errors: any[] = [];
+
+    // A first real run hit Alvys's rate limiter (429s, a Cloudflare HTML
+    // page rather than a JSON error) firing all requests back to back --
+    // space them out, and retry once with a longer pause specifically on
+    // a 429 rather than giving up immediately.
+    const REQUEST_SPACING_MS = 300;
+    const RATE_LIMIT_RETRY_DELAY_MS = 2000;
 
     for (const tripId of tripIds) {
-      const res = await fetch(`${ALVYS_API_BASE}/trips/${tripId}/check-calls`, {
+      let res = await fetch(`${ALVYS_API_BASE}/trips/${tripId}/check-calls`, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) { tripsWithErrors += 1; continue; }
+      if (res.status === 429) {
+        await sleep(RATE_LIMIT_RETRY_DELAY_MS);
+        res = await fetch(`${ALVYS_API_BASE}/trips/${tripId}/check-calls`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+      if (!res.ok) {
+        errors.push({ tripId, status: res.status, body: (await res.text()).slice(0, 300) });
+        await sleep(REQUEST_SPACING_MS);
+        continue;
+      }
       const text = await res.text();
       let json: any;
-      try { json = JSON.parse(text); } catch { tripsWithErrors += 1; continue; }
+      try { json = JSON.parse(text); } catch {
+        errors.push({ tripId, status: res.status, parseError: true, body: text.slice(0, 300) });
+        await sleep(REQUEST_SPACING_MS);
+        continue;
+      }
       const entries: any[] = Array.isArray(json) ? json : [];
       checkCallsFound += entries.length;
       for (const entry of entries) rows.push(mapCheckCall(entry, unitIdByTripId.get(tripId) ?? null));
+      await sleep(REQUEST_SPACING_MS);
     }
 
     if (rows.length > 0) {
@@ -127,9 +154,10 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       activeTripsPolled: tripIds.length,
-      tripsWithErrors,
+      tripsWithErrors: errors.length,
       checkCallsFound,
       upserted,
+      errors,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error
