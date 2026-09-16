@@ -46,12 +46,19 @@ function pillStyle(active, tone) {
   };
 }
 
-function SectionCard({ title, count, children, style }) {
+function SectionCard({ title, count, onAllOk, children, style }) {
   return (
     <Card style={{ marginBottom: 16, ...style }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-brand)" }}>{title}</div>
-        {count != null && <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{count} item{count === 1 ? "" : "s"}</div>}
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          {count != null && <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{count} item{count === 1 ? "" : "s"}</div>}
+          {onAllOk && (
+            <button type="button" onClick={onAllOk} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-royal)", fontSize: 11.5, fontWeight: 700 }}>
+              Select all OK
+            </button>
+          )}
+        </div>
       </div>
       {children}
     </Card>
@@ -96,6 +103,20 @@ function updateByKey(list, key, patch) {
 
 function updateByPosition(list, position, patch) {
   return list.map((row) => (row.position === position ? { ...row, ...patch } : row));
+}
+
+// Marks every row in `keys` OK in one click -- a mid-trip inspection with
+// nothing wrong is the common case, and clicking OK on 20-30 walkaround/
+// under-hood items one at a time is the exact tedium this form's paper
+// predecessor didn't have (a mechanic could just sign off the whole
+// section at once). Notes are left untouched.
+function markKeysOk(list, keys) {
+  const okKeys = new Set(keys);
+  return list.map((row) => (okKeys.has(row.key) ? { ...row, status: "ok" } : row));
+}
+
+function markAllOk(list) {
+  return list.map((row) => ({ ...row, ok: true }));
 }
 
 // Digital replacement for CLG's paper "PM Safety Check" mid-trip
@@ -308,14 +329,15 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
 
           {!isTrailer && unitId && (
             <>
-              <SectionCard title="Walk around / in cab" count={TRACTOR_WALKAROUND_ITEMS.length}>
+              <SectionCard title="Walk around / in cab" count={TRACTOR_WALKAROUND_ITEMS.length}
+                onAllOk={() => setChecklist((list) => markKeysOk(list, TRACTOR_WALKAROUND_ITEMS.map((i) => i.key)))}>
                 {TRACTOR_WALKAROUND_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Fail" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s }))} />
                 ))}
               </SectionCard>
 
-              <SectionCard title="Tires — tread depth & air pressure">
+              <SectionCard title="Tires — tread depth & air pressure" onAllOk={() => setTireGrid(markAllOk)}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "4px 24px" }}>
                   {TRACTOR_TIRE_POSITIONS.map((position) => {
                     const row = tireGrid.find((t) => t.position === position);
@@ -332,7 +354,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Brakes — pad & adjustment measurement (min 1/4)">
+              <SectionCard title="Brakes — pad & adjustment measurement (min 1/4)" onAllOk={() => setBrakeGrid(markAllOk)}>
                 {TRACTOR_BRAKE_POSITIONS.map((position) => {
                   const row = brakeGrid.find((b) => b.position === position);
                   return (
@@ -349,14 +371,16 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
                 })}
               </SectionCard>
 
-              <SectionCard title="Under hood / under truck / misc" count={TRACTOR_UNDER_HOOD_TRUCK_ITEMS.length}>
+              <SectionCard title="Under hood / under truck / misc" count={TRACTOR_UNDER_HOOD_TRUCK_ITEMS.length}
+                onAllOk={() => setChecklist((list) => markKeysOk(list, TRACTOR_UNDER_HOOD_TRUCK_ITEMS.map((i) => i.key)))}>
                 {TRACTOR_UNDER_HOOD_TRUCK_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Fail" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s }))} />
                 ))}
               </SectionCard>
 
-              <SectionCard title="Fifth wheel" count={TRACTOR_FIFTH_WHEEL_ITEMS.length}>
+              <SectionCard title="Fifth wheel" count={TRACTOR_FIFTH_WHEEL_ITEMS.length}
+                onAllOk={() => setChecklist((list) => markKeysOk(list, TRACTOR_FIFTH_WHEEL_ITEMS.map((i) => i.key)))}>
                 {TRACTOR_FIFTH_WHEEL_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Fail" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s }))} />
@@ -399,14 +423,16 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
 
           {isTrailer && (
             <>
-              <SectionCard title="Brake system" count={TRAILER_BRAKE_SYSTEM_ITEMS.length}>
+              <SectionCard title="Brake system" count={TRAILER_BRAKE_SYSTEM_ITEMS.length}
+                onAllOk={() => setChecklist((list) => markKeysOk(list, TRAILER_BRAKE_SYSTEM_ITEMS.map((i) => i.key)))}>
                 {TRAILER_BRAKE_SYSTEM_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Defect" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s === "ok" ? "ok" : "defect_repaired" }))} />
                 ))}
               </SectionCard>
 
-              <SectionCard title="Inspected components / systems" count={TRAILER_CATEGORY_ITEMS.length}>
+              <SectionCard title="Inspected components / systems" count={TRAILER_CATEGORY_ITEMS.length}
+                onAllOk={() => setChecklist((list) => markKeysOk(list, TRAILER_CATEGORY_ITEMS.map((i) => i.key)))}>
                 {TRAILER_CATEGORY_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Defect" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s === "ok" ? "ok" : "defect_repaired" }))} />
