@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
@@ -11,6 +11,11 @@ import {
   TRAILER_TIRE_POSITIONS, TRAILER_BRAKE_LINING_POSITIONS, countChecked,
 } from "../../lib/midTripInspectionItems";
 import SignaturePad from "../shared/SignaturePad";
+import ChargebackDriverPicker from "../shared/ChargebackDriverPicker";
+
+function moneyFmt(n) {
+  return `$${Number(n || 0).toFixed(2)}`;
+}
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -114,6 +119,16 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
   const [brakeGrid, setBrakeGrid] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [isChargeback, setIsChargeback] = useState(false);
+  const [chargebackDriver, setChargebackDriver] = useState("");
+  const [chargebackDriverId, setChargebackDriverId] = useState(null);
+  const [midtripFeeAmount, setMidtripFeeAmount] = useState(null);
+
+  useEffect(() => {
+    supabase.from("app_settings").select("midtrip_chargeback_amount").single().then(({ data }) => {
+      setMidtripFeeAmount(data?.midtrip_chargeback_amount ?? null);
+    });
+  }, []);
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
   const setInput = (key) => (e) => set(key)(e.target.value);
@@ -188,6 +203,31 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
           .update({ last_midtrip_date: form.inspected_at })
           .eq("id", unitId);
         if (unitErr) throw unitErr;
+
+        // Reuses the existing work_orders chargeback mechanism (same
+        // is_chargeback/chargeback_driver_id fields NewWorkOrderForm and
+        // WorkOrderDetailModal use) so this flat fee shows up in the
+        // existing Deductions report and Spend/Intacct export for free,
+        // rather than a parallel ledger. Closed immediately -- there's no
+        // repair to work, just a fee to bill.
+        if (isChargeback) {
+          const { error: feeErr } = await supabase.from("work_orders").insert({
+            unit_id: unitId,
+            category: "DOT Inspection",
+            description: "Mid-trip inspection fee",
+            cost: midtripFeeAmount ?? 0,
+            status: "Closed",
+            date_opened: form.inspected_at,
+            date_closed: form.inspected_at,
+            intake_source: "manual",
+            source: "manual",
+            is_chargeback: true,
+            chargeback_driver_name: chargebackDriver.trim() || null,
+            chargeback_driver_id: chargebackDriverId,
+            mid_trip_inspection_id: inspection.id,
+          });
+          if (feeErr) throw feeErr;
+        }
       }
 
       onFiled(inspection.id);
@@ -424,6 +464,25 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
               <Field label="Signature">
                 <SignaturePad value={form.mechanic_signature_data} onChange={set("mechanic_signature_data")} />
               </Field>
+            </SectionCard>
+          )}
+
+          {unitId && (
+            <SectionCard title="Chargeback">
+              <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>
+                Flat fee of {moneyFmt(midtripFeeAmount)} for this mid-trip inspection, applied the same way
+                regardless of who it's charged back to.
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--clg-text-body)", cursor: "pointer", marginBottom: isChargeback ? 12 : 0 }}>
+                <input type="checkbox" checked={isChargeback} onChange={(e) => setIsChargeback(e.target.checked)} />
+                Charge back to driver
+              </label>
+              {isChargeback && (
+                <ChargebackDriverPicker
+                  name={chargebackDriver}
+                  onChange={(name, driverId) => { setChargebackDriver(name); setChargebackDriverId(driverId); }}
+                />
+              )}
             </SectionCard>
           )}
         </div>
