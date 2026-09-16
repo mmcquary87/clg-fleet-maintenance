@@ -152,7 +152,7 @@ function ExpandedRow({ row, onSave, onGoToWorkOrders, onGoToUnits }) {
 // purely by expiration (soonest first -- no red-zone pinning), and a
 // notes layer that's explicitly separate from Alvys.
 export default function AnnualInspectionComplianceView({ onGoToWorkOrders, onGoToUnits }) {
-  const { rows, fleetTotal, loading, error, saveNotes } = useAnnualInspectionCompliance();
+  const { rows, fleetTotal, noDocumentCount, loading, error, saveNotes } = useAnnualInspectionCompliance();
   const [typeFilter, setTypeFilter] = useState("all");
   const [showInactive, setShowInactive] = useState(false);
   const [bandFilter, setBandFilter] = useState(null);
@@ -347,6 +347,7 @@ export default function AnnualInspectionComplianceView({ onGoToWorkOrders, onGoT
           </div>
           <div style={{ borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ fontSize: 12.5, color: "var(--clg-text-body)" }}><strong>{rows.length}</strong> units with an expiration date on file</div>
+            {noDocumentCount != null && <div style={{ fontSize: 12.5, color: "var(--clg-text-body)" }}><strong>{noDocumentCount}</strong> checked in Alvys with no certificate on file</div>}
             {fleetTotal != null && <div style={{ fontSize: 12.5, color: "var(--clg-text-body)" }}><strong>{fleetTotal}</strong> units in the fleet</div>}
           </div>
         </Card>
