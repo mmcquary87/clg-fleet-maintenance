@@ -10,6 +10,7 @@ import {
 import AssetLifecycleCard from "./AssetLifecycleCard";
 import UnitDocumentsPanel from "./UnitDocumentsPanel";
 import UnitCheckinsPanel from "./UnitCheckinsPanel";
+import UnitInspectionsPanel from "./UnitInspectionsPanel";
 
 const OWNERSHIP_LABEL = { owned: "CLG-owned", penske_lease: "Penske lease", hale_lease: "Hale lease" };
 const OWNERSHIP_TONE = { owned: "neutral", penske_lease: "brand", hale_lease: "brand" };
@@ -197,6 +198,9 @@ export default function UnitDetailPage({ unitId, onBack, canViewAssetLifecycle }
 
       {tab === "compliance" && (
         <div>
+          <Section title="Filed inspections">
+            <UnitInspectionsPanel unitId={unitId} unitNumber={unit.number} />
+          </Section>
           <Section title="Open DVIR defects & recent fault codes">
             {openDefects.length === 0 && recentFaults.length === 0 ? (
               <div style={{ padding: "12px 0", color: "var(--clg-text-muted)", fontSize: 13 }}>Nothing outstanding.</div>
