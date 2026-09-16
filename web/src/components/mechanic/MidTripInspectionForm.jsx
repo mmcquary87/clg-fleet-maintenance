@@ -46,19 +46,12 @@ function pillStyle(active, tone) {
   };
 }
 
-function SectionCard({ title, count, onAllOk, children, style }) {
+function SectionCard({ title, count, children, style }) {
   return (
     <Card style={{ marginBottom: 16, ...style }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-brand)" }}>{title}</div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-          {count != null && <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{count} item{count === 1 ? "" : "s"}</div>}
-          {onAllOk && (
-            <button type="button" onClick={onAllOk} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-royal)", fontSize: 11.5, fontWeight: 700 }}>
-              Select all OK
-            </button>
-          )}
-        </div>
+        {count != null && <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{count} item{count === 1 ? "" : "s"}</div>}
       </div>
       {children}
     </Card>
@@ -105,17 +98,17 @@ function updateByPosition(list, position, patch) {
   return list.map((row) => (row.position === position ? { ...row, ...patch } : row));
 }
 
-// Marks every row in `keys` OK in one click -- a mid-trip inspection with
-// nothing wrong is the common case, and clicking OK on 20-30 walkaround/
-// under-hood items one at a time is the exact tedium this form's paper
-// predecessor didn't have (a mechanic could just sign off the whole
-// section at once). Notes are left untouched.
-function markKeysOk(list, keys) {
-  const okKeys = new Set(keys);
-  return list.map((row) => (okKeys.has(row.key) ? { ...row, status: "ok" } : row));
+// Marks every row OK in one click -- a mid-trip inspection with nothing
+// wrong is the common case, and clicking OK on 30+ checklist/tire/brake
+// rows one at a time is the exact tedium this form's paper predecessor
+// didn't have. Whole-document, not per-section -- a mechanic signing off
+// a clean inspection doesn't want to hunt down five separate buttons.
+// Notes are left untouched.
+function markChecklistAllOk(list) {
+  return list.map((row) => ({ ...row, status: "ok" }));
 }
 
-function markAllOk(list) {
+function markGridAllOk(list) {
   return list.map((row) => ({ ...row, ok: true }));
 }
 
@@ -285,30 +278,33 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
           .eq("id", unitId);
         if (unitErr) throw unitErr;
 
-        // Reuses the existing work_orders chargeback mechanism (same
-        // is_chargeback/chargeback_driver_id fields NewWorkOrderForm and
-        // WorkOrderDetailModal use) so this flat fee shows up in the
-        // existing Deductions report and Spend/Intacct export for free,
-        // rather than a parallel ledger. Closed immediately -- there's no
-        // repair to work, just a fee to bill.
-        if (isChargeback) {
-          const { error: feeErr } = await supabase.from("work_orders").insert({
-            unit_id: unitId,
-            category: "Mid-Trip Inspection",
-            description: "Mid-trip inspection fee",
-            cost: midtripFeeAmount ?? 0,
-            status: "Closed",
-            date_opened: form.inspected_at,
-            date_closed: form.inspected_at,
-            intake_source: "manual",
-            source: "manual",
-            is_chargeback: true,
-            chargeback_driver_name: chargebackDriver.trim() || null,
-            chargeback_driver_id: chargebackDriverId,
-            mid_trip_inspection_id: inspectionId,
-          });
-          if (feeErr) throw feeErr;
-        }
+        // Always raises the flat mid-trip fee as its own Closed work order
+        // -- every unit that gets a mid-trip inspection carries the cost
+        // (Spend/Cost-per-mile reporting), truck or trailer, whether or
+        // not it's billed back to a driver, and with no vendor (it's an
+        // in-house fee, not a repair). Reuses the existing work_orders
+        // chargeback mechanism (same is_chargeback/chargeback_driver_id
+        // fields NewWorkOrderForm and WorkOrderDetailModal use) only to
+        // flag *who pays* it, so it shows up in the existing Deductions
+        // report and Spend/Intacct export for free rather than a parallel
+        // ledger. Closed immediately -- there's no repair to work, just a
+        // fee to record.
+        const { error: feeErr } = await supabase.from("work_orders").insert({
+          unit_id: unitId,
+          category: "Mid-Trip Inspection",
+          description: "Mid-trip inspection fee",
+          cost: midtripFeeAmount ?? 0,
+          status: "Closed",
+          date_opened: form.inspected_at,
+          date_closed: form.inspected_at,
+          intake_source: "manual",
+          source: "manual",
+          is_chargeback: isChargeback,
+          chargeback_driver_name: isChargeback ? (chargebackDriver.trim() || null) : null,
+          chargeback_driver_id: isChargeback ? chargebackDriverId : null,
+          mid_trip_inspection_id: inspectionId,
+        });
+        if (feeErr) throw feeErr;
       }
 
       onFiled(inspectionId, status);
@@ -387,15 +383,14 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
 
           {!isTrailer && unitId && (
             <>
-              <SectionCard title="Walk around / in cab" count={TRACTOR_WALKAROUND_ITEMS.length}
-                onAllOk={() => setChecklist((list) => markKeysOk(list, TRACTOR_WALKAROUND_ITEMS.map((i) => i.key)))}>
+              <SectionCard title="Walk around / in cab" count={TRACTOR_WALKAROUND_ITEMS.length}>
                 {TRACTOR_WALKAROUND_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Fail" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s }))} />
                 ))}
               </SectionCard>
 
-              <SectionCard title="Tires — tread depth & air pressure" onAllOk={() => setTireGrid(markAllOk)}>
+              <SectionCard title="Tires — tread depth & air pressure">
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "4px 24px" }}>
                   {TRACTOR_TIRE_POSITIONS.map((position) => {
                     const row = tireGrid.find((t) => t.position === position);
@@ -412,7 +407,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
                 </div>
               </SectionCard>
 
-              <SectionCard title="Brakes — pad & adjustment measurement (min 1/4)" onAllOk={() => setBrakeGrid(markAllOk)}>
+              <SectionCard title="Brakes — pad & adjustment measurement (min 1/4)">
                 {TRACTOR_BRAKE_POSITIONS.map((position) => {
                   const row = brakeGrid.find((b) => b.position === position);
                   return (
@@ -429,16 +424,14 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
                 })}
               </SectionCard>
 
-              <SectionCard title="Under hood / under truck / misc" count={TRACTOR_UNDER_HOOD_TRUCK_ITEMS.length}
-                onAllOk={() => setChecklist((list) => markKeysOk(list, TRACTOR_UNDER_HOOD_TRUCK_ITEMS.map((i) => i.key)))}>
+              <SectionCard title="Under hood / under truck / misc" count={TRACTOR_UNDER_HOOD_TRUCK_ITEMS.length}>
                 {TRACTOR_UNDER_HOOD_TRUCK_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Fail" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s }))} />
                 ))}
               </SectionCard>
 
-              <SectionCard title="Fifth wheel" count={TRACTOR_FIFTH_WHEEL_ITEMS.length}
-                onAllOk={() => setChecklist((list) => markKeysOk(list, TRACTOR_FIFTH_WHEEL_ITEMS.map((i) => i.key)))}>
+              <SectionCard title="Fifth wheel" count={TRACTOR_FIFTH_WHEEL_ITEMS.length}>
                 {TRACTOR_FIFTH_WHEEL_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Fail" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s }))} />
@@ -481,16 +474,14 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
 
           {isTrailer && (
             <>
-              <SectionCard title="Brake system" count={TRAILER_BRAKE_SYSTEM_ITEMS.length}
-                onAllOk={() => setChecklist((list) => markKeysOk(list, TRAILER_BRAKE_SYSTEM_ITEMS.map((i) => i.key)))}>
+              <SectionCard title="Brake system" count={TRAILER_BRAKE_SYSTEM_ITEMS.length}>
                 {TRAILER_BRAKE_SYSTEM_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Defect" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s === "ok" ? "ok" : "defect_repaired" }))} />
                 ))}
               </SectionCard>
 
-              <SectionCard title="Inspected components / systems" count={TRAILER_CATEGORY_ITEMS.length}
-                onAllOk={() => setChecklist((list) => markKeysOk(list, TRAILER_CATEGORY_ITEMS.map((i) => i.key)))}>
+              <SectionCard title="Inspected components / systems" count={TRAILER_CATEGORY_ITEMS.length}>
                 {TRAILER_CATEGORY_ITEMS.map((item) => (
                   <ChecklistRow key={item.key} item={item} badLabel="Defect" status={checklist.find((c) => c.key === item.key)?.status}
                     onChange={(s) => setChecklist((list) => updateByKey(list, item.key, { status: s === "ok" ? "ok" : "defect_repaired" }))} />
@@ -558,10 +549,10 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
           )}
 
           {unitId && (
-            <SectionCard title="Chargeback">
+            <SectionCard title="Mid-trip fee">
               <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>
-                Flat fee of {moneyFmt(midtripFeeAmount)} for this mid-trip inspection, applied the same way
-                regardless of who it's charged back to.
+                A flat {moneyFmt(midtripFeeAmount)} fee is recorded against this unit's cost for every mid-trip
+                inspection filed — truck or trailer, no vendor. Optionally bill it back to a driver below.
               </div>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--clg-text-body)", cursor: "pointer", marginBottom: isChargeback ? 12 : 0 }}>
                 <input type="checkbox" checked={isChargeback} onChange={(e) => setIsChargeback(e.target.checked)} />
@@ -581,17 +572,32 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
 
         <div style={{ position: "sticky", top: 16 }}>
           <Card style={{ marginBottom: 16 }}>
+            {unitId && (
+              <Button
+                variant="outline" size="sm"
+                onClick={() => {
+                  setChecklist(markChecklistAllOk);
+                  setTireGrid(markGridAllOk);
+                  setBrakeGrid(markGridAllOk);
+                }}
+                style={{ width: "100%", marginBottom: 12 }}
+              >
+                Select all OK
+              </Button>
+            )}
             {totalItems > 0 && (
               <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 4 }}>
                 {checkedCount} / {totalItems} items checked
               </div>
             )}
-            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: isChargeback ? 4 : 14 }}>
+            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 4 }}>
               {missingSignature ? "Mechanic signature outstanding" : "Signed"}
             </div>
-            {isChargeback && (
-              <div style={{ fontSize: 11.5, color: missingChargebackDriver ? "var(--clg-scarlet)" : "var(--clg-text-muted)", marginBottom: 14 }}>
-                {missingChargebackDriver ? "Billed-to driver required" : `Bills ${moneyFmt(midtripFeeAmount)} to ${chargebackDriver}`}
+            {unitId && (
+              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: isChargeback ? 4 : 14 }}>
+                {isChargeback
+                  ? (missingChargebackDriver ? "Billed-to driver required" : `Bills ${moneyFmt(midtripFeeAmount)} to ${chargebackDriver}`)
+                  : `Fee: ${moneyFmt(midtripFeeAmount)} to unit cost`}
               </div>
             )}
             <Button
