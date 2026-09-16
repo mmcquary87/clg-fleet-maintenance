@@ -1,21 +1,39 @@
-// Fleet Maintenance System — Alvys truck spec/service-interval discovery
-// probe (TEMPORARY)
+// Fleet Maintenance System — Alvys `References` field discovery probe
+// (TEMPORARY)
 //
-// alvys-sync-equipment only ever mapped TruckNum/VinNumber/Id/Year/Make/
-// Model/FuelType off trucks/search's response -- nobody has looked at the
-// FULL raw object. Before building engine-spec-based PM interval rules (to
-// replace/augment the existing manual per-unit pm_interval_days field --
-// see 20260828070000_unit_maintenance_schedule.sql), this checks whether
-// Alvys actually exposes an engine make/model/serial field, or any kind of
-// next-service-date/interval field, on trucks or trailers.
+// Originally a 3-sample truck/trailer spec dump (used to confirm the
+// InspectionExpirationDate/InspectionExpiresAt fields behind the DOT
+// inspection date fix in alvys-sync-equipment). Repurposed 2026-09-18 to
+// investigate Alvys's `References` array -- the custom per-account fields
+// shown on Alvys's "Edit Truck" screen under Last/Next PM Date & Odometer
+// Reading and Next/Last MT Due -- ahead of pulling that data into the app
+// the same way the DOT inspection date was.
+//
+// References are keyed by a `ReferenceId` GUID that (per Alvys support
+// conventions and the free-text-name mismatches already seen elsewhere in
+// this integration, e.g. trailing-space "Next MT Due ") is the stable
+// identifier per reference *type* -- `Name` is a human label that can vary
+// in exact wording/whitespace across records. This scans every active
+// truck/trailer (not just a few samples, unlike the original version of
+// this file) and aggregates every distinct {ReferenceId, Name, Type} seen,
+// plus a few sample Values per ReferenceId, so a reliable ReferenceId->
+// meaning mapping can be confirmed across the whole fleet before writing
+// any sync logic against it.
+//
+// Also fixes this file's own trucks/search filter to match the corrected
+// { Status: ["Active"] } filter alvys-sync-equipment now uses -- this file
+// still had the old { IsActive: true } filter, which Alvys silently
+// ignores (see alvys-sync-equipment's header comment).
 //
 // Run once via this function's Test button in the Supabase dashboard
 // (Authorization: Bearer <anon key>, body {}) and paste the output back.
 // Requires ALVYS_CLIENT_ID/ALVYS_CLIENT_SECRET. Doesn't touch our database.
-// Delete once the real field names are confirmed.
+// Delete once the real ReferenceId mapping is confirmed and the real sync
+// is built.
 
 const ALVYS_TOKEN_URL = "https://auth.alvys.com/oauth/token";
 const ALVYS_API_BASE = "https://integrations.alvys.com/api/p/v1.0";
+const PAGE_SIZE = 100;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,17 +54,58 @@ async function getAlvysToken(): Promise<string> {
   return (await res.json()).access_token;
 }
 
-async function fetchFirstPage(token: string, path: string, extraBody: Record<string, unknown>) {
-  const res = await fetch(`${ALVYS_API_BASE}/${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ Page: 0, PageSize: 5, ...extraBody }),
-  });
-  const text = await res.text();
-  let json: any;
-  try { json = JSON.parse(text); } catch { throw new Error(`${path} returned non-JSON: ${text.slice(0, 500)}`); }
-  if (!res.ok) throw new Error(`${path} failed (${res.status}): ${text.slice(0, 500)}`);
-  return json;
+async function fetchAllPages(token: string, path: string, extraBody: Record<string, unknown>) {
+  const items: any[] = [];
+  let page = 0; // Alvys' Page parameter is 0-indexed
+  while (true) {
+    const res = await fetch(`${ALVYS_API_BASE}/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ Page: page, PageSize: PAGE_SIZE, ...extraBody }),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`${path} page ${page} failed (${res.status}): ${text.slice(0, 500)}`);
+    let json: any;
+    try { json = JSON.parse(text); } catch { throw new Error(`${path} page ${page} returned non-JSON: ${text.slice(0, 500)}`); }
+    if (typeof json.Total !== "number" || !Array.isArray(json.Items)) {
+      throw new Error(`${path} page ${page} unexpected shape: ${text.slice(0, 500)}`);
+    }
+    items.push(...json.Items);
+    if (items.length >= json.Total || json.Items.length === 0) break;
+    page += 1;
+  }
+  return items;
+}
+
+// Aggregates every distinct {ReferenceId, Name, Type} seen across a set of
+// truck/trailer records, with a few sample (unit number, value) pairs per
+// ReferenceId -- enough to confirm meaning + value shape without dumping
+// the entire fleet's raw References verbatim.
+function aggregateReferences(units: any[], numberField: string) {
+  const byRefId = new Map<string, { referenceId: string; namesSeen: Set<string>; typesSeen: Set<string>; samples: { unit: string; value: any }[]; count: number }>();
+  for (const u of units) {
+    const refs: any[] = Array.isArray(u.References) ? u.References : [];
+    for (const r of refs) {
+      const key = r.ReferenceId ?? `(no ReferenceId) ${r.Name}`;
+      if (!byRefId.has(key)) {
+        byRefId.set(key, { referenceId: key, namesSeen: new Set(), typesSeen: new Set(), samples: [], count: 0 });
+      }
+      const agg = byRefId.get(key)!;
+      agg.namesSeen.add(r.Name);
+      agg.typesSeen.add(r.Type);
+      agg.count += 1;
+      if (agg.samples.length < 5) agg.samples.push({ unit: u[numberField], value: r.Value });
+    }
+  }
+  return [...byRefId.values()]
+    .map((agg) => ({
+      referenceId: agg.referenceId,
+      namesSeen: [...agg.namesSeen],
+      typesSeen: [...agg.typesSeen],
+      seenOnCount: agg.count,
+      samples: agg.samples,
+    }))
+    .sort((a, b) => b.seenOnCount - a.seenOnCount);
 }
 
 Deno.serve(async (req) => {
@@ -54,24 +113,16 @@ Deno.serve(async (req) => {
 
   try {
     const token = await getAlvysToken();
-    const [trucksJson, trailersJson] = await Promise.all([
-      fetchFirstPage(token, "trucks/search", { IsActive: true }),
-      fetchFirstPage(token, "trailers/search", { Status: ["Active"] }),
+    const [trucks, trailers] = await Promise.all([
+      fetchAllPages(token, "trucks/search", { Status: ["Active"] }),
+      fetchAllPages(token, "trailers/search", { Status: ["Active"] }),
     ]);
 
-    const trucks: any[] = trucksJson.Items ?? [];
-    const trailers: any[] = trailersJson.Items ?? [];
-
     return new Response(JSON.stringify({
-      trucksTotal: trucksJson.Total,
-      trailersTotal: trailersJson.Total,
-      // Every distinct top-level key seen across the sample, so we know
-      // what to even look for -- a raw dump alone is easy to skim past a
-      // sparsely-populated field.
-      truckKeysSeen: [...new Set(trucks.flatMap((t) => Object.keys(t)))],
-      trailerKeysSeen: [...new Set(trailers.flatMap((t) => Object.keys(t)))],
-      sampleTrucks: trucks.slice(0, 3),
-      sampleTrailers: trailers.slice(0, 3),
+      trucksScanned: trucks.length,
+      trailersScanned: trailers.length,
+      truckReferences: aggregateReferences(trucks, "TruckNum"),
+      trailerReferences: aggregateReferences(trailers, "TrailerNum"),
     }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

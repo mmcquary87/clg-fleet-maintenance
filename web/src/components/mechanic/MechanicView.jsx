@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
-import { Wrench, ChevronLeft, Plus, Trash2, Loader2, Search, ClipboardCheck } from "lucide-react";
+import { Wrench, ChevronLeft, Plus, Trash2, Loader2, Search, ClipboardCheck, AlertTriangle } from "lucide-react";
 import { Button, Input, Badge, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import { CATEGORIES } from "../../lib/categories";
 import { useMechanicQueue } from "../../hooks/useMechanicQueue";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
+import { useFailedMidTripInspections } from "../../hooks/useFailedMidTripInspections";
 import EmptyState from "../EmptyState";
 import TractorInspectionForm from "./TractorInspectionForm";
 import MidTripInspectionForm from "./MidTripInspectionForm";
+import MidTripReinspectionSheet from "./MidTripReinspectionSheet";
 
 const fieldLabelStyle = { fontSize: 13, fontWeight: 700, color: "var(--clg-navy)", marginBottom: 6 };
 const backButtonStyle = {
@@ -37,7 +39,9 @@ function emptyPartRow() {
 // which a mechanic logging parts/hours from the shop floor doesn't set.
 export default function MechanicView() {
   const { orders, loading, error, reload } = useMechanicQueue();
+  const { inspections: failedMidTrips, loading: failedMidTripsLoading, reload: reloadFailedMidTrips } = useFailedMidTripInspections();
   const [selectedId, setSelectedId] = useState(null);
+  const [reinspectingInsp, setReinspectingInsp] = useState(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const [inspecting, setInspecting] = useState(false);
   const [midTripInspecting, setMidTripInspecting] = useState(false);
@@ -97,6 +101,20 @@ export default function MechanicView() {
     return <RepairSheet workOrderId={selectedId} onBack={() => { setSelectedId(null); reload(); }} />;
   }
 
+  if (reinspectingInsp) {
+    return (
+      <MidTripReinspectionSheet
+        inspection={reinspectingInsp}
+        onBack={() => setReinspectingInsp(null)}
+        onResolved={() => {
+          setReinspectingInsp(null);
+          setFiledNotice("Mid-trip inspection marked repaired & passed.");
+          reloadFailedMidTrips();
+        }}
+      />
+    );
+  }
+
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 16px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
@@ -120,6 +138,41 @@ export default function MechanicView() {
       </div>
 
       {filedNotice && <Alert tone="brand" style={{ marginBottom: 16 }}>{filedNotice}</Alert>}
+
+      {!failedMidTripsLoading && failedMidTrips.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <AlertTriangle size={15} style={{ color: "var(--clg-scarlet)" }} />
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--clg-navy)" }}>
+              Failed mid-trip inspections needing re-check
+            </div>
+            <Badge tone="critical">{failedMidTrips.length}</Badge>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {failedMidTrips.map((insp) => (
+              <button
+                key={insp.id}
+                onClick={() => setReinspectingInsp(insp)}
+                style={{
+                  textAlign: "left", cursor: "pointer", border: "1px solid var(--clg-scarlet)",
+                  borderRadius: "var(--clg-radius-md)", background: "var(--clg-surface-subtle)", padding: "12px 16px",
+                  display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+                }}
+              >
+                <div>
+                  <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)" }}>
+                    Unit {insp.unit?.number ?? "—"}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)" }}>
+                    Filed {insp.inspected_at} · {insp.mechanic_name || "—"}
+                  </div>
+                </div>
+                <Badge tone="critical">{insp.overall_result === "Fail" ? "Fail" : "Defect found"}</Badge>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ position: "relative", marginBottom: 16 }}>
         <Search size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--clg-text-muted)" }} />
