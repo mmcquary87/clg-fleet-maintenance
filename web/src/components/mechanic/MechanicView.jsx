@@ -7,6 +7,7 @@ import { useMechanicQueue } from "../../hooks/useMechanicQueue";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import EmptyState from "../EmptyState";
 import TractorInspectionForm from "./TractorInspectionForm";
+import AnnualInspectionForm from "./AnnualInspectionForm";
 
 const fieldLabelStyle = { fontSize: 13, fontWeight: 700, color: "var(--clg-navy)", marginBottom: 6 };
 const backButtonStyle = {
@@ -39,6 +40,7 @@ export default function MechanicView() {
   const [selectedId, setSelectedId] = useState(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const [inspecting, setInspecting] = useState(false);
+  const [annualInspecting, setAnnualInspecting] = useState(false);
   const [filedNotice, setFiledNotice] = useState(null);
   const [query, setQuery] = useState("");
 
@@ -78,6 +80,19 @@ export default function MechanicView() {
     );
   }
 
+  if (annualInspecting) {
+    return (
+      <AnnualInspectionForm
+        onCancel={() => setAnnualInspecting(false)}
+        onFiled={() => {
+          setAnnualInspecting(false);
+          setFiledNotice("Annual inspection filed.");
+          reload();
+        }}
+      />
+    );
+  }
+
   if (selectedId) {
     return <RepairSheet workOrderId={selectedId} onBack={() => { setSelectedId(null); reload(); }} />;
   }
@@ -91,6 +106,9 @@ export default function MechanicView() {
         <div style={{ display: "flex", gap: 8 }}>
           <Button size="md" variant="outline" iconLeft={<ClipboardCheck size={15} />} onClick={() => setInspecting(true)}>
             Tractor inspection
+          </Button>
+          <Button size="md" variant="outline" iconLeft={<ClipboardCheck size={15} />} onClick={() => setAnnualInspecting(true)}>
+            Annual inspection
           </Button>
           <Button size="md" iconLeft={<Plus size={15} />} onClick={() => setCreatingNew(true)}>
             New job
