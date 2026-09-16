@@ -32,11 +32,19 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Order is first-match-wins. "Tow" sits last on purpose -- something like
-// "TOWED IN FOR DERATE DEF QUALITY FAULTS" should classify as Emissions /
-// Aftertreatment via "derate", not get hijacked by "tow" just because the
-// truck happened to get towed there. Note: was "battery" (not "batter"),
-// which silently never matched "batteries" -- same substring bug, fixed here.
+// Not "Wheel End", "kingpin" is left off the list entirely -- a tractor's
+// front-axle steering kingpin (suspension/steering) and a trailer's
+// fifth-wheel kingpin (structural coupling) are two unrelated parts that
+// share a name, so the word alone can't be auto-classified.
+//
+// A single Alvys invoice line often bundles more than one repair into one
+// free-text description. Rather than force the whole line's cost into one
+// category (or split it by estimated percentage, which isn't worth the
+// complexity here), classifyCategory only auto-classifies when exactly
+// one category's keywords match -- zero or multiple matches both fall to
+// "General Repair" for a human to sort out. Note: was "battery" (not
+// "batter"), which silently never matched "batteries" -- same substring
+// bug, fixed here.
 const CATEGORY_RULES: [string, string[]][] = [
   ["DOT Inspection", ["dot", "inspection", "inspec"]],
   ["Tires", ["tire", "tyre", "wheel alignment"]],
@@ -47,7 +55,7 @@ const CATEGORY_RULES: [string, string[]][] = [
   ["Body / Structural", [
     "trailer", "mudflap", "mud flap", "bracket", "door", "bumper", "fender", "body",
     "hood", "mirror", "windshield", "crossmember", "floorboard", "floor damage", "roof",
-    "5th wheel", "fifth wheel", "kingpin", "tandem", "landing gear", "wall damage",
+    "5th wheel", "fifth wheel", "tandem", "landing gear", "wall damage",
   ]],
   ["PM / Oil", ["pm ", "pm,", "oil", "service", "lube", "grease", "a-service", "b-service", "regen"]],
   ["Engine", ["engine", "turbo", "injector", "compressor", "governor", "air system", "coolant", "exhaust", "fuel contamination", "timing chain"]],
@@ -59,10 +67,8 @@ const CATEGORY_RULES: [string, string[]][] = [
 
 function classifyCategory(text: string): string {
   const t = (text || "").toLowerCase();
-  for (const [category, keywords] of CATEGORY_RULES) {
-    if (keywords.some((k) => t.includes(k))) return category;
-  }
-  return "General Repair";
+  const matches = CATEGORY_RULES.filter(([, keywords]) => keywords.some((k) => t.includes(k)));
+  return matches.length === 1 ? matches[0][0] : "General Repair";
 }
 
 async function getAlvysToken(): Promise<string> {
