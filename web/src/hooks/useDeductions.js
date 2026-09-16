@@ -23,7 +23,7 @@ export function useDeductions(range) {
           .from("work_orders")
           .select(
             "id, chargeback_driver_name, chargeback_driver_id, category, description, complaint, cost, date_opened, date_closed, " +
-            "invoice_ref, po_number, unit:units(number), vendor:vendors(name), driver:drivers(driver_type)"
+            "invoice_ref, po_number, mid_trip_inspection_id, unit:units(number), vendor:vendors(name), driver:drivers(driver_type)"
           )
           .eq("is_chargeback", true)
           .eq("voided", false)
@@ -42,7 +42,12 @@ export function useDeductions(range) {
       setRecords(
         (ordersRes.data ?? []).map((r) => {
           const isOwnerOperator = r.driver?.driver_type === "OWNER_OPERATOR";
-          const flatRateApplied = isOwnerOperator && flatAmount != null;
+          // The mid-trip inspection fee is a flat rate applied uniformly
+          // regardless of who's being charged (CLG, 2026-09-18) -- its own
+          // cost IS that flat rate already, so it must never be swapped out
+          // for the owner-operator-specific rate below.
+          const isMidTripFee = r.mid_trip_inspection_id != null;
+          const flatRateApplied = !isMidTripFee && isOwnerOperator && flatAmount != null;
           const billedAmount = flatRateApplied ? Number(flatAmount) : Number(r.cost) || 0;
           return { ...r, isOwnerOperator, flatRateApplied, billedAmount };
         })
