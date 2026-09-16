@@ -209,7 +209,7 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
       // removed from the diagram, not re-filed here).
       const damageRows = newDamageMarkers.map((m) => ({
         unit_id: unitId,
-        category: "Trailer / Body",
+        category: "Body / Structural",
         complaint: `${m.part || "Damage"}${m.note ? " — " + m.note : ""} — marked on the ${m.view.toLowerCase()} diagram during this inspection`,
         severity: "Routine",
         status: "Open",
