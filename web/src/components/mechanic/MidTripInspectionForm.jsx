@@ -219,7 +219,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
         if (isChargeback) {
           const { error: feeErr } = await supabase.from("work_orders").insert({
             unit_id: unitId,
-            category: "DOT Inspection",
+            category: "Mid-Trip Inspection",
             description: "Mid-trip inspection fee",
             cost: midtripFeeAmount ?? 0,
             status: "Closed",
