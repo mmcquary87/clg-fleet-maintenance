@@ -1,14 +1,15 @@
--- Fleet Maintenance System — annual PM safety check inspections
+-- Fleet Maintenance System — mid-trip PM safety check inspections
 -- (2026-09-18)
 --
 -- Digital replacement for CLG's paper "PM Safety Check" forms (uploaded
--- 2026-09-18) -- a mechanic-run periodic mechanical/safety inspection,
--- separate from and unrelated to both tractor_inspections (the
--- driver/CLG assignment-and-return equipment checklist) and dvir_defects
--- (the DOT-mandated electronic DVIR fed by Samsara). One shared table
--- covers both the tractor and trailer variants -- the two paper forms
--- overlap heavily in shape (a checklist, a tire/brake measurement grid,
--- a mechanic sign-off) but differ enough in their actual items (tractor:
+-- 2026-09-18, confirmed by CLG to be the Tractor/Trailer Midtrip forms)
+-- -- a mechanic-run periodic mechanical/safety inspection, separate from
+-- and unrelated to both tractor_inspections (the driver/CLG
+-- assignment-and-return equipment checklist) and dvir_defects (the
+-- DOT-mandated electronic DVIR fed by Samsara). One shared table covers
+-- both the tractor and trailer variants -- the two paper forms overlap
+-- heavily in shape (a checklist, a tire/brake measurement grid, a
+-- mechanic sign-off) but differ enough in their actual items (tractor:
 -- walkaround + under-hood/under-truck + fifth wheel + PM mileage
 -- interval; trailer: ABS/brake system + suspension + coupling/locking/
 -- slider + frame & body + electrical + landing gear, each as one
@@ -27,18 +28,17 @@
 -- tractor_inspections does -- see tractorInspectionItems.js/
 -- TractorInspectionForm.jsx for that pattern.
 --
--- Annual vs. Mid-Trip: only "Annual" ships now, using the checklist from
--- the two uploaded PMSC forms. "Mid-Trip" (CLG confirmed 2026-09-18 it's
--- a materially different, shorter checklist, not just the same form
--- tagged differently) is a deliberate follow-up -- inspection_occasion
--- is added now so it doesn't require a second migration once that
--- content exists, but only 'annual' is used today.
+-- Annual vs. Mid-Trip: only Mid-Trip ships here, using the checklist
+-- from the two uploaded PMSC forms. Annual inspection is a separate,
+-- not-yet-scoped follow-up -- CLG has not yet provided its content, and
+-- there's no reason to assume it shares this table's shape, so it isn't
+-- speculatively modeled here (a fresh table/form when that content
+-- exists, same reasoning as this table not reusing tractor_inspections).
 
-create table annual_inspections (
+create table mid_trip_inspections (
   id uuid primary key default gen_random_uuid(),
   unit_id uuid not null references units(id) on delete restrict,
   unit_type unit_type not null,
-  inspection_occasion text not null default 'annual', -- 'annual' | 'mid_trip' (mid_trip not yet implemented)
   status text not null default 'draft', -- 'draft' | 'filed'
   inspected_at date not null default current_date,
 
@@ -56,7 +56,7 @@ create table annual_inspections (
 
   -- Shared checklist -- one shape covers the tractor's per-part OK/Fail
   -- rows and the trailer's per-category OK/Defect-Repaired rows. See
-  -- web/src/lib/annualInspectionItems.js for the fixed item list each
+  -- web/src/lib/midTripInspectionItems.js for the fixed item list each
   -- vehicle type renders.
   -- Shape: [{ key, section, label, status: 'ok'|'fail'|'defect_repaired'|null, note }]
   checklist jsonb not null default '[]'::jsonb,
@@ -98,9 +98,9 @@ create table annual_inspections (
   updated_at timestamptz not null default now()
 );
 
-create index idx_annual_inspections_unit_id on annual_inspections(unit_id);
-create index idx_annual_inspections_status on annual_inspections(status);
+create index idx_mid_trip_inspections_unit_id on mid_trip_inspections(unit_id);
+create index idx_mid_trip_inspections_status on mid_trip_inspections(status);
 
-alter table annual_inspections enable row level security;
-create policy "authenticated_all_annual_inspections" on annual_inspections
+alter table mid_trip_inspections enable row level security;
+create policy "authenticated_all_mid_trip_inspections" on mid_trip_inspections
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');

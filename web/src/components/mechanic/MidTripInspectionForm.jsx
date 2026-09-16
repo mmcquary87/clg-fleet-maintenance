@@ -9,7 +9,7 @@ import {
   TRACTOR_ALL_CHECK_ITEMS, TRACTOR_TIRE_POSITIONS, TRACTOR_BRAKE_POSITIONS, PM_SERVICE_LEVELS,
   TRAILER_BRAKE_SYSTEM_ITEMS, TRAILER_CATEGORY_ITEMS, TRAILER_ALL_CHECK_ITEMS,
   TRAILER_TIRE_POSITIONS, TRAILER_BRAKE_LINING_POSITIONS, countChecked,
-} from "../../lib/annualInspectionItems";
+} from "../../lib/midTripInspectionItems";
 import SignaturePad from "../shared/SignaturePad";
 
 function todayIso() {
@@ -93,7 +93,7 @@ function updateByPosition(list, position, patch) {
   return list.map((row) => (row.position === position ? { ...row, ...patch } : row));
 }
 
-// Digital replacement for CLG's paper "PM Safety Check" annual
+// Digital replacement for CLG's paper "PM Safety Check" mid-trip
 // inspection forms (uploaded 2026-09-18) -- one tractor variant, one
 // trailer variant, sharing this form shell but rendering different
 // checklists based on the looked-up unit's type. Unlike the Tractor
@@ -101,7 +101,7 @@ function updateByPosition(list, position, patch) {
 // orders -- it's a record of the periodic safety check only (per CLG,
 // 2026-09-18); anyone who finds something that needs fixing opens a work
 // order separately.
-export default function AnnualInspectionForm({ onCancel, onFiled }) {
+export default function MidTripInspectionForm({ onCancel, onFiled }) {
   const { session } = useAuth();
   const { profile } = useProfile(session?.user?.id);
   const [form, setForm] = useState(emptyForm());
@@ -171,11 +171,25 @@ export default function AnnualInspectionForm({ onCancel, onFiled }) {
     setError(null);
     try {
       const { data: inspection, error: err } = await supabase
-        .from("annual_inspections")
+        .from("mid_trip_inspections")
         .insert(buildInsertPayload(status))
         .select("id")
         .single();
       if (err) throw err;
+
+      // Keep the roster's PM-compliance due/overdue badge (maintenanceSchedule.js)
+      // in sync with this form -- the same field a "DOT Inspection" work order
+      // tagged inspectionType "Midtrip" already updates on close, so the two
+      // don't silently drift apart into two different "when was this last done"
+      // answers.
+      if (status === "filed") {
+        const { error: unitErr } = await supabase
+          .from("units")
+          .update({ last_midtrip_date: form.inspected_at })
+          .eq("id", unitId);
+        if (unitErr) throw unitErr;
+      }
+
       onFiled(inspection.id);
     } catch (err) {
       setError(err.message);
@@ -191,7 +205,7 @@ export default function AnnualInspectionForm({ onCancel, onFiled }) {
       </button>
 
       <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 22, color: "var(--clg-navy)", marginBottom: 4 }}>
-        Annual PM safety check
+        Mid-trip PM safety check
       </div>
       <div style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginBottom: 20 }}>
         Periodic mechanical/safety inspection per 49 CFR 393 and 396. This records pass/fail only — it does not raise
