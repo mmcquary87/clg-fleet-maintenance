@@ -427,6 +427,8 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         } else if (li.category === "DOT Inspection" && li.inspectionType) {
           const field = li.inspectionType === "Annual" ? "last_annual_inspection_date" : "last_midtrip_date";
           unitUpdates[field] = dateClosed;
+        } else if (li.category === "Mid-Trip Inspection") {
+          unitUpdates.last_midtrip_date = dateClosed;
         }
       }
       if (Object.keys(unitUpdates).length > 0 && order.unit?.id) {

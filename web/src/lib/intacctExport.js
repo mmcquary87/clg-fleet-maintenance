@@ -14,9 +14,11 @@
 // GL account routing (confirmed against CLG's real chart of accounts,
 // 2026-09-16): the accounts split by asset type (Truck/Trailer) and
 // transaction type (Inspection / Tires / Repairs & Maintenance / Parts),
-// NOT by our 10 work order categories directly -- "DOT Inspection" and
-// "Tires" map to their own accounts, everything else collapses into the
-// "Repairs & Maintenance" bucket. Repairs & Maintenance on a TRUCK
+// NOT by our work order categories directly -- "DOT Inspection" and
+// "Mid-Trip Inspection" both map to the same Inspection account (they're
+// the same transaction type on CLG's chart of accounts), "Tires" maps to
+// its own account, everything else collapses into the "Repairs &
+// Maintenance" bucket. Repairs & Maintenance on a TRUCK
 // further splits Company vs Owner-Operator based on that truck's
 // `owner_operator_assigned` flag (Units page) -- a systematic safeguard
 // rather than trusting a work order's "Charge Back to Driver" checkbox
@@ -63,7 +65,7 @@ export function partsCostFor(order) {
 // Tires/Repairs) line, or null if the needed account isn't configured.
 function repairAccountFor(order, glMap) {
   const isTruck = order.unit?.type === "Truck";
-  if (order.category === "DOT Inspection") {
+  if (order.category === "DOT Inspection" || order.category === "Mid-Trip Inspection") {
     return isTruck ? glMap.truck_inspection_account : glMap.trailer_inspection_account;
   }
   if (order.category === "Tires") {

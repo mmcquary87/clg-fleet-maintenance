@@ -138,6 +138,8 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
           } else if (li.category === "DOT Inspection" && li.inspectionType) {
             const field = li.inspectionType === "Annual" ? "last_annual_inspection_date" : "last_midtrip_date";
             if (!unitUpdates[field] || doneDate > unitUpdates[field]) unitUpdates[field] = doneDate;
+          } else if (li.category === "Mid-Trip Inspection") {
+            if (!unitUpdates.last_midtrip_date || doneDate > unitUpdates.last_midtrip_date) unitUpdates.last_midtrip_date = doneDate;
           }
         }
         if (Object.keys(unitUpdates).length > 0) {
