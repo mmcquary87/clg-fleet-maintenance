@@ -11,7 +11,7 @@ const FULL_SELECT = `
   payment_status, payment_method, payment_reference, paid_at,
   unit:units(id, number, type, vin, driver_name, current_location),
   vendor:vendors(id, name, contact_name, contact_email),
-  parts:work_order_parts(id, part_name, quantity, unit_cost, created_at)
+  parts:work_order_parts(id, part_name, quantity, unit_cost, category, created_at)
 `;
 
 // Fetches one work order with every column (the list views only pull a

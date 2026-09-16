@@ -1,0 +1,18 @@
+-- Fleet Maintenance System — per-part category on work_order_parts
+-- (2026-09-18)
+--
+-- work_order_parts had no category of its own -- every category-based
+-- report (Spend by category on CompanyView/UnitView, groupSum(records,
+-- "category")) works off the parent work_orders.category, one value for
+-- the whole job. A work order tagged "General Repair" that happens to
+-- include a turbo replacement had that turbo's cost silently counted as
+-- General Repair rather than Engine -- there was no way to say a part
+-- belongs to a different category than the job it was logged against.
+--
+-- Nullable and not backfilled: existing parts rows have no reliable
+-- category to infer (part_name is free text), and the mechanic/office
+-- parts UI is what actually captures this going forward, not a one-time
+-- guess. Reuses wo_category rather than a separate enum/table -- this is
+-- a classification tag on the part, not an inventory system (no stock,
+-- no SKUs, no reorder tracking -- explicitly out of scope for now).
+alter table work_order_parts add column category wo_category;

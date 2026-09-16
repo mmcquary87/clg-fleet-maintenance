@@ -142,6 +142,11 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     await reload();
   };
 
+  const saveCategory = async (partId, category) => {
+    await supabase.from("work_order_parts").update({ category }).eq("id", partId);
+    await reload();
+  };
+
   const attachReceipt = async () => {
     if (!pendingFile || !order) return;
     setUploading(true);
@@ -857,14 +862,22 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                         }}
                       >
                         <span>{p.part_name} × {p.quantity}</span>
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--clg-text-muted)", flexShrink: 0 }}>
-                          $
-                          <input
-                            type="number" min="0" step="0.01" defaultValue={p.unit_cost ?? ""} placeholder="cost each"
-                            onBlur={(e) => saveUnitCost(p.id, e.target.value)}
-                            style={{ width: 74, fontSize: 12, padding: "3px 6px", border: "1px solid var(--clg-border-default)", borderRadius: "var(--clg-radius-sm)" }}
+                        <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                          <Select
+                            value={p.category || order.category}
+                            onChange={(e) => saveCategory(p.id, e.target.value)}
+                            options={CATEGORIES}
+                            style={{ width: 150, fontSize: 12, padding: "3px 6px" }}
                           />
-                          each
+                          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--clg-text-muted)" }}>
+                            $
+                            <input
+                              type="number" min="0" step="0.01" defaultValue={p.unit_cost ?? ""} placeholder="cost each"
+                              onBlur={(e) => saveUnitCost(p.id, e.target.value)}
+                              style={{ width: 74, fontSize: 12, padding: "3px 6px", border: "1px solid var(--clg-border-default)", borderRadius: "var(--clg-radius-sm)" }}
+                            />
+                            each
+                          </span>
                         </span>
                       </div>
                     ))}

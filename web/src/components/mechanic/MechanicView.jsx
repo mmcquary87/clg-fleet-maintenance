@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Wrench, ChevronLeft, Plus, Trash2, Loader2, Search, ClipboardCheck, AlertTriangle, FileEdit } from "lucide-react";
-import { Button, Input, Badge, Alert } from "../../ds";
+import { Button, Input, Badge, Alert, Select } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import { CATEGORIES } from "../../lib/categories";
 import { useMechanicQueue } from "../../hooks/useMechanicQueue";
@@ -29,7 +29,7 @@ function uid() {
 }
 
 function emptyPartRow() {
-  return { id: uid(), part_name: "", quantity: "1" };
+  return { id: uid(), part_name: "", quantity: "1", category: "" };
 }
 
 // Big, touch-first job list + repair log sheet for the shop mechanic to use
@@ -351,6 +351,12 @@ function RepairSheet({ workOrderId, onBack }) {
           work_order_id: order.id,
           part_name: p.part_name.trim(),
           quantity: Number(p.quantity) || 1,
+          // Defaults to the work order's own category (most parts match
+          // the job they were logged against) but the mechanic can pick a
+          // different one -- e.g. a turbo logged on a "General Repair" WO
+          // should still count as Engine in category reporting, not
+          // whatever the parent job happened to be tagged.
+          category: p.category || order.category,
         }));
       if (rowsToInsert.length > 0) {
         const { error: partsErr } = await supabase.from("work_order_parts").insert(rowsToInsert);
@@ -469,8 +475,11 @@ function RepairSheet({ workOrderId, onBack }) {
                   background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-sm)",
                 }}
               >
-                <div style={{ fontSize: 14, color: "var(--clg-text-body)" }}>
-                  {p.part_name} <span style={{ color: "var(--clg-text-muted)" }}>× {p.quantity}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 14, color: "var(--clg-text-body)" }}>
+                    {p.part_name} <span style={{ color: "var(--clg-text-muted)" }}>× {p.quantity}</span>
+                  </div>
+                  {p.category && <Badge tone="neutral">{p.category}</Badge>}
                 </div>
                 <button
                   onClick={() => removeSavedPart(p.id)}
@@ -486,8 +495,14 @@ function RepairSheet({ workOrderId, onBack }) {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {newParts.map((p) => (
-            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr 90px auto", gap: 8 }}>
+            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr 160px 90px auto", gap: 8 }}>
               <Input value={p.part_name} onChange={setPartField(p.id, "part_name")} placeholder="Part name" style={inputStyle} />
+              <Select
+                value={p.category || order.category}
+                onChange={setPartField(p.id, "category")}
+                options={CATEGORIES}
+                style={inputStyle}
+              />
               <Input type="number" min="0" step="1" value={p.quantity} onChange={setPartField(p.id, "quantity")} placeholder="Qty" style={inputStyle} />
               <button
                 onClick={() => removeNewPartRow(p.id)}
