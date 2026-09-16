@@ -160,6 +160,11 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
   const checkedCount = countChecked(checklist);
   const totalItems = checklist.length;
   const missingSignature = !form.mechanic_name.trim() || !form.mechanic_signature_data;
+  // Charging back is a manual per-filing choice for now -- CLG's
+  // owner-operator/lease-purchase units aren't reliably flagged yet
+  // (units.owner_operator_assigned) to drive this automatically. Revisit
+  // once that list is built out.
+  const missingChargebackDriver = isChargeback && !chargebackDriver.trim();
 
   const buildInsertPayload = (status) => {
     const { unit_number, ...rest } = form; // eslint-disable-line no-unused-vars
@@ -182,6 +187,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
 
   const save = async (status) => {
     if (!unitId) { setError("Look up a real unit number first."); return; }
+    if (status === "filed" && missingChargebackDriver) { setError("This is an owner-operator/lease-purchase unit — enter who the mid-trip fee is billed to."); return; }
     setSaving(true);
     setError(null);
     try {
@@ -478,10 +484,12 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
                 Charge back to driver
               </label>
               {isChargeback && (
-                <ChargebackDriverPicker
-                  name={chargebackDriver}
-                  onChange={(name, driverId) => { setChargebackDriver(name); setChargebackDriverId(driverId); }}
-                />
+                <Field label="Billed to" required>
+                  <ChargebackDriverPicker
+                    name={chargebackDriver}
+                    onChange={(name, driverId) => { setChargebackDriver(name); setChargebackDriverId(driverId); }}
+                  />
+                </Field>
               )}
             </SectionCard>
           )}
@@ -494,12 +502,17 @@ export default function MidTripInspectionForm({ onCancel, onFiled }) {
                 {checkedCount} / {totalItems} items checked
               </div>
             )}
-            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 14 }}>
+            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: isChargeback ? 4 : 14 }}>
               {missingSignature ? "Mechanic signature outstanding" : "Signed"}
             </div>
+            {isChargeback && (
+              <div style={{ fontSize: 11.5, color: missingChargebackDriver ? "var(--clg-scarlet)" : "var(--clg-text-muted)", marginBottom: 14 }}>
+                {missingChargebackDriver ? "Billed-to driver required" : `Bills ${moneyFmt(midtripFeeAmount)} to ${chargebackDriver}`}
+              </div>
+            )}
             <Button
               onClick={() => save("filed")}
-              disabled={saving || !unitId}
+              disabled={saving || !unitId || missingChargebackDriver}
               iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}
               style={{ width: "100%", marginBottom: 8 }}
             >
