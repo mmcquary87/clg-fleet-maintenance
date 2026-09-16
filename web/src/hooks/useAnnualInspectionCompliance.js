@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { ANNUAL_INSPECTION_INTERVAL_DAYS, nextDueDate } from "../lib/maintenanceSchedule";
 
 // Per the Claude Design handoff (2026-09-18): this console tracks units
 // that actually have a DOT annual inspection date on file, not every
@@ -10,6 +9,16 @@ import { ANNUAL_INSPECTION_INTERVAL_DAYS, nextDueDate } from "../lib/maintenance
 // gap between this list and the fleet total is surfaced as its own
 // finding (the "partial picture" rail card), not papered over with a
 // fake status.
+//
+// The expiration date itself comes from unit_maintenance_due (kind =
+// 'dot_inspection', basis = 'alvys_certificate') -- alvys-sync-dot-
+// inspections parses the real expiration date straight off each unit's
+// uploaded DOT inspection certificate in Alvys, so this is the actual
+// due date, not an estimate from units.last_annual_inspection_date +
+// a fixed interval. That sync has only been run once (2026-09-01,
+// before the fleet grew to its current size) and isn't scheduled --
+// re-running it periodically would pick up units added since and any
+// units that previously hit a rate-limit error.
 const RED_WINDOW_DAYS = 14; // overdue or < 14 days
 const YELLOW_WINDOW_DAYS = 29; // 14-29 days
 
@@ -33,23 +42,25 @@ function alvysStatusFor(unit) {
 export function useAnnualInspectionCompliance() {
   const [rows, setRows] = useState([]);
   const [fleetTotal, setFleetTotal] = useState(null);
+  const [noDocumentCount, setNoDocumentCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [trackedRes, fleetRes] = await Promise.all([
+    const [dueRes, fleetRes, noDocRes] = await Promise.all([
       supabase
-        .from("units")
-        .select("id, number, type, is_active, last_annual_inspection_date, annual_inspection_notes")
-        .in("type", ["Truck", "Trailer"])
-        .not("last_annual_inspection_date", "is", null),
+        .from("unit_maintenance_due")
+        .select("due_date, unit:units(id, number, type, is_active, annual_inspection_notes)")
+        .eq("kind", "dot_inspection")
+        .eq("basis", "alvys_certificate"),
       supabase.from("units").select("id", { count: "exact", head: true }).in("type", ["Truck", "Trailer"]),
+      supabase.from("unit_maintenance_due").select("id", { count: "exact", head: true }).eq("kind", "dot_inspection").eq("basis", "no_document_on_file"),
     ]);
 
-    if (trackedRes.error) {
-      setError(trackedRes.error.message);
+    if (dueRes.error) {
+      setError(dueRes.error.message);
       setRows([]);
       setLoading(false);
       return;
@@ -57,20 +68,23 @@ export function useAnnualInspectionCompliance() {
 
     const today = new Date().toISOString().slice(0, 10);
     setRows(
-      (trackedRes.data ?? []).map((unit) => {
-        const expiration = nextDueDate(unit.last_annual_inspection_date, ANNUAL_INSPECTION_INTERVAL_DAYS);
-        const daysUntilDue = Math.round((new Date(expiration + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
-        return {
-          ...unit,
-          alvysStatus: alvysStatusFor(unit),
-          expiration,
-          daysUntilDue,
-          band: bandFor(daysUntilDue),
-          overdue: daysUntilDue < 0,
-        };
-      })
+      (dueRes.data ?? [])
+        .filter((r) => r.unit && ["Truck", "Trailer"].includes(r.unit.type))
+        .map((r) => {
+          const unit = r.unit;
+          const daysUntilDue = Math.round((new Date(r.due_date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
+          return {
+            ...unit,
+            alvysStatus: alvysStatusFor(unit),
+            expiration: r.due_date,
+            daysUntilDue,
+            band: bandFor(daysUntilDue),
+            overdue: daysUntilDue < 0,
+          };
+        })
     );
     setFleetTotal(fleetRes.count ?? null);
+    setNoDocumentCount(noDocRes.count ?? null);
     setLoading(false);
   }, []);
 
@@ -84,5 +98,5 @@ export function useAnnualInspectionCompliance() {
     setRows((rs) => rs.map((r) => (r.id === unitId ? { ...r, annual_inspection_notes: notes } : r)));
   };
 
-  return { rows, fleetTotal, loading, error, reload: load, saveNotes };
+  return { rows, fleetTotal, noDocumentCount, loading, error, reload: load, saveNotes };
 }
