@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin } from "lucide-react";
 import { Badge } from "../../ds";
 import { useUnitDetail } from "../../hooks/useUnitDetail";
+import { cityStateFromAddress } from "../../lib/formatLocation";
 import UnitInfoCard from "../intake/UnitInfoCard";
 import {
   Section, CurrentLoadSection, MaintenanceSchedule, WorkOrderHistory, FaultCodeNotifyPanel, money,
@@ -120,15 +121,18 @@ export default function UnitDetailPage({ unitId, onBack, canViewAssetLifecycle }
             <CurrentLoadSection trip={trip} hos={hos} />
           </Section>
           {unit.current_location && (
-            <Section title="Map">
-              <div style={{ borderRadius: "var(--clg-radius-md)", overflow: "hidden", border: "1px solid var(--clg-border-subtle)" }}>
-                <iframe
-                  title={`Map — ${unit.current_location}`}
-                  width="100%" height="220" style={{ border: 0, display: "block" }}
-                  loading="lazy"
-                  src={`https://maps.google.com/maps?q=${encodeURIComponent(unit.current_location)}&output=embed`}
-                />
+            <Section title="Live location">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <MapPin size={16} style={{ color: "var(--clg-text-muted)", flexShrink: 0 }} />
+                <span style={{ fontSize: 15, fontWeight: 600, color: "var(--clg-text-heading)" }}>
+                  {cityStateFromAddress(unit.current_location)}
+                </span>
               </div>
+              {unit.samsara_synced_at && (
+                <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
+                  As of {new Date(unit.samsara_synced_at).toLocaleString()}
+                </div>
+              )}
             </Section>
           )}
         </div>
