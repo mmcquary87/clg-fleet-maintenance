@@ -3,8 +3,8 @@
 // Every item here is a boolean field on tractor_inspections where
 // true = good (Yes / OK), false = a problem (No / Needs attention).
 // `category`/`severity` are what a work order raised from a false item
-// gets stamped with -- a first-pass mapping onto the existing 9-category
-// enum (none of these fit perfectly; adjust here if CLG wants different
+// gets stamped with -- a first-pass mapping onto the wo_category enum
+// (none of these fit perfectly; adjust here if CLG wants different
 // categories, this is the one place that mapping lives). `goodLabel`/
 // `badLabel` are just which button pair the source design used for that
 // row (Yes/No vs OK/Needs attention) -- purely cosmetic, same boolean
@@ -15,14 +15,14 @@
 // Everything else defaults to "Routine".
 
 export const EQUIPMENT_ITEMS = [
-  { key: "prepass_transponder", label: "Prepass transponder", sublabel: "Record the transponder number", category: "Other", hasNumber: "prepass_transponder_number", numberLabel: "Prepass transponder #" },
-  { key: "current_ifta_decal", label: "Current IFTA decal", sublabel: "Both doors", category: "Other" },
-  { key: "loves_rfid", label: "Love's RFID in windshield", sublabel: "Record the number", category: "Other", hasNumber: "loves_rfid_number", numberLabel: "Love's RFID #" },
+  { key: "prepass_transponder", label: "Prepass transponder", sublabel: "Record the transponder number", category: "General Repair", hasNumber: "prepass_transponder_number", numberLabel: "Prepass transponder #" },
+  { key: "current_ifta_decal", label: "Current IFTA decal", sublabel: "Both doors", category: "General Repair" },
+  { key: "loves_rfid", label: "Love's RFID in windshield", sublabel: "Record the number", category: "General Repair", hasNumber: "loves_rfid_number", numberLabel: "Love's RFID #" },
   { key: "eld_dashcam_cables", label: "ELD, dash cam and both cables", category: "Electrical" },
-  { key: "warning_triangles", label: "Three warning triangles", sublabel: "Side box", category: "Other" },
-  { key: "kingpin_lock_key", label: "King pin lock and key", category: "Other" },
-  { key: "circle_lock_key", label: "Circle lock and key", category: "Other" },
-  { key: "cell_tablet_mount", label: "Mount for cell / tablet", sublabel: "Photo required — see Photos below", category: "Other" },
+  { key: "warning_triangles", label: "Three warning triangles", sublabel: "Side box", category: "General Repair" },
+  { key: "kingpin_lock_key", label: "King pin lock and key", category: "Body / Structural" },
+  { key: "circle_lock_key", label: "Circle lock and key", category: "Body / Structural" },
+  { key: "cell_tablet_mount", label: "Mount for cell / tablet", sublabel: "Photo required — see Photos below", category: "General Repair" },
   { key: "inverter", label: "Inverter", sublabel: "Works and clean", category: "Electrical" },
   { key: "refrigerator", label: "Refrigerator", sublabel: "Works and clean", category: "Electrical" },
   { key: "apu", label: "APU", sublabel: "If applicable — works", category: "Engine" },
@@ -30,11 +30,11 @@ export const EQUIPMENT_ITEMS = [
 ];
 
 export const WALKAROUND_ITEMS = [
-  { key: "fifth_wheel_plate", label: "Fifth wheel plate", sublabel: "Greased, not loose, not cracked, no missing bolts", category: "Trailer / Body", severity: "Urgent", goodLabel: "OK", badLabel: "Needs attention" },
+  { key: "fifth_wheel_plate", label: "Fifth wheel plate", sublabel: "Greased, not loose, not cracked, no missing bolts", category: "Body / Structural", severity: "Urgent", goodLabel: "OK", badLabel: "Needs attention" },
   { key: "airlines", label: "Airlines", sublabel: "Secure, no cracks, not chafed", category: "Brakes", severity: "Urgent", goodLabel: "OK", badLabel: "Needs attention" },
   { key: "tires_lugs_hubs", label: "Tires, lugs and hubs", sublabel: "Tread, no chunks / cuts / wires, air pressure, lugs tight, hub oil not leaking, mudflaps whole and tight", category: "Tires", severity: "Urgent", goodLabel: "OK", badLabel: "Needs attention" },
   { key: "all_lights_work", label: "All lights work", category: "Electrical", severity: "Urgent" },
-  { key: "reflective_ls", label: "Inverted reflective L's on back of cab", category: "Other", severity: "Urgent" },
+  { key: "reflective_ls", label: "Inverted reflective L's on back of cab", category: "Body / Structural", severity: "Urgent" },
 ];
 
 export const DOCUMENT_ITEMS = [

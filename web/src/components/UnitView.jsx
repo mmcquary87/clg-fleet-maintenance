@@ -194,10 +194,10 @@ export default function UnitView({ records, range, canViewAssetLifecycle }) {
   const selectedByCategory = groupSum(selectedRecords, "category");
 
   // "What stands out" -- flagged only above a real threshold, so a unit
-  // with a stray Other item or two doesn't get an alarming callout.
-  const selectedOtherTotal = selectedRecords.filter((r) => r.category === "Other").reduce((s, r) => s + r.cost, 0);
+  // with a stray General Repair item or two doesn't get an alarming callout.
+  const selectedOtherTotal = selectedRecords.filter((r) => r.category === "General Repair").reduce((s, r) => s + r.cost, 0);
   const selectedOtherPct = selectedTotal > 0 ? (selectedOtherTotal / selectedTotal) * 100 : 0;
-  const selectedOtherCount = selectedRecords.filter((r) => r.category === "Other").length;
+  const selectedOtherCount = selectedRecords.filter((r) => r.category === "General Repair").length;
 
   return (
     <>
@@ -340,7 +340,7 @@ export default function UnitView({ records, range, canViewAssetLifecycle }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 14, marginBottom: 14 }}>
         {categoryLeaderboards.map(({ category, top, max }) => {
-          const isOther = category === "Other";
+          const isOther = category === "General Repair";
           const color = isOther ? "var(--clg-scarlet)" : (CAT_COLORS[category] || "#888");
           return (
             <SectionCard key={category} style={isOther ? { padding: 16, borderTop: "3px solid var(--clg-scarlet)" } : { padding: 16 }}>

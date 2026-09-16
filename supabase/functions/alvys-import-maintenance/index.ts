@@ -3,7 +3,7 @@
 // Pulls all maintenance records from Alvys and inserts any not already in
 // our `work_orders` table as Closed (already-completed) work orders.
 // Alvys's "Category" field is free text (e.g. "rfi tire replaced"), not
-// our fixed 9-category enum, so this classifies it with a keyword
+// our fixed wo_category enum, so this classifies it with a keyword
 // heuristic.
 //
 // INSERT-ONLY by work_orders.alvys_maintenance_id -- deliberately not an
@@ -32,15 +32,29 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Order is first-match-wins. "Tow" sits last on purpose -- something like
+// "TOWED IN FOR DERATE DEF QUALITY FAULTS" should classify as Emissions /
+// Aftertreatment via "derate", not get hijacked by "tow" just because the
+// truck happened to get towed there. Note: was "battery" (not "batter"),
+// which silently never matched "batteries" -- same substring bug, fixed here.
 const CATEGORY_RULES: [string, string[]][] = [
   ["DOT Inspection", ["dot", "inspection", "inspec"]],
-  ["Tires", ["tire", "tyre"]],
-  ["Brakes", ["brake", "abs "]],
-  ["Transmission", ["transmission", "clutch"]],
-  ["Electrical", ["electrical", "battery", "alternator", "wiring", "abs light", "light"]],
-  ["Trailer / Body", ["trailer", "mudflap", "mud flap", "bracket", "door", "bumper", "fender", "body"]],
+  ["Tires", ["tire", "tyre", "wheel alignment"]],
+  ["Brakes", ["brake", "abs ", "air leak", "air brake"]],
+  ["Suspension", ["suspension", "air ride", "shock absorber", "leaf spring"]],
+  ["Transmission", ["transmission", "clutch", "gearbox"]],
+  ["Electrical", ["electrical", "batter", "alternator", "wiring", "abs light", "light", "inverter", "invertor", "stalk switch"]],
+  ["Body / Structural", [
+    "trailer", "mudflap", "mud flap", "bracket", "door", "bumper", "fender", "body",
+    "hood", "mirror", "windshield", "crossmember", "floorboard", "floor damage", "roof",
+    "5th wheel", "fifth wheel", "kingpin", "tandem", "landing gear", "wall damage",
+  ]],
   ["PM / Oil", ["pm ", "pm,", "oil", "service", "lube", "grease", "a-service", "b-service", "regen"]],
-  ["Engine", ["engine", "turbo", "injector", "dpf", "compressor", "governor", "air system"]],
+  ["Engine", ["engine", "turbo", "injector", "compressor", "governor", "air system", "coolant", "exhaust", "fuel contamination", "timing chain"]],
+  ["Emissions / Aftertreatment", ["dpf", "derate", "nox", "def quality", "delete def", "def "]],
+  ["HVAC", ["a/c", "air condition", "hvac", "blower motor", "heater core"]],
+  ["Detailing / Cleaning", ["detail", "wash", "cleaning"]],
+  ["Tow", ["tow"]],
 ];
 
 function classifyCategory(text: string): string {
@@ -48,7 +62,7 @@ function classifyCategory(text: string): string {
   for (const [category, keywords] of CATEGORY_RULES) {
     if (keywords.some((k) => t.includes(k))) return category;
   }
-  return "Other";
+  return "General Repair";
 }
 
 async function getAlvysToken(): Promise<string> {

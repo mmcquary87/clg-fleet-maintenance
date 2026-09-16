@@ -8,8 +8,8 @@ import { useMilesDriven } from "../hooks/useMilesDriven";
 import { useUnits } from "../hooks/useUnits";
 
 // Below this, "uncategorized spend" isn't worth an alarming callout --
-// some Other is normal. Above it, it's actively undermining every other
-// breakdown on this page, per the CLG OS mockup's "Read this first" panel.
+// some General Repair is normal. Above it, it's actively undermining every
+// other breakdown on this page, per the CLG OS mockup's "Read this first" panel.
 const UNCATEGORIZED_ALERT_THRESHOLD_PCT = 15;
 // A rounded-cost/unit/vendor match this close together is worth a human
 // glance -- not proof of a duplicate invoice, just a real, checkable flag
@@ -51,14 +51,14 @@ export default function CompanyView({ records, range, onGoToWorkOrders, onGoToUn
   const { miles, loading: milesLoading, error: milesError } = useMilesDriven(range);
   const { units } = useUnits();
 
-  // Uncategorized spend -- "Other" is a real, already-tracked category, so
-  // this needs no new schema. Flagged because a third of spend hiding
-  // behind "Other" makes every other breakdown on this page directional
-  // at best (per the CLG OS mockup's "Read this first" panel).
-  const otherRecords = useMemo(() => records.filter((r) => r.category === "Other"), [records]);
+  // Uncategorized spend -- "General Repair" is a real, already-tracked
+  // category, so this needs no new schema. Flagged because a third of
+  // spend hiding behind it makes every other breakdown on this page
+  // directional at best (per the CLG OS mockup's "Read this first" panel).
+  const otherRecords = useMemo(() => records.filter((r) => r.category === "General Repair"), [records]);
   const otherTotal = otherRecords.reduce((s, r) => s + r.cost, 0);
   const otherPct = grandTotal > 0 ? (otherTotal / grandTotal) * 100 : 0;
-  const topRealCategory = byCategory.find((c) => c.name !== "Other");
+  const topRealCategory = byCategory.find((c) => c.name !== "General Repair");
 
   // The units costing you most -- same leaderboard concept as the By Unit
   // page, with a one-line "what's driving it" summary: this unit's single
@@ -236,12 +236,12 @@ export default function CompanyView({ records, range, onGoToWorkOrders, onGoToUn
               {fmtPct(otherPct)} of your maintenance spend has no category on it
             </div>
             <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginTop: 10, lineHeight: 1.6, maxWidth: 560 }}>
-              {fmtMoney(otherTotal)} across {otherRecords.length} invoice{otherRecords.length === 1 ? "" : "s"} is filed as <em>Other</em>
+              {fmtMoney(otherTotal)} across {otherRecords.length} invoice{otherRecords.length === 1 ? "" : "s"} is filed as <em>General Repair</em>
               {topRealCategory && otherTotal > topRealCategory.value ? ` — more than ${topRealCategory.name}, your largest real category.` : "."}
               {" "}Until those are coded, every breakdown on this page is directional at best.
             </div>
             <div style={{ marginTop: 16 }}>
-              <Button size="sm" onClick={() => onGoToWorkOrders?.("Other")}>
+              <Button size="sm" onClick={() => onGoToWorkOrders?.("General Repair")}>
                 Code {otherRecords.length} invoice{otherRecords.length === 1 ? "" : "s"}
               </Button>
             </div>
@@ -348,7 +348,7 @@ export default function CompanyView({ records, range, onGoToWorkOrders, onGoToUn
               <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>{fmtMoney(otherTotal)} · blocks every breakdown above</div>
             </div>
             {otherRecords.length > 0 && (
-              <button onClick={() => onGoToWorkOrders?.("Other")} style={{ background: "none", border: "none", color: "var(--clg-scarlet)", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+              <button onClick={() => onGoToWorkOrders?.("General Repair")} style={{ background: "none", border: "none", color: "var(--clg-scarlet)", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
                 Code
               </button>
             )}
