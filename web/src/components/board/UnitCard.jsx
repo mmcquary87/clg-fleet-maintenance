@@ -54,6 +54,7 @@ export default function UnitCard({ card, lead, onChanged }) {
       <div style={{
         display: "flex", alignItems: "center", gap: 14, background: "var(--clg-surface-card)",
         boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)", padding: "12px 16px",
+        minWidth: 0,
       }}>
         <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", flexShrink: 0 }}>
           {unit.number}
