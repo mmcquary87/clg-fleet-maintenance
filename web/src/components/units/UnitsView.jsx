@@ -198,12 +198,19 @@ export default function UnitsView({ canViewAssetLifecycle }) {
   const isMobile = useIsMobile();
 
   const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    // A typed search is a request to find one specific unit -- it
+    // overrides the status/type tabs rather than being narrowed by
+    // them, so searching a real unit number never comes up empty just
+    // because that unit happens to be inactive or on the other tab (a
+    // unit wrongly flagged inactive, e.g. by 20260914010000_deactivate_
+    // stale_trucks.sql's Samsara-sync heuristic, was otherwise
+    // unfindable here at all).
     const rows = units
-      .filter((u) => statusFilter === "all" || (statusFilter === "active" ? u.is_active : !u.is_active))
-      .filter((u) => (typeTab === "Truck" ? u.type !== "Trailer" : u.type === "Trailer"))
+      .filter((u) => q || statusFilter === "all" || (statusFilter === "active" ? u.is_active : !u.is_active))
+      .filter((u) => q || (typeTab === "Truck" ? u.type !== "Trailer" : u.type === "Trailer"))
       .filter((u) => {
-        if (!query.trim()) return true;
-        const q = query.toLowerCase();
+        if (!q) return true;
         return [u.number, u.vin, u.current_location, u.plate_number].filter(Boolean).some((v) => v.toLowerCase().includes(q));
       });
     // Attention first (down, then check-engine), then by YTD spend --
