@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Loader2, ExternalLink, FileWarning, Mail, Sparkles, Plus, Trash2, Pencil, Ban, RotateCcw } from "lucide-react";
+import { X, Loader2, Mail, Sparkles, Plus, Trash2, Pencil, Ban, RotateCcw } from "lucide-react";
 import { Badge, Button, Input, Select, Alert } from "../../ds";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import { useVendors } from "../../hooks/useVendors";
@@ -11,6 +11,7 @@ import { uploadReceipt, fileToBase64 } from "../../lib/invoiceFiles";
 import { CATEGORIES } from "../../lib/categories";
 import FileDropzone from "../shared/FileDropzone";
 import ChargebackDriverPicker from "../shared/ChargebackDriverPicker";
+import WorkOrderDocumentsPanel from "./WorkOrderDocumentsPanel";
 
 const SEVERITIES = ["Routine", "Urgent", "Unit down"];
 // Plain frontend list, not a DB enum -- see the payment_method column
@@ -91,7 +92,7 @@ function emptyDetailsForm() {
 }
 
 export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }) {
-  const { order, loading, error, receiptUrl, reload } = useWorkOrder(workOrderId);
+  const { order, loading, error, reload } = useWorkOrder(workOrderId);
   const { vendors } = useVendors();
   const { session } = useAuth();
   const { canVoidWorkOrders } = useProfile(session?.user?.id);
@@ -105,9 +106,6 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const [paymentForm, setPaymentForm] = useState({ method: PAYMENT_METHODS[0], reference: "", paidAt: todayIso() });
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
-  const [pendingFile, setPendingFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState(null);
 
   const [closing, setClosing] = useState(false);
   const [closeForm, setCloseForm] = useState({ invoiceRef: "", poNumber: "", dateClosed: "" });
@@ -145,24 +143,6 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const saveCategory = async (partId, category) => {
     await supabase.from("work_order_parts").update({ category }).eq("id", partId);
     await reload();
-  };
-
-  const attachReceipt = async () => {
-    if (!pendingFile || !order) return;
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const path = await uploadReceipt(pendingFile);
-      const { error: updateErr } = await supabase.from("work_orders").update({ receipt_path: path }).eq("id", order.id);
-      if (updateErr) throw updateErr;
-      setPendingFile(null);
-      await reload();
-      onChanged?.();
-    } catch (err) {
-      setUploadError(err.message);
-    } finally {
-      setUploading(false);
-    }
   };
 
   const updateStatus = async (newStatus) => {
@@ -406,6 +386,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
 
+      let extraWorkOrderIds = [];
       if (extra.length > 0 && order.unit?.id) {
         const rows = extra.map((li) => ({
           unit_id: order.unit.id,
@@ -421,8 +402,23 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
           source: "manual",
           receipt_path: receiptPath,
         }));
-        const { error: insertErr } = await supabase.from("work_orders").insert(rows);
+        const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id");
         if (insertErr) throw insertErr;
+        extraWorkOrderIds = (inserted ?? []).map((r) => r.id);
+      }
+
+      // A file uploaded at close time also becomes a real
+      // work_order_documents row (not just the legacy receipt_path column
+      // above) so it shows up immediately in the multi-document list on
+      // every work order this close created/touched, same as attaching
+      // one manually via WorkOrderDocumentsPanel.
+      if (closeFile) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const docRows = [order.id, ...extraWorkOrderIds].map((workOrderId) => ({
+          work_order_id: workOrderId, storage_path: receiptPath, file_name: closeFile.name, uploaded_by: user?.id ?? null,
+        }));
+        const { error: docErr } = await supabase.from("work_order_documents").insert(docRows);
+        if (docErr) throw docErr;
       }
 
       const unitUpdates = {};
@@ -916,38 +912,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 <Field label="Approved at" value={order.approved_at ? new Date(order.approved_at).toLocaleString() : null} />
               </div>
 
-              {!closing && (
-                <div>
-                  <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
-                    Receipt / invoice
-                  </div>
-                  {receiptUrl ? (
-                    <a
-                      href={receiptUrl} target="_blank" rel="noreferrer"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--clg-royal)", textDecoration: "none" }}
-                    >
-                      <ExternalLink size={14} /> View attached invoice
-                    </a>
-                  ) : (
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-muted)", marginBottom: 8 }}>
-                        <FileWarning size={13} /> No invoice attached yet.
-                      </div>
-                      <FileDropzone file={pendingFile} onFileChange={setPendingFile} label="Drag & drop an invoice here to attach it" />
-                      {pendingFile && (
-                        <button
-                          onClick={attachReceipt} disabled={uploading}
-                          className="btn-primary" style={{ marginTop: 10 }}
-                        >
-                          {uploading ? <Loader2 size={14} className="spin" /> : null}
-                          {uploading ? "Uploading…" : "Attach invoice"}
-                        </button>
-                      )}
-                      {uploadError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 6 }}>{uploadError}</div>}
-                    </div>
-                  )}
-                </div>
-              )}
+              {!closing && <WorkOrderDocumentsPanel workOrderId={order.id} />}
 
               <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 12 }}>
                 Created {new Date(order.created_at).toLocaleString()}
