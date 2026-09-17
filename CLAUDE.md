@@ -135,16 +135,21 @@ flag checked by its own RLS policies (independent of `role`).
 
 - **Alvys** (TMS) — OAuth2 client-credentials against `auth.alvys.com`,
   read-only (Alvys exposes no way to write maintenance data back).
-  `alvys-sync-equipment`/`alvys-import-maintenance` were one-time historical
-  backfills (idempotent, safe to re-run by hand); `alvys-sync-drivers`,
-  `alvys-sync-loads`, and related functions feed the roster/ops views. Watch
-  for Alvys's `Page` search parameter being **0-indexed**, unlike its own docs.
+  `alvys-import-maintenance` started as a one-time historical backfill but
+  is now scheduled every 15 minutes (`20260917020000_alvys_maintenance_sync_schedule.sql`),
+  insert-only so it never clobbers a manual correction. Most other Alvys
+  functions are scheduled too: `alvys-sync-equipment` (every 6 hours),
+  `alvys-sync-drivers` (every 6 hours), `alvys-sync-active-trips` and
+  `alvys-sync-check-calls` (every 15 minutes). `alvys-sync-loads` is the
+  one still intentionally manual-only (paginated/resumable across manual
+  Test invocations per its own header) — check a given function's own
+  migration/header comment before assuming it runs on its own. Watch for
+  Alvys's `Page` search parameter being **0-indexed**, unlike its own docs.
 - **Samsara** (telematics) — plain bearer token (`SAMSARA_API` secret, not
   OAuth), read-only. `samsara-sync` pulls vehicle roster/fault
   codes/fuel-odometer-location/DVIR defects in one run and is scheduled via
-  `pg_cron` every 15 minutes (`20260828150000_samsara_sync_schedule.sql`) —
-  it's the one integration with an actual recurring schedule; the Alvys
-  functions are still manual/on-demand. When writing Supabase `.upsert()`
+  `pg_cron` every 15 minutes (`20260828150000_samsara_sync_schedule.sql`).
+  When writing Supabase `.upsert()`
   calls against partial column sets, know that Postgres still validates
   NOT NULL constraints on the whole row before checking for a conflict — use
   per-row `.update()` (fired concurrently, not sequentially) instead of a

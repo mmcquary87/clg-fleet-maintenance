@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { Card } from "../../ds";
 import { useBoard } from "../../hooks/useBoard";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import UnitCard from "./UnitCard";
@@ -33,12 +34,9 @@ function itemsPhrase(waitingOnYouCount) {
 
 function EmptyLaneCard({ text }) {
   return (
-    <div style={{
-      background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)",
-      padding: "16px 12px", fontSize: 12, color: "var(--clg-pewter)", textAlign: "center",
-    }}>
+    <Card padding="16px 12px" style={{ fontSize: 12, color: "var(--clg-pewter)", textAlign: "center" }}>
       {text}
-    </div>
+    </Card>
   );
 }
 

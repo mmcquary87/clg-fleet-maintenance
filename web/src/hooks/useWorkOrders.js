@@ -3,6 +3,11 @@ import { supabase } from "../lib/supabaseClient";
 
 // Flattens a work_orders row (joined with units/vendors) into the shape
 // the dashboard views expect: { unit, unitType, category, vendor, cost, date, ref, desc }
+// `parts` carries each logged part's own category/cost so the Spend-by-
+// category chart can split spend across them (see lib/categorySplit.js)
+// instead of counting every part's cost under the work order's own single
+// category -- everything else here (filtering, CSV export, vendor
+// grouping) keeps using the work order's own `category` unchanged.
 function toRecord(row) {
   return {
     id: row.id,
@@ -15,6 +20,11 @@ function toRecord(row) {
     date: row.date_closed,
     ref: row.invoice_ref,
     desc: row.description,
+    parts: (row.parts ?? []).map((p) => ({
+      category: p.category ?? null,
+      quantity: Number(p.quantity) || 0,
+      unitCost: p.unit_cost != null ? Number(p.unit_cost) : null,
+    })),
   };
 }
 
@@ -42,7 +52,8 @@ export function useWorkOrders(range) {
         let query = supabase
           .from("work_orders")
           .select(
-            "id, category, cost, date_closed, invoice_ref, description, unit:units(number, type, ownership), vendor:vendors(name)"
+            "id, category, cost, date_closed, invoice_ref, description, unit:units(number, type, ownership), vendor:vendors(name), " +
+            "parts:work_order_parts(category, quantity, unit_cost)"
           )
           .eq("status", "Closed")
           .eq("voided", false)

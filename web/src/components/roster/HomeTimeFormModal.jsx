@@ -76,7 +76,7 @@ export default function HomeTimeFormModal({ row, onClose, onSave, onDelete }) {
       <Card style={{ width: "100%", maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700 }}>{row ? "Edit home-time schedule" : "New home-time schedule"}</h3>
-          <button type="button" onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}><X size={18} /></button>
         </div>
 
         {error && <Alert tone="critical" style={{ marginBottom: 14 }}>{error}</Alert>}

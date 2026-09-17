@@ -21,13 +21,27 @@ function conditionFor(unit, faults) {
   return "ok";
 }
 
+const CONDITION_LABEL = { down: "Down — can't move a load", check_engine: "Check engine", ok: "OK" };
+
+// Solid vs. ringed vs. royal isn't itself an accessible distinction (down
+// vs. ok differ by hue alone) -- the adjacent flagBadge text in the same
+// row already covers "down"/"check_engine", but a title/aria-label here
+// means the dot itself isn't relying on color even before that badge is
+// read, and covers the plain "ok" case which gets no badge at all.
 function ConditionDot({ condition }) {
   const style = {
     down: { background: "var(--clg-ruby)", border: "none" },
     check_engine: { background: "transparent", border: "2px solid var(--clg-ruby)" },
     ok: { background: "var(--clg-royal)", border: "none" },
   }[condition];
-  return <span style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, display: "inline-block", ...style }} />;
+  return (
+    <span
+      role="img"
+      aria-label={CONDITION_LABEL[condition]}
+      title={CONDITION_LABEL[condition]}
+      style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, display: "inline-block", ...style }}
+    />
+  );
 }
 
 function maintenanceBadge(status) {

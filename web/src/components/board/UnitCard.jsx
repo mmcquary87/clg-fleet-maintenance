@@ -1,4 +1,4 @@
-import { Button } from "../../ds";
+import { Button, Card } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 
 const ACTION_BY_LANE = {
@@ -51,11 +51,7 @@ export default function UnitCard({ card, lead, onChanged }) {
   if (!lead) {
     const description = wo.system_component || wo.complaint || wo.description || wo.category;
     return (
-      <div style={{
-        display: "flex", alignItems: "center", gap: 14, background: "var(--clg-surface-card)",
-        boxShadow: "var(--clg-shadow-resting)", borderRadius: "var(--clg-radius-md)", padding: "12px 16px",
-        minWidth: 0,
-      }}>
+      <Card padding="12px 16px" style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
         <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)", flexShrink: 0 }}>
           {unit.number}
         </span>
@@ -71,15 +67,12 @@ export default function UnitCard({ card, lead, onChanged }) {
         }}>
           {fmtHours(idleHours)}
         </span>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div style={{
-      background: "var(--clg-surface-card)", boxShadow: "var(--clg-shadow-focus)",
-      borderRadius: "var(--clg-radius-md)", borderTop: "3px solid var(--clg-scarlet)", padding: "18px 20px",
-    }}>
+    <Card elevation="focus" padding="18px 20px" style={{ borderTop: "3px solid var(--clg-scarlet)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 26, color: "var(--clg-navy)" }}>
           {unit.number}
@@ -117,6 +110,6 @@ export default function UnitCard({ card, lead, onChanged }) {
           ${Math.round(hourlyRate)}/hr to keep thinking about it
         </div>
       )}
-    </div>
+    </Card>
   );
 }

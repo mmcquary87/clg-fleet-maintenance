@@ -5,7 +5,7 @@ import {
 import { LayoutGrid, Search } from "lucide-react";
 import { Input } from "../ds";
 import { CATEGORIES, CAT_COLORS } from "../lib/categories";
-import { groupSum } from "../lib/groupSum";
+import { groupSumByPartCategory } from "../lib/categorySplit";
 import { useMilesDriven } from "../hooks/useMilesDriven";
 import EmptyState from "./EmptyState";
 import AssetLifecycleCard from "./units/AssetLifecycleCard";
@@ -191,7 +191,7 @@ export default function UnitView({ records, range, canViewAssetLifecycle }) {
   const selectedUnit = units.find((u) => u.unit === selected);
   const selectedRecords = records.filter((r) => r.unit === selected);
   const selectedTotal = selectedRecords.reduce((s, r) => s + r.cost, 0);
-  const selectedByCategory = groupSum(selectedRecords, "category");
+  const selectedByCategory = groupSumByPartCategory(selectedRecords);
 
   // "What stands out" -- flagged only above a real threshold, so a unit
   // with a stray General Repair item or two doesn't get an alarming callout.
