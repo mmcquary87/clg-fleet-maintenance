@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, Loader2, MapPin } from "lucide-react";
+import { Alert } from "../../ds";
 import { useUnitDetail } from "../../hooks/useUnitDetail";
 import UnitInfoCard from "../intake/UnitInfoCard";
 import { cityStateFromAddress } from "../../lib/formatLocation";
@@ -17,6 +18,7 @@ import {
 export default function UnitDrawer({ unitId, onClose }) {
   const { unit, orders, openDefects, recentFaults, trip, hos, maintenanceDue, loading, error, updateSchedule } = useUnitDetail(unitId);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -26,7 +28,9 @@ export default function UnitDrawer({ unitId, onClose }) {
 
   const handleSave = async (fields) => {
     setSaving(true);
-    await updateSchedule(fields);
+    setSaveError(null);
+    const err = await updateSchedule(fields);
+    if (err) setSaveError(err.message);
     setSaving(false);
   };
 
@@ -94,6 +98,7 @@ export default function UnitDrawer({ unitId, onClose }) {
                 )}
 
                 <Section title="Maintenance schedule">
+                  {saveError && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 12 }}>{saveError}</Alert>}
                   <MaintenanceSchedule unit={unit} maintenanceDue={maintenanceDue} onSave={handleSave} saving={saving} />
                 </Section>
 

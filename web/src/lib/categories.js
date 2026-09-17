@@ -1,5 +1,5 @@
 export const CATEGORIES = [
-  "PM / Oil", "Tires", "Brakes", "Suspension", "Transmission", "Electrical",
+  "PM / Oil", "Tires", "Brakes", "Suspension", "Transmission", "Electrical", "Batteries",
   "Engine", "Emissions / Aftertreatment", "HVAC", "Body / Structural",
   "DOT Inspection", "Mid-Trip Inspection", "Tow", "Detailing / Cleaning", "General Repair",
 ];
@@ -33,4 +33,5 @@ export const CAT_COLORS = {
   "HVAC": "#2D8FBF",
   "Detailing / Cleaning": "#7A8C3A",
   "Mid-Trip Inspection": "#3D5A99",
+  "Batteries": "#C99A00",
 };

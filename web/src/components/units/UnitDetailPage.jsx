@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, Loader2, MapPin } from "lucide-react";
-import { Badge } from "../../ds";
+import { Badge, Alert } from "../../ds";
 import { useUnitDetail } from "../../hooks/useUnitDetail";
 import { cityStateFromAddress } from "../../lib/formatLocation";
 import UnitInfoCard from "../intake/UnitInfoCard";
@@ -37,10 +37,13 @@ export default function UnitDetailPage({ unitId, onBack, canViewAssetLifecycle }
   const { unit, orders, openDefects, recentFaults, trip, hos, maintenanceDue, loading, error, updateSchedule } = useUnitDetail(unitId);
   const [tab, setTab] = useState("overview");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   const handleSave = async (fields) => {
     setSaving(true);
-    await updateSchedule(fields);
+    setSaveError(null);
+    const err = await updateSchedule(fields);
+    if (err) setSaveError(err.message);
     setSaving(false);
   };
 
@@ -142,6 +145,7 @@ export default function UnitDetailPage({ unitId, onBack, canViewAssetLifecycle }
       {tab === "service" && (
         <div>
           <Section title="Maintenance schedule">
+            {saveError && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 12 }}>{saveError}</Alert>}
             <MaintenanceSchedule unit={unit} maintenanceDue={maintenanceDue} onSave={handleSave} saving={saving} />
           </Section>
           <Section title={`Work order history (${orders.length}) · YTD spend ${money(ytdSpend)}`}>
