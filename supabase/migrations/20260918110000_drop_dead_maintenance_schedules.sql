@@ -1,0 +1,20 @@
+-- Fleet Maintenance System — drop dead maintenance_schedules table
+-- (2026-09-18)
+--
+-- Created in 20260901030000_preventive_maintenance.sql to feed a planned
+-- "estimated_from_mileage_rate" basis for unit_maintenance_due
+-- (kind='oil_change') off Samsara's own PM schedule intervals. That sync
+-- was never built -- confirmed zero code in web/src or supabase/functions
+-- ever selects from this table. The oil_change tracking that actually
+-- shipped instead (20260918100000_unit_maintenance_due_odometer.sql)
+-- reads Alvys's own odometer reference fields directly via
+-- alvys-sync-equipment, with no dependency on this table or its seeded
+-- Samsara intervals. Left as-is it's just dead schema that could mislead
+-- future work into thinking it's part of the real PM pipeline.
+--
+-- Cascades to drop unit_maintenance_due.schedule_id's now-pointless FK
+-- constraint -- the column itself (already unused, always null) is left
+-- alone rather than also dropped, since it costs nothing to keep and a
+-- future engineer building the schedule-based path back out shouldn't
+-- have to re-add it.
+drop table if exists maintenance_schedules cascade;
