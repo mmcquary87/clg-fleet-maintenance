@@ -9,14 +9,12 @@ import { supabase } from "../../lib/supabaseClient";
 import { buildMailto } from "../../lib/mailto";
 import { uploadReceipt, fileToBase64 } from "../../lib/invoiceFiles";
 import { CATEGORIES } from "../../lib/categories";
+import { PAYMENT_METHODS } from "../../lib/paymentMethods";
 import FileDropzone from "../shared/FileDropzone";
 import ChargebackDriverPicker from "../shared/ChargebackDriverPicker";
 import WorkOrderDocumentsPanel from "./WorkOrderDocumentsPanel";
 
 const SEVERITIES = ["Routine", "Urgent", "Unit down"];
-// Plain frontend list, not a DB enum -- see the payment_method column
-// comment in 20260915010000_work_order_payment_status.sql for why.
-const PAYMENT_METHODS = ["Check", "EFS", "Comcheck", "ACH / Wire", "Credit Card", "Company Account", "Net Terms", "Other"];
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;

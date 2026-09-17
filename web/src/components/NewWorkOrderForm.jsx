@@ -4,6 +4,7 @@ import { Card, Field, Input, Select, Button, Alert, Eyebrow } from "../ds";
 import { supabase } from "../lib/supabaseClient";
 import { CATEGORIES } from "../lib/categories";
 import { uploadReceipt, fileToBase64 } from "../lib/invoiceFiles";
+import { PAYMENT_METHODS } from "../lib/paymentMethods";
 import FileDropzone from "./shared/FileDropzone";
 import ChargebackDriverPicker from "./shared/ChargebackDriverPicker";
 
@@ -51,6 +52,13 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanApplied, setScanApplied] = useState(false);
+  // For the EFS-breakdown case -- a completed repair, invoice in hand,
+  // already paid on the spot -- so the whole thing (create, attach
+  // invoice, close, mark paid) can happen in this one form instead of a
+  // separate trip into the work order afterward just to mark it paid.
+  const [markPaid, setMarkPaid] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
+  const [paymentReference, setPaymentReference] = useState("");
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -124,6 +132,12 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
         is_chargeback: li.isChargeback,
         chargeback_driver_name: li.isChargeback ? (li.chargebackDriver.trim() || null) : null,
         chargeback_driver_id: li.isChargeback ? li.chargebackDriverId : null,
+        ...(f.status === "Closed" && markPaid ? {
+          payment_status: "paid",
+          payment_method: paymentMethod,
+          payment_reference: paymentReference.trim() || null,
+          paid_at: f.dateClosed || f.dateOpened,
+        } : {}),
       }));
 
       const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id");
@@ -181,7 +195,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
         </button>
       </div>
       <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 4, marginBottom: 20 }}>
-        For a repair that's already done, with a real invoice in hand — one shop visit, every service performed, each with its own category and cost.
+        For a repair that's already done, with a real invoice in hand — attach it, scan it, and mark it paid right here (e.g. an EFS breakdown check) instead of creating, closing, and paying it in three separate trips.
       </p>
 
       {error && <Alert tone="critical" style={{ marginBottom: 16 }}>{error}</Alert>}
@@ -230,6 +244,25 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
             )}
           </Field>
         </div>
+
+        {f.status === "Closed" && (
+          <div style={{ border: "1px solid var(--clg-border-subtle)", borderRadius: "var(--clg-radius-sm)", padding: 12, marginBottom: 20 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--clg-text-body)", cursor: "pointer", marginBottom: markPaid ? 10 : 0 }}>
+              <input type="checkbox" checked={markPaid} onChange={(e) => setMarkPaid(e.target.checked)} />
+              Already paid — mark as paid now (e.g. an EFS/Comcheck breakdown payment)
+            </label>
+            {markPaid && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Field label="Payment method">
+                  <Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} options={PAYMENT_METHODS} />
+                </Field>
+                <Field label="Reference # (optional)">
+                  <Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="Check #, confirmation #, last 4 of card" />
+                </Field>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
