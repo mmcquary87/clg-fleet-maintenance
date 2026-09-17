@@ -1,4 +1,7 @@
-export const ANNUAL_INSPECTION_INTERVAL_DAYS = 365;
+// 364, not 365 -- an annual inspection done 9/10 is valid through 9/9 of
+// the following year (expires the day before the anniversary), not
+// through the anniversary date itself.
+export const ANNUAL_INSPECTION_INTERVAL_DAYS = 364;
 export const DUE_SOON_WINDOW_DAYS = 14;
 
 export const MILESTONES = [

@@ -67,7 +67,7 @@ export function alvysDotInspectionNote(maintenanceDue) {
 }
 
 // The real due date to show for "Next due" -- prefers Alvys's own answer
-// over computing one from the manual last_annual_inspection_date/365-day
+// over computing one from the manual last_annual_inspection_date/364-day
 // fields, since those are usually empty (nothing in this app requires
 // filling them in) while Alvys's real expiration is now reliably synced.
 export function alvysDotDueDate(maintenanceDue) {
