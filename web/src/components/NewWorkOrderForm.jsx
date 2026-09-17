@@ -126,8 +126,21 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
         chargeback_driver_id: li.isChargeback ? li.chargebackDriverId : null,
       }));
 
-      const { error: insertErr } = await supabase.from("work_orders").insert(rows);
+      const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id");
       if (insertErr) throw insertErr;
+
+      // Also a real work_order_documents row per created work order (not
+      // just the legacy receipt_path column above) so the uploaded
+      // invoice shows up in each one's multi-document list right away --
+      // see 20260918130000_work_order_documents.sql.
+      if (file && inserted?.length > 0) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const docRows = inserted.map((row) => ({
+          work_order_id: row.id, storage_path: receiptPath, file_name: file.name, uploaded_by: user?.id ?? null,
+        }));
+        const { error: docErr } = await supabase.from("work_order_documents").insert(docRows);
+        if (docErr) throw docErr;
+      }
 
       if (f.status === "Closed") {
         const doneDate = f.dateClosed || f.dateOpened;
