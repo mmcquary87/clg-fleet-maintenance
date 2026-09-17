@@ -4,6 +4,7 @@ import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../hooks/useAuth";
 import { useProfile } from "../../hooks/useProfile";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { EQUIPMENT_ITEMS, WALKAROUND_ITEMS, DOCUMENT_ITEMS, ALL_CHECK_ITEMS, countChecked } from "../../lib/tractorInspectionItems";
 import PhotoCapture from "../shared/PhotoCapture";
 import SignaturePad from "../shared/SignaturePad";
@@ -90,6 +91,7 @@ function CheckRow({ item, value, onChange }) {
 export default function TractorInspectionForm({ onCancel, onFiled }) {
   const { session } = useAuth();
   const { profile } = useProfile(session?.user?.id);
+  const isMobile = useIsMobile();
   const [form, setForm] = useState(emptyForm());
   const [unitId, setUnitId] = useState(null);
   const [unitNotFound, setUnitNotFound] = useState(false);
@@ -249,7 +251,7 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
 
       {error && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 16 }}>{error}</Alert>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 320px", gap: 20, alignItems: "start" }}>
         <div>
           <Card style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
@@ -327,7 +329,7 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
           </SectionCard>
 
           <SectionCard title="Fluid levels">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(5, 1fr)", gap: 14 }}>
               <Field label="Fuel"><Input value={form.fuel_level} onChange={setInput("fuel_level")} placeholder="e.g. 7/8" /></Field>
               <Field label="Coolant"><Input value={form.coolant_level} onChange={setInput("coolant_level")} placeholder="Full" /></Field>
               <Field label="Oil"><Input value={form.oil_level} onChange={setInput("oil_level")} placeholder="Full" /></Field>
@@ -403,7 +405,7 @@ export default function TractorInspectionForm({ onCancel, onFiled }) {
           </SectionCard>
         </div>
 
-        <div style={{ position: "sticky", top: 16 }}>
+        <div style={isMobile ? undefined : { position: "sticky", top: 16 }}>
           <Card style={{ marginBottom: 16, borderTop: "3px solid " + (needsAttention.length + newDamageMarkers.length > 0 ? "var(--clg-scarlet)" : "var(--clg-royal)") }}>
             {needsAttention.length + newDamageMarkers.length > 0 ? (
               <>

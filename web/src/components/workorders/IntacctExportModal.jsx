@@ -116,7 +116,7 @@ export default function IntacctExportModal({ onClose }) {
       >
         <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--clg-border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, color: "var(--clg-navy)" }}>Export to Sage Intacct</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}><X size={18} /></button>
+          <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}><X size={18} /></button>
         </div>
 
         <div style={{ padding: 24 }}>

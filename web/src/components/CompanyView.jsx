@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { TrendingUp } from "lucide-react";
 import { Button } from "../ds";
 import { CAT_COLORS } from "../lib/categories";
-import { groupSum, groupVendorStats } from "../lib/groupSum";
+import { groupVendorStats } from "../lib/groupSum";
+import { groupSumByPartCategory } from "../lib/categorySplit";
 import EmptyState from "./EmptyState";
 import { useMilesDriven } from "../hooks/useMilesDriven";
 import { useUnits } from "../hooks/useUnits";
@@ -46,7 +47,7 @@ function PendingCard({ label, reason }) {
 
 export default function CompanyView({ records, range, onGoToWorkOrders, onGoToUnits }) {
   const grandTotal = records.reduce((s, r) => s + r.cost, 0);
-  const byCategory = useMemo(() => groupSum(records, "category"), [records]);
+  const byCategory = useMemo(() => groupSumByPartCategory(records), [records]);
   const byVendor = useMemo(() => groupVendorStats(records), [records]);
   const { miles, loading: milesLoading, error: milesError } = useMilesDriven(range);
   const { units } = useUnits();

@@ -4,6 +4,7 @@ import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../hooks/useAuth";
 import { useProfile } from "../../hooks/useProfile";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import {
   TRACTOR_WALKAROUND_ITEMS, TRACTOR_UNDER_HOOD_TRUCK_ITEMS, TRACTOR_FIFTH_WHEEL_ITEMS,
   TRACTOR_ALL_CHECK_ITEMS, TRACTOR_TIRE_POSITIONS, TRACTOR_BRAKE_POSITIONS, PM_SERVICE_LEVELS,
@@ -128,6 +129,7 @@ function markGridAllOk(list) {
 export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
   const { session } = useAuth();
   const { profile } = useProfile(session?.user?.id);
+  const isMobile = useIsMobile();
   const [form, setForm] = useState(emptyForm());
   const [unitId, setUnitId] = useState(null);
   const [unitType, setUnitType] = useState(null);
@@ -335,7 +337,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
 
       {error && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 16 }}>{error}</Alert>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 320px", gap: 20, alignItems: "start" }}>
         <div>
           <Card style={{ marginBottom: 16 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
@@ -570,7 +572,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
           )}
         </div>
 
-        <div style={{ position: "sticky", top: 16 }}>
+        <div style={isMobile ? undefined : { position: "sticky", top: 16 }}>
           <Card style={{ marginBottom: 16 }}>
             {unitId && (
               <Button
