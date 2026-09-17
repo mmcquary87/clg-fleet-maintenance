@@ -48,7 +48,7 @@ function PrimaryLane({ cards, onChanged }) {
   const meta = LANE_META.waiting_on_you;
 
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       {/* Fixed height + align-items:center, matching MonitoredLane's header
           exactly -- this one used to be two stacked lines (title, then a
           separate "N units · hint" line below), which made its header
@@ -85,7 +85,7 @@ function MonitoredLane({ laneKey, cards, onChanged }) {
   const meta = LANE_META[laneKey];
 
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       <div style={{ height: 20, display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{
           fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.13em",
@@ -183,7 +183,7 @@ export default function Board({ onGoToUnits }) {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "46fr 54fr", gap: 14, padding: isMobile ? "20px 16px" : "24px 28px" }}>
         <PrimaryLane cards={lanes.waiting_on_you} onChanged={reload} />
 
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 14 }}>
             {MONITORED_LANE_KEYS.map((laneKey) => (
               <MonitoredLane key={laneKey} laneKey={laneKey} cards={lanes[laneKey]} onChanged={reload} />
