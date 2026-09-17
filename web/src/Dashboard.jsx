@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { useProfile } from "./hooks/useProfile";
 import Sidebar from "./components/Sidebar";
@@ -41,12 +41,33 @@ const PAGE_META = {
   settings: { group: "Admin", page: "Settings" },
 };
 
+// Remembers the last tab across a browser refresh -- Dashboard has no
+// router (per CLAUDE.md, plain useState tab switching), so a reload used
+// to always remount back to "board" no matter what page you were on.
+// Per-browser convenience only, not shared/critical state, so
+// localStorage is fine; falls back to "board" for a first visit, a
+// cleared/blocked store, or a stored tab that no longer exists.
+const LAST_TAB_STORAGE_KEY = "clg_dashboard_last_tab";
+
+function initialTab() {
+  try {
+    const stored = localStorage.getItem(LAST_TAB_STORAGE_KEY);
+    return stored && PAGE_META[stored] ? stored : "board";
+  } catch {
+    return "board";
+  }
+}
+
 export default function Dashboard({ session }) {
-  const [tab, setTab] = useState("board");
+  const [tab, setTab] = useState(initialTab);
   const [woInitialCategory, setWoInitialCategory] = useState(null);
   const { profile, isAdmin } = useProfile(session.user.id);
   const isMechanic = profile?.role === "mechanic";
   const canUseMechanicQueue = isMechanic || isAdmin;
+
+  useEffect(() => {
+    try { localStorage.setItem(LAST_TAB_STORAGE_KEY, tab); } catch { /* ignore */ }
+  }, [tab]);
 
   const goToWorkOrders = (category) => {
     setWoInitialCategory(category ?? null);
