@@ -56,7 +56,7 @@ export function useAnnualInspectionCompliance() {
     const [dueRes, fleetRes, noDocRes] = await Promise.all([
       supabase
         .from("unit_maintenance_due")
-        .select("due_date, unit:units(id, number, type, is_active, annual_inspection_notes)")
+        .select("due_date, unit:units(id, number, type, is_active, annual_inspection_notes, current_location)")
         .eq("kind", "dot_inspection")
         .in("basis", ["alvys_field", "alvys_certificate"]),
       supabase.from("units").select("id", { count: "exact", head: true }).in("type", ["Truck", "Trailer"]),

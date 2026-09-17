@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Card, Badge, Button, Toggle, Alert, Eyebrow } from "../../ds";
 import { useAnnualInspectionCompliance } from "../../hooks/useAnnualInspectionCompliance";
 import { downloadCsv } from "../../lib/exportCsv";
+import { cityStateFromAddress } from "../../lib/formatLocation";
 import EmptyState from "../EmptyState";
 
 // Band colors are a palette ramp, not a traffic light (Claude Design
@@ -91,7 +92,7 @@ function ExpandedRow({ row, onSave, onGoToWorkOrders, onGoToUnits }) {
 
   return (
     <tr>
-      <td colSpan={6} style={{ padding: 0, background: "var(--clg-surface-subtle)" }}>
+      <td colSpan={7} style={{ padding: 0, background: "var(--clg-surface-subtle)" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, padding: "18px 14px" }}>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--clg-text-muted)", marginBottom: 8 }}>
@@ -186,6 +187,7 @@ export default function AnnualInspectionComplianceView({ onGoToWorkOrders, onGoT
       { label: "Unit", value: (r) => r.number },
       { label: "Type", value: (r) => TYPE_LABEL[r.type] || r.type },
       { label: "Alvys status", value: (r) => r.alvysStatus },
+      { label: "Location", value: (r) => cityStateFromAddress(r.current_location) || "" },
       { label: "Expires", value: (r) => r.expiration },
       { label: "Days until due", value: (r) => r.daysUntilDue },
       { label: "Notes", value: (r) => r.annual_inspection_notes || "" },
@@ -265,10 +267,10 @@ export default function AnnualInspectionComplianceView({ onGoToWorkOrders, onGoT
         <EmptyState title="No units match" body="Try a different type filter, clear the status band filter, or show out-of-service units." />
       ) : (
         <Card padding={0} style={{ overflow: "hidden", overflowX: "auto" }}>
-          <table style={{ width: "100%", minWidth: 860, borderCollapse: "collapse", fontSize: 13 }}>
+          <table style={{ width: "100%", minWidth: 980, borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "var(--clg-surface-subtle)", textAlign: "left" }}>
-                {["Unit", "Type", "Alvys status", "Expires", "Days", "Notes"].map((h) => (
+                {["Unit", "Type", "Alvys status", "Location", "Expires", "Days", "Notes"].map((h) => (
                   <th key={h} style={{ padding: "10px 14px", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--clg-text-muted)" }}>
                     {h}
                   </th>
@@ -296,6 +298,7 @@ export default function AnnualInspectionComplianceView({ onGoToWorkOrders, onGoT
                       <td style={{ padding: "10px 14px" }}>
                         <Badge tone={row.alvysStatus === "Active" ? "neutral" : "critical"}>{row.alvysStatus}</Badge>
                       </td>
+                      <td style={{ padding: "10px 14px", color: "var(--clg-text-muted)" }}>{cityStateFromAddress(row.current_location) || "—"}</td>
                       <td style={{ padding: "10px 14px", color: "var(--clg-text-body)" }}>{fmtDate(row.expiration)}</td>
                       <td style={{ padding: "10px 14px", fontWeight: 700, color: BAND_COLOR[row.band] }}>{fmtDays(row)}</td>
                       <td style={{ padding: "10px 14px", color: row.annual_inspection_notes ? "var(--clg-text-body)" : "var(--clg-text-muted)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
