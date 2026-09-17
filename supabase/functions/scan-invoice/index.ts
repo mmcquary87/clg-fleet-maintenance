@@ -25,7 +25,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.69.0";
 
 const CATEGORIES = [
-  "PM / Oil", "Tires", "Brakes", "Suspension", "Transmission", "Electrical",
+  "PM / Oil", "Tires", "Brakes", "Suspension", "Transmission", "Electrical", "Batteries",
   "Engine", "Emissions / Aftertreatment", "HVAC", "Body / Structural",
   "DOT Inspection", "Mid-Trip Inspection", "Tow", "Detailing / Cleaning", "General Repair",
 ];
