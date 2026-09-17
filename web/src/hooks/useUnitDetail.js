@@ -53,14 +53,13 @@ export function useUnitDetail(unitId) {
       supabase.from("unit_current_trip").select(TRIP_SELECT).eq("unit_id", unitId).maybeSingle(),
       supabase.from("unit_hos_status").select("duty_status, drive_remaining_minutes, shift_remaining_minutes, cycle_remaining_minutes")
         .eq("unit_id", unitId).maybeSingle(),
-      // Real, Alvys-certificate-sourced maintenance due dates (currently
-      // just dot_inspection) -- separate from the manually-logged
-      // last_annual_inspection_date/pm_interval_days fields above, which
-      // only reflect work orders closed in this app and can silently
-      // disagree with the real certificate on file. Surfaced alongside the
-      // old tracker in UnitDrawer rather than replacing it, since only the
-      // DOT half is populated by a sync so far.
-      supabase.from("unit_maintenance_due").select("kind, label, due_date, basis, synced_at").eq("unit_id", unitId),
+      // Real, Alvys-sourced maintenance due data (dot_inspection, oil_change,
+      // midtrip) -- separate from the manually-logged last_*_date/interval
+      // fields above, which only reflect work orders/inspections closed in
+      // this app and can silently disagree with what Alvys has on file.
+      // Surfaced alongside the old tracker in UnitDrawer rather than
+      // replacing it.
+      supabase.from("unit_maintenance_due").select("kind, label, due_date, current_odometer, due_odometer, basis, synced_at").eq("unit_id", unitId),
     ]);
     if (unitRes.error) {
       setError(unitRes.error.message);
