@@ -41,6 +41,24 @@
 // field says 2027-09-09). alvys-sync-dot-inspections is superseded by
 // this and no longer scheduled (see the migration that unschedules it).
 //
+// Also captures Preventive Maintenance (oil change) and Mid-Trip due data
+// off each unit's `References` array -- custom per-account fields shown
+// on Alvys's own "Edit Truck/Trailer" screen, discovered + confirmed
+// stable across the whole active fleet via the alvys-explore-truck-spec
+// probe (2026-09-18). Matched on the stable ReferenceId GUID, never the
+// free-text Name (which varies in whitespace, e.g. trucks' "Next MT Due "
+// vs. trailers' "Next MT Due ", and trucks/trailers use entirely
+// different ReferenceIds for the same-looking field). PM's two reference
+// fields hold a bare odometer number despite their names implying a date
+// is possible -- into unit_maintenance_due (kind='oil_change',
+// basis='alvys_field', current_odometer=last done, due_odometer=next
+// due); Mid-Trip's due date -- trucks and trailers both have one, under
+// different ReferenceIds -- into kind='midtrip', due_date. Trucks only:
+// PM reference fields (trailers don't get PM service). A unit missing a
+// given reference just doesn't get a row for it -- no fallback basis, no
+// "not on file" placeholder, unlike dot_inspection's no_document_on_file
+// (no compliance console reads these yet to need one).
+//
 // Safe to re-run — idempotent upsert by number/alvys_asset_id.
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets + service role
 // access (writes bypass RLS via the service role key, since this runs
@@ -51,6 +69,32 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const ALVYS_TOKEN_URL = "https://auth.alvys.com/oauth/token";
 const ALVYS_API_BASE = "https://integrations.alvys.com/api/p/v1.0";
 const PAGE_SIZE = 100;
+
+// Confirmed via alvys-explore-truck-spec against the full active fleet
+// (47 trucks / 107 trailers, 2026-09-18) -- see that function's header.
+const TRUCK_REF_IDS = {
+  lastPmOdometer: "5b587a8b-449a-4c24-97e6-bc41d1cba9c6", // "Last PM Date & Odometer Reading"
+  nextPmOdometerDue: "43b1e18f-3e22-4c44-ba8b-257d8cd9d5c0", // "Next PM Date and/or Odometer Reading Due"
+  nextMidtripDue: "2f4fdd5d-c946-484b-bc2e-e696849d6360", // "Next MT Due "
+};
+const TRAILER_REF_IDS = {
+  nextMidtripDue: "9b98ddb8-6c6c-4a99-ae08-bd0bb4758cd0", // "Next MT Due"
+};
+
+function refValue(references: any, referenceId: string): string | null {
+  const r = (Array.isArray(references) ? references : []).find((x: any) => x.ReferenceId === referenceId);
+  return r?.Value ?? null;
+}
+
+// Observed values are bare odometer numbers ("880339") despite the
+// reference names implying a date is sometimes possible -- defensively
+// strips any non-digit characters rather than assuming the format never
+// changes.
+function parseOdometer(value: string | null): number | null {
+  if (value == null) return null;
+  const n = parseInt(String(value).replace(/[^0-9]/g, ""), 10);
+  return Number.isFinite(n) ? n : null;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,11 +158,16 @@ Deno.serve(async (req) => {
         number: t.TruckNum, type: "Truck", vin: t.VinNumber ?? null, alvys_asset_id: t.Id,
         year: t.Year ?? null, make: t.Make ?? null, model: t.Model ?? null, fuel_type: t.FuelType ?? null,
         is_active: true, inspection_due_date: t.InspectionExpirationDate ?? null,
+        last_pm_odometer: parseOdometer(refValue(t.References, TRUCK_REF_IDS.lastPmOdometer)),
+        next_pm_odometer_due: parseOdometer(refValue(t.References, TRUCK_REF_IDS.nextPmOdometerDue)),
+        next_midtrip_due: refValue(t.References, TRUCK_REF_IDS.nextMidtripDue),
       })),
       ...trailers.map((t) => ({
         number: t.TrailerNum, type: "Trailer", vin: t.VinNum ?? null, alvys_asset_id: t.Id,
         year: t.Year ?? null, make: t.Make ?? null, model: t.EquipmentType ?? null, fuel_type: null,
         is_active: true, inspection_due_date: t.InspectionExpiresAt ?? null,
+        last_pm_odometer: null, next_pm_odometer_due: null,
+        next_midtrip_due: refValue(t.References, TRAILER_REF_IDS.nextMidtripDue),
       })),
     ].filter((u) => u.number);
     const activeNumbers = new Set(alvysUnits.map((u) => u.number.toLowerCase()));
@@ -147,11 +196,13 @@ Deno.serve(async (req) => {
       .map((u: any) => u.id);
 
     if (toInsert.length > 0) {
-      const { error: insErr } = await supabase.from("units").insert(toInsert.map(({ inspection_due_date, ...fields }) => fields));
+      const { error: insErr } = await supabase.from("units").insert(
+        toInsert.map(({ inspection_due_date, last_pm_odometer, next_pm_odometer_due, next_midtrip_due, ...fields }) => fields)
+      );
       if (insErr) throw insErr;
     }
     for (const u of toUpdate) {
-      const { id, inspection_due_date, ...fields } = u;
+      const { id, inspection_due_date, last_pm_odometer, next_pm_odometer_due, next_midtrip_due, ...fields } = u;
       const { error: updErr } = await supabase.from("units").update(fields).eq("id", id);
       if (updErr) throw updErr;
     }
@@ -184,6 +235,37 @@ Deno.serve(async (req) => {
       if (dueErr) throw dueErr;
     }
 
+    const pmRows = alvysUnits
+      .filter((u) => (u.last_pm_odometer != null || u.next_pm_odometer_due != null) && idByNumber.has(u.number.toLowerCase()))
+      .map((u) => ({
+        unit_id: idByNumber.get(u.number.toLowerCase()),
+        kind: "oil_change",
+        label: "Preventive Maintenance",
+        current_odometer: u.last_pm_odometer,
+        due_odometer: u.next_pm_odometer_due,
+        basis: "alvys_field",
+        synced_at: new Date().toISOString(),
+      }));
+    if (pmRows.length > 0) {
+      const { error: pmErr } = await supabase.from("unit_maintenance_due").upsert(pmRows, { onConflict: "unit_id,kind" });
+      if (pmErr) throw pmErr;
+    }
+
+    const midtripRows = alvysUnits
+      .filter((u) => u.next_midtrip_due && idByNumber.has(u.number.toLowerCase()))
+      .map((u) => ({
+        unit_id: idByNumber.get(u.number.toLowerCase()),
+        kind: "midtrip",
+        label: "Mid-Trip Inspection",
+        due_date: u.next_midtrip_due,
+        basis: "alvys_field",
+        synced_at: new Date().toISOString(),
+      }));
+    if (midtripRows.length > 0) {
+      const { error: midtripErr } = await supabase.from("unit_maintenance_due").upsert(midtripRows, { onConflict: "unit_id,kind" });
+      if (midtripErr) throw midtripErr;
+    }
+
     return new Response(JSON.stringify({
       trucksFound: trucks.length,
       trailersFound: trailers.length,
@@ -191,6 +273,8 @@ Deno.serve(async (req) => {
       unitsUpdated: toUpdate.length,
       unitsDeactivated: toDeactivate.length,
       inspectionDatesSynced: dueRows.length,
+      pmRecordsSynced: pmRows.length,
+      midtripDueDatesSynced: midtripRows.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err instanceof Error ? err.message : err) }), {

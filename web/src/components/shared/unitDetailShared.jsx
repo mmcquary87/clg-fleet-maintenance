@@ -75,6 +75,41 @@ export function alvysDotDueDate(maintenanceDue) {
   return row?.due_date ?? null;
 }
 
+// Mid-Trip's real next-due date from Alvys, same pattern/reasoning as the
+// DOT inspection note above -- last_midtrip_date only updates when a
+// mid-trip inspection is filed in this app (or a "DOT Inspection" work
+// order tagged inspectionType "Midtrip" is closed), so a unit CLG has
+// been tracking in Alvys but never yet inspected here shows nothing
+// without this.
+export function alvysMidtripNote(maintenanceDue) {
+  const row = (maintenanceDue ?? []).find((d) => d.kind === "midtrip" && d.basis === "alvys_field" && d.due_date);
+  if (!row) return null;
+  return { tone: "brand", text: `Alvys — next due ${row.due_date}` };
+}
+
+export function alvysMidtripDueDate(maintenanceDue) {
+  const row = (maintenanceDue ?? []).find((d) => d.kind === "midtrip" && d.basis === "alvys_field");
+  return row?.due_date ?? null;
+}
+
+// PM/Oil is odometer-based in Alvys (no due-date concept there at all),
+// unlike this app's own date+interval "pm" milestone -- shown as an
+// independent note with its own odometer-based status rather than forced
+// into the date-based "Next due" column. unit.odometer is the Samsara-
+// synced current reading (same field UnitsView/UnitDetailPage already
+// show), so this stays live between Alvys syncs.
+export function alvysPmNote(maintenanceDue, unit) {
+  const row = (maintenanceDue ?? []).find((d) => d.kind === "oil_change" && d.basis === "alvys_field" && d.due_odometer != null);
+  if (!row) return null;
+  const current = unit.odometer;
+  const remaining = current != null ? row.due_odometer - current : null;
+  const tone = remaining == null ? "neutral" : remaining < 0 ? "critical" : remaining <= 2500 ? "accent" : "brand";
+  const text = current != null
+    ? `Alvys — due at ${row.due_odometer.toLocaleString()} mi (now ${current.toLocaleString()} mi)`
+    : `Alvys — due at ${row.due_odometer.toLocaleString()} mi`;
+  return { tone, text };
+}
+
 export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
   const interval = milestone.fixedInterval ?? unit[milestone.intervalField];
   const [lastDate, setLastDate] = useState(unit[milestone.lastField] || "");
@@ -149,15 +184,23 @@ export function MaintenanceSchedule({ unit, maintenanceDue, onSave, saving }) {
     <>
       {MILESTONES.map((m) => {
         const isAnnual = m.key === "annual";
-        const dotNote = isAnnual ? alvysDotInspectionNote(maintenanceDue) : null;
-        const dueOverride = isAnnual && !unit[m.lastField] ? alvysDotDueDate(maintenanceDue) : null;
+        const isMidtrip = m.key === "midtrip";
+        const isPm = m.key === "pm";
+        const note = isAnnual ? alvysDotInspectionNote(maintenanceDue)
+          : isMidtrip ? alvysMidtripNote(maintenanceDue)
+          : isPm ? alvysPmNote(maintenanceDue, unit)
+          : null;
+        const dueOverride = unit[m.lastField] ? null
+          : isAnnual ? alvysDotDueDate(maintenanceDue)
+          : isMidtrip ? alvysMidtripDueDate(maintenanceDue)
+          : null;
         return (
           <div key={m.key}>
             <MilestoneRow milestone={m} unit={unit} onSave={onSave} saving={saving} dueOverride={dueOverride} />
-            {dotNote && (
+            {note && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 0 0", fontSize: 12 }}>
-                <Badge tone={dotNote.tone}>Alvys</Badge>
-                <span style={{ color: "var(--clg-text-muted)" }}>{dotNote.text}</span>
+                <Badge tone={note.tone}>Alvys</Badge>
+                <span style={{ color: "var(--clg-text-muted)" }}>{note.text}</span>
               </div>
             )}
           </div>

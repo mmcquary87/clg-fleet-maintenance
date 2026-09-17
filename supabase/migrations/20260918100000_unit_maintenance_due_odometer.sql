@@ -1,0 +1,14 @@
+-- Fleet Maintenance System — odometer-based due threshold for unit_maintenance_due
+-- (2026-09-18)
+--
+-- Alvys tracks Preventive Maintenance (oil change) by odometer reading, not
+-- date -- its "Last PM Date & Odometer Reading" / "Next PM Date and/or
+-- Odometer Reading Due" custom fields hold bare odometer numbers on every
+-- truck sampled so far, never a date, despite the field names. The
+-- existing current_odometer column (never actually populated by anything
+-- until now -- kind='oil_change' had no real producer despite being in the
+-- schema since 20260901030000_preventive_maintenance.sql) is repurposed to
+-- hold that "last PM done at odometer X" reading; this adds the matching
+-- "due at odometer Y" threshold alongside it. due_date stays null for
+-- these rows -- there's no date to show for an odometer-based basis.
+alter table unit_maintenance_due add column due_odometer integer;
