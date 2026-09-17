@@ -2,9 +2,12 @@
 //
 // Pulls from Samsara and updates our tables:
 //   1. Vehicle roster -> matches units by VIN, sets units.samsara_vehicle_id
+//   1b. Trailer roster -> matches units by VIN (separate Samsara object
+//       type from vehicles; no schema column, re-matched each run)
 //   2. Fault codes (last 7 days) -> fault_events (OBD-II + J1939)
 //   3. Fuel/odometer/GPS, each vehicle's latest known reading -> units
 //      (current_lat/current_lng feed the Tracking page's ETA math)
+//   3b. Trailer GPS, same as 3 but engine-less (no fuel/odometer)
 //   4. DVIR defects (last 30 days) -> dvir_defects
 //
 // Read-only against Samsara — no writes back (Phase 1 scope; the design
@@ -107,6 +110,25 @@ Deno.serve(async (req) => {
     }
     const vehiclesMatched = vehicleMatchTasks.length;
 
+    // ---- 1b. Trailer roster -> match units by VIN ----
+    // Confirmed via a discovery probe (2026-09-17, all trailers carry
+    // Samsara trailer-tracking hardware): trailers are a separate object
+    // type in Samsara's API (/fleet/trailers, /fleet/trailers/stats), not
+    // part of /fleet/vehicles above -- and a trailer's VIN lives under
+    // externalIds["samsara.vin"], not a top-level `vin` field like
+    // vehicles have. No samsara_trailer_id column exists (unlike
+    // samsara_vehicle_id) -- trailerIdToUnitId is rebuilt fresh each run
+    // from the VIN match instead, same net effect without a schema change.
+    const trailers = await fetchAllPaginated("/fleet/trailers", { limit: "512" });
+    const trailerIdToUnitId = new Map<string, string>();
+    for (const t of trailers) {
+      const vin = t.externalIds?.["samsara.vin"];
+      if (!vin) continue;
+      const unitId = unitByVin.get(vin.toLowerCase());
+      if (unitId) trailerIdToUnitId.set(t.id, unitId);
+    }
+    const trailersMatched = trailerIdToUnitId.size;
+
     // ---- 2. Fault codes, last 7 days ----
     const faultVehicles = await fetchAllPaginated("/fleet/vehicles/stats/history", {
       types: "faultCodes",
@@ -186,13 +208,8 @@ Deno.serve(async (req) => {
     // street address computed directly from THIS reading's own lat/lng, so
     // it can't disagree with the coordinates the way a saved-place match
     // can. Preferred when available; address.name is a fallback for
-    // vehicles/plans where a live reverse-geocode isn't returned.
-    // NOT YET CONFIRMED against Samsara's docs (network access to
-    // developers.samsara.com is blocked from this environment) -- the
-    // rawGpsLogged block below prints one full reading to this function's
-    // logs so the exact field name can be verified/corrected after the
-    // first live run.
-    let rawGpsLogged = false;
+    // vehicles/plans where a live reverse-geocode isn't returned. Field
+    // name confirmed live via a discovery probe (2026-09-17).
     const syncedAt = new Date().toISOString();
     const unitUpdateTasks: Promise<{ error: unknown }>[] = [];
     for (const v of statVehicles) {
@@ -204,10 +221,6 @@ Deno.serve(async (req) => {
       const lastOdo = latestOf(v.obdOdometerMeters);
       if (lastOdo) fields.odometer = Math.round(lastOdo.value * 0.000621371); // meters -> miles
       const lastGps = latestOf(v.gps);
-      if (lastGps && !rawGpsLogged) {
-        console.log("[samsara-sync] sample gps reading (verify field names):", JSON.stringify(lastGps));
-        rawGpsLogged = true;
-      }
       const liveLocation = lastGps?.reverseGeo?.formattedLocation ?? null;
       if (liveLocation) {
         fields.current_location = liveLocation;
@@ -221,6 +234,30 @@ Deno.serve(async (req) => {
       // different key sets would null out fields missing on some rows.
       unitUpdateTasks.push(supabase.from("units").update(fields).eq("id", unitId));
     }
+
+    // ---- 3b. Trailer GPS, latest known reading ----
+    // Same shape as /fleet/vehicles/stats's gps reading (latitude/
+    // longitude/reverseGeo/time) confirmed by the same discovery probe,
+    // just returned as a single object per trailer rather than an array --
+    // latestOf() already handles both shapes. Trailers have no engine, so
+    // only GPS is requested (no fuelPercents/obdOdometerMeters).
+    const statTrailers = await fetchAllPaginated("/fleet/trailers/stats", { types: "gps" });
+    let trailersRefreshed = 0;
+    for (const t of statTrailers) {
+      const unitId = trailerIdToUnitId.get(t.id);
+      if (!unitId) continue;
+      const lastGps = latestOf(t.gps);
+      if (!lastGps) continue;
+      const fields: Record<string, unknown> = { samsara_synced_at: syncedAt };
+      const liveLocation = lastGps.reverseGeo?.formattedLocation ?? null;
+      if (liveLocation) fields.current_location = liveLocation;
+      else if (lastGps.address?.name) fields.current_location = lastGps.address.name;
+      if (typeof lastGps.latitude === "number") fields.current_lat = lastGps.latitude;
+      if (typeof lastGps.longitude === "number") fields.current_lng = lastGps.longitude;
+      unitUpdateTasks.push(supabase.from("units").update(fields).eq("id", unitId));
+      trailersRefreshed++;
+    }
+
     const unitUpdateResults = await Promise.all(unitUpdateTasks);
     for (const result of unitUpdateResults) {
       if (result && result.error) throw result.error;
@@ -252,6 +289,9 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       vehiclesFound: vehicles.length,
       vehiclesMatchedToUnits: vehiclesMatched,
+      trailersFound: trailers.length,
+      trailersMatchedToUnits: trailersMatched,
+      trailersRefreshed,
       faultsUpserted,
       unitsRefreshed,
       defectsFound: defects.length,
