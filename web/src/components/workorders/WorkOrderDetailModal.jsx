@@ -158,6 +158,29 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     }
   };
 
+  // Same update the Board's "Authorize" button performs (UnitCard.jsx) --
+  // that was previously the only place to clear "needs approval", forcing
+  // a detour away from this modal just to come back and close the order.
+  const approve = async () => {
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: updateErr } = await supabase.from("work_orders").update({
+        approval_status: "approved",
+        approved_by: user?.email,
+        approved_at: new Date().toISOString(),
+      }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setStatusError(err.message);
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
   const openVoidForm = () => {
     setStatusError(null);
     setClosing(false);
@@ -497,6 +520,11 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 </div>
                 {!closing && !editingDetails && !voiding && !editingPayment && !order.voided && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                    {order.approval_status === "needs_approval" && (
+                      <Button size="sm" onClick={approve} disabled={statusBusy} iconLeft={statusBusy ? <Loader2 size={12} className="spin" /> : null}>
+                        Authorize
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" iconLeft={<Pencil size={12} />} onClick={openDetailsForm} disabled={statusBusy}>
                       Edit details
                     </Button>
