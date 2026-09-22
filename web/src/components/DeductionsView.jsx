@@ -1,4 +1,5 @@
-import { Loader2, Download, UserMinus } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Download, UserMinus, Check } from "lucide-react";
 import { Card, Badge, Button, Alert } from "../ds";
 import { useDeductions } from "../hooks/useDeductions";
 import { downloadCsv } from "../lib/exportCsv";
@@ -18,11 +19,20 @@ const EXPORT_COLUMNS = [
   { label: "PO number", value: (r) => r.po_number },
   { label: "Repair cost", value: (r) => Number(r.cost) || 0 },
   { label: "Billed to driver", value: (r) => r.billedAmount },
+  { label: "Deducted", value: (r) => (r.chargeback_deducted_at ? "Yes" : "No") },
+  { label: "Deducted on", value: (r) => (r.chargeback_deducted_at ? r.chargeback_deducted_at.slice(0, 10) : "") },
 ];
 
 export default function DeductionsView({ range }) {
-  const { records, loading, error } = useDeductions(range);
+  const { records, loading, error, setDeducted } = useDeductions(range);
+  const [busyId, setBusyId] = useState(null);
   const total = records.reduce((s, r) => s + r.billedAmount, 0);
+
+  const toggleDeducted = async (r) => {
+    setBusyId(r.id);
+    await setDeducted(r.id, !r.chargeback_deducted_at);
+    setBusyId(null);
+  };
 
   return (
     <div>
@@ -56,9 +66,9 @@ export default function DeductionsView({ range }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
               <thead>
                 <tr>
-                  {["Driver", "Unit", "Date", "Vendor", "Category", "Description", "Repair cost", "Billed"].map((h) => (
+                  {["Driver", "Unit", "Date", "Vendor", "Category", "Description", "Repair cost", "Billed", "Deducted"].map((h) => (
                     <th key={h} style={{
-                      textAlign: h === "Repair cost" || h === "Billed" ? "right" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
+                      textAlign: h === "Repair cost" || h === "Billed" ? "right" : h === "Deducted" ? "center" : "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
                       color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
                     }}>{h}</th>
@@ -95,6 +105,16 @@ export default function DeductionsView({ range }) {
                         </Badge>
                       )}
                     </td>
+                    <td style={{ padding: "10px 14px", textAlign: "center", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                      <Button
+                        size="sm" variant={r.chargeback_deducted_at ? "primary" : "outline"}
+                        iconLeft={busyId === r.id ? <Loader2 size={12} className="spin" /> : r.chargeback_deducted_at ? <Check size={12} /> : null}
+                        onClick={() => toggleDeducted(r)} disabled={busyId === r.id}
+                        title={r.chargeback_deducted_at ? `Deducted ${r.chargeback_deducted_at.slice(0, 10)} — click to undo` : "Mark as deducted from pay"}
+                      >
+                        {r.chargeback_deducted_at ? "Deducted" : "Mark deducted"}
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -107,6 +127,7 @@ export default function DeductionsView({ range }) {
                   <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 700, color: "var(--clg-navy)" }}>
                     {money(total)}
                   </td>
+                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }} />
                 </tr>
               </tfoot>
             </table>

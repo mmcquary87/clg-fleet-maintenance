@@ -241,6 +241,11 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
                       <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", maxWidth: 280, fontWeight: isOpen ? 600 : 400, color: rowFg }}>
                         {o.complaint || o.description || "—"}
                         {o.is_chargeback && <Badge tone="critical" style={{ marginLeft: 6 }}>Chargeback</Badge>}
+                        {o.is_chargeback && (
+                          <Badge tone={o.chargeback_deducted_at ? "brand" : "outline"} style={{ marginLeft: 6 }}>
+                            {o.chargeback_deducted_at ? "Deducted" : "Not deducted"}
+                          </Badge>
+                        )}
                       </td>
                       <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: isOpen ? "var(--clg-navy)" : "var(--clg-text-muted)" }}>
                         {blockedOnText(o)}
@@ -255,9 +260,16 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
                         {!o.cost ? (
                           <span style={{ color: "var(--clg-mercury)", fontStyle: "italic" }}>—</span>
                         ) : (
-                          <Badge tone={o.payment_status === "paid" ? "brand" : "outline"}>
-                            {o.payment_status === "paid" ? "Paid" : "Unpaid"}
-                          </Badge>
+                          <>
+                            <Badge tone={o.payment_status === "paid" ? "brand" : "outline"}>
+                              {o.payment_status === "paid" ? "Paid" : "Unpaid"}
+                            </Badge>
+                            {o.exported_to_intacct_at && (
+                              <Badge tone="neutral" style={{ marginLeft: 6 }} title={`Exported to Sage Intacct ${o.exported_to_intacct_at.slice(0, 10)}`}>
+                                Exported
+                              </Badge>
+                            )}
+                          </>
                         )}
                       </td>
                       <td style={{

@@ -28,9 +28,9 @@ export function useAllWorkOrders(range) {
       .from("work_orders")
       .select(
         "id, wo_number, category, severity, description, complaint, cost, status, approval_status, " +
-        "date_opened, date_closed, invoice_ref, po_number, is_chargeback, chargeback_driver_name, " +
+        "date_opened, date_closed, invoice_ref, po_number, is_chargeback, chargeback_driver_name, chargeback_deducted_at, " +
         "voided, voided_at, voided_reason, vendor_id, waiting_on_parts, assigned_bay, " +
-        "payment_status, payment_method, payment_reference, paid_at, " +
+        "payment_status, payment_method, payment_reference, paid_at, exported_to_intacct_at, " +
         "unit:units(id, number), vendor:vendors(id, name)"
       )
       .order("date_opened", { ascending: false })

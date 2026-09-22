@@ -22,7 +22,7 @@ export function useDeductions(range) {
         let query = supabase
           .from("work_orders")
           .select(
-            "id, chargeback_driver_name, chargeback_driver_id, category, description, complaint, cost, date_opened, date_closed, " +
+            "id, chargeback_driver_name, chargeback_driver_id, chargeback_deducted_at, category, description, complaint, cost, date_opened, date_closed, " +
             "invoice_ref, po_number, mid_trip_inspection_id, unit:units(number), vendor:vendors(name), driver:drivers(driver_type)"
           )
           .eq("is_chargeback", true)
@@ -60,5 +60,15 @@ export function useDeductions(range) {
     load();
   }, [load]);
 
-  return { records, loading, error, reload: load };
+  const setDeducted = async (id, deducted) => {
+    const { error: err } = await supabase
+      .from("work_orders")
+      .update({ chargeback_deducted_at: deducted ? new Date().toISOString() : null })
+      .eq("id", id);
+    if (err) return err.message;
+    setRecords((rs) => rs.map((r) => (r.id === id ? { ...r, chargeback_deducted_at: deducted ? new Date().toISOString() : null } : r)));
+    return null;
+  };
+
+  return { records, loading, error, reload: load, setDeducted };
 }
