@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { nextDueDate, ANNUAL_INSPECTION_INTERVAL_DAYS } from "../lib/maintenanceSchedule";
 
 // Per the Claude Design handoff (2026-09-18): this console tracks units
 // that actually have a DOT annual inspection date on file, not every
@@ -56,7 +57,7 @@ export function useAnnualInspectionCompliance() {
     const [dueRes, fleetRes, noDocRes] = await Promise.all([
       supabase
         .from("unit_maintenance_due")
-        .select("due_date, unit:units(id, number, type, is_active, annual_inspection_notes, current_location)")
+        .select("due_date, unit:units(id, number, type, is_active, annual_inspection_notes, current_location, last_annual_inspection_date)")
         .eq("kind", "dot_inspection")
         .in("basis", ["alvys_field", "alvys_certificate"]),
       supabase.from("units").select("id", { count: "exact", head: true }).in("type", ["Truck", "Trailer"]),
@@ -76,11 +77,22 @@ export function useAnnualInspectionCompliance() {
         .filter((r) => r.unit && ["Truck", "Trailer"].includes(r.unit.type))
         .map((r) => {
           const unit = r.unit;
-          const daysUntilDue = Math.round((new Date(r.due_date + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
+          // A manually-logged "Last done" date (Unit page's Service tab)
+          // is more current than Alvys's own synced record whenever it
+          // computes a LATER expiration -- a real inspection can only push
+          // the due date forward, so whichever source gives the further-
+          // out date is the freshest one, regardless of which system
+          // recorded it. Otherwise this console silently ignored a manual
+          // update entirely until Alvys's own record caught up on its next
+          // sync, showing a unit as overdue when it had already been
+          // reinspected and logged here.
+          const manualDue = nextDueDate(unit.last_annual_inspection_date, ANNUAL_INSPECTION_INTERVAL_DAYS);
+          const dueDate = manualDue && manualDue > r.due_date ? manualDue : r.due_date;
+          const daysUntilDue = Math.round((new Date(dueDate + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000);
           return {
             ...unit,
             alvysStatus: alvysStatusFor(unit),
-            expiration: r.due_date,
+            expiration: dueDate,
             daysUntilDue,
             band: bandFor(daysUntilDue),
             overdue: daysUntilDue < 0,
