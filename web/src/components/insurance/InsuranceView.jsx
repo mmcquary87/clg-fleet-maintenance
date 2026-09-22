@@ -120,7 +120,7 @@ export default function InsuranceView({ onGoToUnits }) {
 
   useEffect(() => {
     supabase.from("units")
-      .select("number, type, current_market_value, current_market_value_date, market_value_mom_depreciation_pct")
+      .select("number, type, year, make, model, vin, current_market_value, current_market_value_date, market_value_mom_depreciation_pct, in_service_date")
       .eq("is_active", true)
       .eq("ownership", "owned")
       .not("current_market_value", "is", null)
@@ -137,7 +137,7 @@ export default function InsuranceView({ onGoToUnits }) {
   // different way.
   useEffect(() => {
     supabase.from("units")
-      .select("ownership, current_market_value")
+      .select("number, ownership, year, make, model, vin, current_market_value, current_market_value_date, in_service_date")
       .neq("ownership", "owned")
       .then(({ data, error: err }) => {
         if (err) { setLeasedError(err.message); setLeased([]); } else { setLeased(data ?? []); }
@@ -175,6 +175,7 @@ export default function InsuranceView({ onGoToUnits }) {
 
   let truckValue = 0;
   let trailerValue = 0;
+  const ownedUnitValueRows = [];
   for (const u of equipment) {
     const baseline = new Date(u.current_market_value_date);
     const baselineMonth = new Date(baseline.getFullYear(), baseline.getMonth(), 1);
@@ -183,6 +184,10 @@ export default function InsuranceView({ onGoToUnits }) {
     const depreciated = Number(u.current_market_value) * Math.pow(1 - rate, months);
     if (u.type === "Truck") truckValue += depreciated;
     else trailerValue += depreciated;
+    ownedUnitValueRows.push({
+      insuredId: u.number, year: u.year, make: u.make, model: u.model, vin: u.vin,
+      currentValue: depreciated, changeDate: u.current_market_value_date, ogDateAdded: u.in_service_date,
+    });
   }
   // CLG-owned only -- what the Physical Damage premium is actually rated
   // on, per the workbook's own stated scope (Penske/Hale equipment is
@@ -196,11 +201,23 @@ export default function InsuranceView({ onGoToUnits }) {
   // operates, not part of the premium base above.
   let penskeValue = 0;
   let haleValue = 0;
+  const leasedUnitValueRows = [];
   for (const l of leased) {
     if (l.ownership === "penske_lease") penskeValue += Number(l.current_market_value) || 0;
     else haleValue += Number(l.current_market_value) || 0;
+    leasedUnitValueRows.push({
+      insuredId: l.number, year: l.year, make: l.make, model: l.model, vin: l.vin,
+      currentValue: Number(l.current_market_value) || 0, changeDate: l.current_market_value_date, ogDateAdded: l.in_service_date,
+    });
   }
   const grandTotalEquipmentValue = clgEquipmentValue != null ? clgEquipmentValue + penskeValue + haleValue : null;
+  // Schedule-of-values export -- every valued unit (CLG-owned + Penske +
+  // Hale) with its own identity fields, for attaching to the actual
+  // insurer filing rather than just the four-number summary above.
+  // "2025 Value" and "Value Removed" aren't tracked anywhere in this app
+  // (no history of a unit's prior value is kept once current_market_value
+  // is overwritten) -- left blank for manual fill-in rather than guessed.
+  const unitValueRows = [...ownedUnitValueRows, ...leasedUnitValueRows].sort((a, b) => (a.insuredId ?? "").localeCompare(b.insuredId ?? ""));
 
   const totalPremium = [autoLiabilityPremium, cargoPremium, physicalDamagePremium].every((v) => v != null)
     ? autoLiabilityPremium + cargoPremium + physicalDamagePremium
@@ -219,6 +236,9 @@ export default function InsuranceView({ onGoToUnits }) {
       fleetMileage: miles ?? "",
       equipmentValue: grandTotalEquipmentValue != null ? grandTotalEquipmentValue.toFixed(2) : "",
       activePowerUnits: activeTrucks,
+      autoLiabilityPremium: autoLiabilityPremium != null ? autoLiabilityPremium.toFixed(2) : "",
+      physicalDamagePremium: physicalDamagePremium != null ? physicalDamagePremium.toFixed(2) : "",
+      cargoPremium: cargoPremium != null ? cargoPremium.toFixed(2) : "",
       estimatedPremium: totalPremium != null ? totalPremium.toFixed(2) : "",
     }], [
       { label: "Reporting month", value: (r) => r.reportingMonth },
@@ -226,9 +246,38 @@ export default function InsuranceView({ onGoToUnits }) {
       { label: "Fleet mileage (mi)", value: (r) => r.fleetMileage },
       { label: "Equipment value ($)", value: (r) => r.equipmentValue },
       { label: "Active power units", value: (r) => r.activePowerUnits },
-      { label: "CLG estimated premium ($, not part of the submission)", value: (r) => r.estimatedPremium },
+      { label: "Auto liability premium ($, not part of the submission)", value: (r) => r.autoLiabilityPremium },
+      { label: "Physical damage premium ($, not part of the submission)", value: (r) => r.physicalDamagePremium },
+      { label: "Motor truck cargo premium ($, not part of the submission)", value: (r) => r.cargoPremium },
+      { label: "CLG estimated total premium ($, not part of the submission)", value: (r) => r.estimatedPremium },
     ]);
     setExportBusy(false);
+  };
+
+  const handleExportUnitValues = () => {
+    downloadCsv(`insurance-unit-values-${reportingMonth.toISOString().slice(0, 7)}.csv`, unitValueRows.map((r) => ({
+      insuredId: r.insuredId ?? "",
+      year: r.year ?? "",
+      make: r.make ?? "",
+      model: r.model ?? "",
+      vin: r.vin ?? "",
+      currentValue: r.currentValue.toFixed(2),
+      value2025: "",
+      valueRemoved: "",
+      changeDate: r.changeDate ?? "",
+      ogDateAdded: r.ogDateAdded ?? "",
+    })), [
+      { label: "Insured ID", value: (r) => r.insuredId },
+      { label: "Year", value: (r) => r.year },
+      { label: "Make", value: (r) => r.make },
+      { label: "Model", value: (r) => r.model },
+      { label: "VIN", value: (r) => r.vin },
+      { label: "Current Value", value: (r) => r.currentValue },
+      { label: "2025 Value", value: (r) => r.value2025 },
+      { label: "Value Removed", value: (r) => r.valueRemoved },
+      { label: "Change Date", value: (r) => r.changeDate },
+      { label: "OG Date Added", value: (r) => r.ogDateAdded },
+    ]);
   };
 
   const handleMarkFiled = async () => {
@@ -251,6 +300,12 @@ export default function InsuranceView({ onGoToUnits }) {
         <div style={{ display: "flex", gap: 9, flexShrink: 0 }}>
           <Button variant="outline" size="sm" iconLeft={<Download size={14} />} onClick={handleExport} disabled={exportBusy || !canFile}>
             Export filing
+          </Button>
+          <Button
+            variant="outline" size="sm" iconLeft={<Download size={14} />} onClick={handleExportUnitValues}
+            disabled={equipmentLoading || leasedLoading || unitValueRows.length === 0}
+          >
+            Export unit values
           </Button>
           {filing || filedJustNow ? (
             <Badge tone="brand" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "10px 14px" }}>

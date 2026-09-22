@@ -275,6 +275,27 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     }
   };
 
+  // Whether this chargeback's been pulled from the driver's pay yet --
+  // same before/nothing pattern as payment_status/paid_at above, so
+  // payroll has a real "done" state instead of the Deductions report
+  // showing every non-voided chargeback forever.
+  const toggleDeducted = async () => {
+    setPaymentBusy(true);
+    setPaymentError(null);
+    try {
+      const { error: updateErr } = await supabase.from("work_orders").update({
+        chargeback_deducted_at: order.chargeback_deducted_at ? null : new Date().toISOString(),
+      }).eq("id", order.id);
+      if (updateErr) throw updateErr;
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setPaymentError(err.message);
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
   const openCloseForm = () => {
     setStatusError(null);
     setEditingDetails(false);
@@ -517,6 +538,16 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                       {order.payment_status === "paid" ? "Paid" : "Unpaid"}
                     </Badge>
                   )}
+                  {order.exported_to_intacct_at && (
+                    <Badge tone="neutral" title={`Exported to Sage Intacct ${order.exported_to_intacct_at.slice(0, 10)}`}>
+                      Exported {order.exported_to_intacct_at.slice(0, 10)}
+                    </Badge>
+                  )}
+                  {order.is_chargeback && (
+                    <Badge tone={order.chargeback_deducted_at ? "brand" : "outline"}>
+                      {order.chargeback_deducted_at ? `Deducted ${order.chargeback_deducted_at.slice(0, 10)}` : "Not deducted"}
+                    </Badge>
+                  )}
                 </div>
                 {!closing && !editingDetails && !voiding && !editingPayment && !order.voided && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
@@ -560,6 +591,15 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                     ) : (
                       <Button size="sm" variant="outline" onClick={openPaymentForm} disabled={statusBusy}>
                         Mark as paid
+                      </Button>
+                    )}
+                    {order.is_chargeback && (
+                      <Button
+                        size="sm" variant="outline"
+                        iconLeft={paymentBusy ? <Loader2 size={12} className="spin" /> : order.chargeback_deducted_at ? <RotateCcw size={12} /> : null}
+                        onClick={toggleDeducted} disabled={paymentBusy}
+                      >
+                        {order.chargeback_deducted_at ? "Undo deducted" : "Mark deducted"}
                       </Button>
                     )}
                     {canVoidWorkOrders && (
