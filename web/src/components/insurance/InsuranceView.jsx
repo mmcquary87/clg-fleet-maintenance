@@ -219,6 +219,9 @@ export default function InsuranceView({ onGoToUnits }) {
       fleetMileage: miles ?? "",
       equipmentValue: grandTotalEquipmentValue != null ? grandTotalEquipmentValue.toFixed(2) : "",
       activePowerUnits: activeTrucks,
+      autoLiabilityPremium: autoLiabilityPremium != null ? autoLiabilityPremium.toFixed(2) : "",
+      physicalDamagePremium: physicalDamagePremium != null ? physicalDamagePremium.toFixed(2) : "",
+      cargoPremium: cargoPremium != null ? cargoPremium.toFixed(2) : "",
       estimatedPremium: totalPremium != null ? totalPremium.toFixed(2) : "",
     }], [
       { label: "Reporting month", value: (r) => r.reportingMonth },
@@ -226,7 +229,10 @@ export default function InsuranceView({ onGoToUnits }) {
       { label: "Fleet mileage (mi)", value: (r) => r.fleetMileage },
       { label: "Equipment value ($)", value: (r) => r.equipmentValue },
       { label: "Active power units", value: (r) => r.activePowerUnits },
-      { label: "CLG estimated premium ($, not part of the submission)", value: (r) => r.estimatedPremium },
+      { label: "Auto liability premium ($, not part of the submission)", value: (r) => r.autoLiabilityPremium },
+      { label: "Physical damage premium ($, not part of the submission)", value: (r) => r.physicalDamagePremium },
+      { label: "Motor truck cargo premium ($, not part of the submission)", value: (r) => r.cargoPremium },
+      { label: "CLG estimated total premium ($, not part of the submission)", value: (r) => r.estimatedPremium },
     ]);
     setExportBusy(false);
   };
