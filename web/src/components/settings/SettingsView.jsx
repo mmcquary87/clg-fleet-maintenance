@@ -448,7 +448,7 @@ function IntacctExportSettingsPanel() {
 }
 
 function UsersPanel() {
-  const { users, loading, error, setCanEditRoster, setCanVoidWorkOrders } = useUsersAdmin();
+  const { users, loading, error, setCanEditRoster, setCanVoidWorkOrders, setCanUseMechanicQueue } = useUsersAdmin();
   const [toggleError, setToggleError] = useState(null);
 
   const onToggle = async (userId, next) => {
@@ -463,12 +463,19 @@ function UsersPanel() {
     if (err) setToggleError(err);
   };
 
+  const onToggleMechanicQueue = async (userId, next) => {
+    setToggleError(null);
+    const err = await setCanUseMechanicQueue(userId, next);
+    if (err) setToggleError(err);
+  };
+
   return (
     <Card>
       <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Users</h3>
       <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
         Drivers rights controls who can add, edit, or remove records on the Drivers page.
-        Void rights controls who can void/un-void a work order. Admins always have both.
+        Void rights controls who can void/un-void a work order. Mechanic queue controls who
+        can access the Mechanic queue regardless of role. Admins always have all three.
       </p>
 
       {error && <Alert tone="critical" title="Couldn't load users" style={{ marginBottom: 16 }}>{error}</Alert>}
@@ -484,9 +491,9 @@ function UsersPanel() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
           <thead>
             <tr>
-              {["Name", "Email", "Role", "Drivers rights", "Void rights"].map((h) => (
+              {["Name", "Email", "Role", "Drivers rights", "Void rights", "Mechanic queue"].map((h) => (
                 <th key={h} style={{
-                  textAlign: h === "Drivers rights" || h === "Void rights" ? "right" : "left", padding: "8px 10px", fontFamily: "var(--clg-font-heading)",
+                  textAlign: h === "Drivers rights" || h === "Void rights" || h === "Mechanic queue" ? "right" : "left", padding: "8px 10px", fontFamily: "var(--clg-font-heading)",
                   fontSize: 10.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
                   color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)",
                 }}>{h}</th>
@@ -510,6 +517,9 @@ function UsersPanel() {
                 </td>
                 <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid var(--clg-border-subtle)" }}>
                   <Toggle checked={u.can_void_work_orders} onChange={(next) => onToggleVoid(u.id, next)} />
+                </td>
+                <td style={{ padding: "8px 10px", textAlign: "right", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                  <Toggle checked={u.can_use_mechanic_queue} onChange={(next) => onToggleMechanicQueue(u.id, next)} />
                 </td>
               </tr>
             ))}
