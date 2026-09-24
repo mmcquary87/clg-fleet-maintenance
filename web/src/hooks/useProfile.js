@@ -14,7 +14,7 @@ export function useProfile(userId) {
     }
     let cancelled = false;
     setLoading(true);
-    supabase.from("profiles").select("id, full_name, role, can_edit_roster, can_void_work_orders").eq("id", userId).single()
+    supabase.from("profiles").select("id, full_name, role, can_edit_roster, can_void_work_orders, can_use_mechanic_queue").eq("id", userId).single()
       .then(({ data }) => {
         if (cancelled) return;
         setProfile(data ?? null);
@@ -28,5 +28,9 @@ export function useProfile(userId) {
     profile, loading, isAdmin,
     canEditRoster: isAdmin || !!profile?.can_edit_roster,
     canVoidWorkOrders: isAdmin || !!profile?.can_void_work_orders,
+    // role === 'mechanic' keeps automatic access (unchanged) -- the new
+    // flag is additive, granting it to any other role too, same as
+    // can_edit_roster/can_void_work_orders already work.
+    canUseMechanicQueue: isAdmin || profile?.role === "mechanic" || !!profile?.can_use_mechanic_queue,
   };
 }

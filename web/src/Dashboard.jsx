@@ -61,9 +61,8 @@ function initialTab() {
 export default function Dashboard({ session }) {
   const [tab, setTab] = useState(initialTab);
   const [woInitialCategory, setWoInitialCategory] = useState(null);
-  const { profile, isAdmin } = useProfile(session.user.id);
+  const { profile, isAdmin, canUseMechanicQueue } = useProfile(session.user.id);
   const isMechanic = profile?.role === "mechanic";
-  const canUseMechanicQueue = isMechanic || isAdmin;
 
   useEffect(() => {
     try { localStorage.setItem(LAST_TAB_STORAGE_KEY, tab); } catch { /* ignore */ }

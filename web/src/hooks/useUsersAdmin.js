@@ -53,5 +53,17 @@ export function useUsersAdmin() {
     return null;
   };
 
-  return { users, loading, error, reload: load, setCanEditRoster, setCanVoidWorkOrders };
+  const setCanUseMechanicQueue = async (userId, canUseMechanicQueue) => {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, can_use_mechanic_queue: canUseMechanicQueue } : u)));
+    const { data, error: fnError } = await supabase.functions.invoke("update-user-permissions", {
+      body: { userId, canUseMechanicQueue },
+    });
+    if (fnError || data?.error) {
+      await load(); // revert to server state on failure
+      return fnError?.message || data?.error;
+    }
+    return null;
+  };
+
+  return { users, loading, error, reload: load, setCanEditRoster, setCanVoidWorkOrders, setCanUseMechanicQueue };
 }
