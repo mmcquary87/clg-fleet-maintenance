@@ -1,6 +1,9 @@
-import { X, Loader2 } from "lucide-react";
-import { Badge, StatusPill, Alert } from "../../ds";
+import { useState } from "react";
+import { X, Loader2, Check, ShieldCheck } from "lucide-react";
+import { Badge, StatusPill, Alert, Button, Input } from "../../ds";
 import { useLeadDetail } from "../../hooks/useLeadDetail";
+import { useAuth } from "../../hooks/useAuth";
+import { supabase } from "../../lib/supabaseClient";
 
 const SEGMENT_LABELS = { new_mc: "New MC", small_fleet: "Small fleet", driver: "Driver" };
 const SEGMENT_TONES = { new_mc: "brand", small_fleet: "neutral", driver: "accent" };
@@ -86,7 +89,54 @@ function SnapshotPanel({ snapshot }) {
   );
 }
 
-function FlagsPanel({ flags }) {
+function FlagRow({ flag: f, onResolve }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(null); // "cleared" | "confirmed" | null
+
+  const submit = async (state) => {
+    setBusy(state);
+    await onResolve(f, state, note.trim() || null);
+    setBusy(null);
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 10px", background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-sm)" }}>
+      <StatusPill tone={FLAG_SEVERITY_TONE[f.severity] || "neutral"} style={{ flexShrink: 0 }}>{f.severity}</StatusPill>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--clg-text-body)" }}>{prettifyCode(f.flag_code)}</div>
+        {f.detail && <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 2 }}>{f.detail}</div>}
+        {f.state !== "open" ? (
+          <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>
+            {f.state}{f.resolved_by ? ` by ${f.resolved_by}` : ""}{f.resolved_at ? ` on ${fmtDate(f.resolved_at)}` : ""}
+            {f.resolution_note ? ` — "${f.resolution_note}"` : ""}
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <Input
+              placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)}
+              disabled={busy !== null} style={{ flex: "1 1 180px", padding: "6px 10px", fontSize: 12.5 }}
+            />
+            <Button
+              variant="outline" size="sm" iconLeft={<Check size={12} />}
+              disabled={busy !== null} onClick={() => submit("cleared")}
+            >
+              {busy === "cleared" ? "…" : "Clear"}
+            </Button>
+            <Button
+              variant="quiet" size="sm" iconLeft={<ShieldCheck size={12} />}
+              disabled={busy !== null} onClick={() => submit("confirmed")}
+              title="Acknowledge this flag is accurate but doesn't block this lead"
+            >
+              {busy === "confirmed" ? "…" : "Confirm"}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FlagsPanel({ flags, onResolve }) {
   if (flags.length === 0) {
     return <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>No vetting flags raised.</div>;
   }
@@ -94,18 +144,7 @@ function FlagsPanel({ flags }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {sorted.map((f) => (
-        <div key={f.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 10px", background: "var(--clg-surface-subtle)", borderRadius: "var(--clg-radius-sm)" }}>
-          <StatusPill tone={FLAG_SEVERITY_TONE[f.severity] || "neutral"} style={{ flexShrink: 0 }}>{f.severity}</StatusPill>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--clg-text-body)" }}>{prettifyCode(f.flag_code)}</div>
-            {f.detail && <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 2 }}>{f.detail}</div>}
-            {f.state !== "open" && (
-              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>
-                {f.state} {f.resolved_by ? `by ${f.resolved_by}` : ""} {f.resolved_at ? `on ${fmtDate(f.resolved_at)}` : ""}
-              </div>
-            )}
-          </div>
-        </div>
+        <FlagRow key={f.id} flag={f} onResolve={onResolve} />
       ))}
     </div>
   );
@@ -145,8 +184,26 @@ function Section({ title, children }) {
   );
 }
 
-export default function LeadDetailModal({ leadId, onClose }) {
-  const { lead, snapshot, flags, conversations, loading, error } = useLeadDetail(leadId);
+export default function LeadDetailModal({ leadId, onClose, onLeadChanged }) {
+  const { lead, snapshot, flags, conversations, loading, error, reload } = useLeadDetail(leadId);
+  const { session } = useAuth();
+  const [resolveError, setResolveError] = useState(null);
+
+  const handleResolve = async (flag, state, note) => {
+    setResolveError(null);
+    const { error: resolveErr } = await supabase.from("lead_vetting_flags").update({
+      state,
+      resolved_at: new Date().toISOString(),
+      resolved_by: session?.user?.email || "unknown",
+      resolution_note: note,
+    }).eq("id", flag.id);
+    if (resolveErr) {
+      setResolveError(resolveErr.message);
+      return;
+    }
+    await reload();
+    onLeadChanged?.();
+  };
 
   return (
     <div
@@ -200,7 +257,8 @@ export default function LeadDetailModal({ leadId, onClose }) {
               </Section>
 
               <Section title="Vetting flags">
-                <FlagsPanel flags={flags} />
+                {resolveError && <Alert tone="critical" title="Couldn't update flag" style={{ marginBottom: 10 }}>{resolveError}</Alert>}
+                <FlagsPanel flags={flags} onResolve={handleResolve} />
               </Section>
 
               <Section title="Activity">

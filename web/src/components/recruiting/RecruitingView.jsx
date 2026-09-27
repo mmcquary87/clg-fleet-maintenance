@@ -35,7 +35,7 @@ function ScoreCell({ lead }) {
 }
 
 export default function RecruitingView() {
-  const { leads, loading, error } = useRecruitingLeads();
+  const { leads, loading, error, reload } = useRecruitingLeads();
   const [segmentFilter, setSegmentFilter] = useState("");
   const [pipelineFilter, setPipelineFilter] = useState("active");
   const [selectedLeadId, setSelectedLeadId] = useState(null);
@@ -146,7 +146,7 @@ export default function RecruitingView() {
       )}
 
       {selectedLeadId && (
-        <LeadDetailModal leadId={selectedLeadId} onClose={() => setSelectedLeadId(null)} />
+        <LeadDetailModal leadId={selectedLeadId} onClose={() => setSelectedLeadId(null)} onLeadChanged={reload} />
       )}
     </div>
   );
