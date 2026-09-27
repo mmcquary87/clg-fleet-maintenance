@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, LogOut } from "lucide-react";
 import { useProfile } from "./hooks/useProfile";
+import { supabase } from "./lib/supabaseClient";
 import Sidebar from "./components/Sidebar";
 import Board from "./components/board/Board";
 import SpendView from "./components/SpendView";
@@ -74,6 +75,36 @@ export default function Dashboard({ session }) {
   };
 
   const { group, page } = PAGE_META[tab] ?? { group: "", page: "" };
+
+  // The recruiter role exists so an account can be invited ahead of the
+  // recruiter-facing UI being built (RECRUITING.md modules 5-7) -- until
+  // then, it deliberately doesn't fall through to the normal tab system
+  // below, which would otherwise hand a recruiter full dispatcher-level
+  // access to fleet maintenance data that isn't their job.
+  if (profile?.role === "recruiter") {
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 16, background: "var(--clg-surface-subtle)", padding: 24, textAlign: "center",
+      }}>
+        <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: "var(--clg-size-h4)", color: "var(--clg-navy)" }}>
+          Owner-Operator Recruiting
+        </div>
+        <div style={{ fontSize: 13, color: "var(--clg-text-muted)", maxWidth: 360 }}>
+          The recruiter dashboard isn't built yet. Check back once lead sourcing and screening are further along.
+        </div>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, background: "none", border: "1px solid var(--clg-border-default)",
+            borderRadius: "var(--clg-radius-sm)", padding: "8px 14px", cursor: "pointer", color: "var(--clg-text-muted)", fontSize: 12.5,
+          }}
+        >
+          <LogOut size={13} /> Sign out
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="app" style={{ display: "flex", minHeight: "100vh", background: "var(--clg-surface-subtle)" }}>

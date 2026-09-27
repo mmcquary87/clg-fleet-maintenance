@@ -14,6 +14,7 @@ const ROLES = [
   { value: "dispatcher", label: "Dispatcher", description: "Day-to-day fleet ops — Board, Tracking, Work Orders, Spend. No Settings access." },
   { value: "mechanic", label: "Mechanic", description: "Shop-floor view (Mechanic queue) for logging repairs. Financial/valuation pages (Insurance, Asset Lifecycle, driver compliance) are hidden." },
   { value: "admin", label: "Admin", description: "Everything a Dispatcher can see, plus Settings, user management, and void rights on work orders." },
+  { value: "recruiter", label: "Recruiter", description: "Owner-Operator Recruiting only — sees a placeholder for now until the recruiter dashboard is built. No fleet maintenance access." },
 ];
 const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.value, r.label]));
 
