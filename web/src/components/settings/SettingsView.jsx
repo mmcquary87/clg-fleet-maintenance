@@ -488,6 +488,7 @@ function UsersPanel() {
       ) : users.length === 0 ? (
         <div style={{ padding: "24px 0", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>No users yet.</div>
       ) : (
+        <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
           <thead>
             <tr>
@@ -525,6 +526,7 @@ function UsersPanel() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </Card>
   );
