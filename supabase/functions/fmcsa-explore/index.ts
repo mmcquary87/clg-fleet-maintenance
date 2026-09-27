@@ -62,6 +62,13 @@ Deno.serve(async (req) => {
       // own _links.
       dotNumber ? tryEndpoint(`GET /carriers/${dotNumber}/authority`, `/carriers/${dotNumber}/authority`, webKey) : null,
       dotNumber ? tryEndpoint(`GET /carriers/${dotNumber}/docket-numbers`, `/carriers/${dotNumber}/docket-numbers`, webKey) : null,
+      // Confirmed present as _links on the base carrier response but not
+      // yet checked -- "basics" in particular is the best remaining
+      // candidate for a registration/add date, since neither the base
+      // snapshot nor /authority nor /docket-numbers has one.
+      dotNumber ? tryEndpoint(`GET /carriers/${dotNumber}/basics`, `/carriers/${dotNumber}/basics`, webKey) : null,
+      dotNumber ? tryEndpoint(`GET /carriers/${dotNumber}/operation-classification`, `/carriers/${dotNumber}/operation-classification`, webKey) : null,
+      dotNumber ? tryEndpoint(`GET /carriers/${dotNumber}/cargo-carried`, `/carriers/${dotNumber}/cargo-carried`, webKey) : null,
       mcNumber ? tryEndpoint(`GET /carriers/docket-number/${mcNumber}`, `/carriers/docket-number/${mcNumber}`, webKey) : null,
     ]);
 
