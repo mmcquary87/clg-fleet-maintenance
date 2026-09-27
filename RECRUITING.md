@@ -140,17 +140,23 @@ Build one module per session. Each must pass its tests before the next starts.
    'provisional'` until CLG approves a scoring config). Aljex importer and
    the inbound web form endpoint are **not built** — see the open scope
    decision below.
-3. **Vetting** — flags are mechanically derived and stored (module 2), but
-   there's no UI yet for a person to review/clear a flag.
+3. **Vetting** — flags are mechanically derived and stored (module 2). A
+   recruiter can now see them (module 7's first slice, below) but there's
+   still no "clear a flag" action for a person to take.
 4. **AI screener** — not started.
 5. **Handoff** — not started.
 6. **Onboarding tracker** — the governed data model is live (templates,
    cases, steps, clear-to-dispatch gate, roster handoff), but there's no UI
    to drive it, and all seeded templates are DRAFT — nothing is approved.
-7. **Recruiter dashboard** — not started. A `recruiter` user role exists
-   (invite-able from Settings) but is gated to a placeholder screen in
-   `Dashboard.jsx` until this module is built, so a recruiter account never
-   falls through to fleet-maintenance access.
+7. **Recruiter dashboard** — first slice done: a Leads pipeline view
+   (`components/recruiting/RecruitingView.jsx`, `LeadDetailModal.jsx`) —
+   filterable leads table (segment, active/all pipeline), fit score shown
+   with its provisional/pending status rather than a bare number, per-lead
+   detail (FMCSA snapshot, full flag history, activity log). The
+   `recruiter` role now lands here instead of a placeholder screen, and is
+   the *only* nav group a pure recruiter account sees (Sidebar); an admin
+   sees it too. Still to build: a "clear this flag" action, campaigns,
+   onboarding board/case UI, the recruiter's own Home view.
 8. **Retention signals (later)** — not started.
 
 **Open scope decision (flagged, not yet resolved):** the CRM spec's own
