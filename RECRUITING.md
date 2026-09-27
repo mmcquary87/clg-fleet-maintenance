@@ -102,6 +102,28 @@ Build one module per session. Each must pass its tests before the next starts.
 - **PII.** Secrets in Edge Function secrets only, never committed. Encrypt phone and email at rest where the platform supports it. Log actions, not full message bodies, in application logs.
 - **Audit trail.** Every automated action and human approval is written to `events`.
 
+## 9a. Confirmed FMCSA QCMobile API limitations (2026-09-27)
+
+Checked every `_links` sub-resource on a real carrier's base response
+(`/carriers/{dot}`, `/authority`, `/docket-numbers`, `/basics`,
+`/operation-classification`, `/cargo-carried`) against DOT 2516954. Two
+fields section 3/6 assume are simply not exposed by this API:
+
+- **No authority-granted/registration date anywhere.** `new_mc` vs.
+  `small_fleet` is assigned on `power_units` alone instead (1-3 vs.
+  4-10) until a module 3 vetting flag or a different data source (FMCSA's
+  separate public Licensing & Insurance lookup, or Aljex) supplies real
+  authority age.
+- **No contact phone or email.** An FMCSA-sourced lead is structurally
+  incomplete for outreach (`leads.phone`/`email` stay null) until
+  enriched from elsewhere -- `fmcsa-import` only sources and scores,
+  never attempts contact.
+
+`basics` returns BASIC safety category scores (Unsafe Driving, HOS
+Compliance, Driver Fitness, Drugs/Alcohol, Vehicle Maintenance) with a
+`basicsRunDate` (when FMCSA last computed the score) -- not a
+registration date, easy to mistake for one.
+
 ## 9. Open questions (ask before assuming)
 
 - Tenstreet API access: yes or no?
