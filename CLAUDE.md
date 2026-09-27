@@ -7,8 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Fleet & operations platform for CLG Transportation (a trucking company). Started
 as a maintenance-spend tracker (see `SPEC.md` for the original goal, data model,
 and phasing rationale) and has grown into a broader ops tool: work order /
-downtime board, driver roster & home-time tracking, chargebacks, and dashboards
-pulling from the company's TMS (Alvys) and telematics (Samsara) providers.
+downtime board, driver roster & home-time tracking, chargebacks, dashboards
+pulling from the company's TMS (Alvys) and telematics (Samsara) providers, and
+(newest, in progress) an Owner-Operator Recruiting system — see `RECRUITING.md`
+for that subsystem's own scope/terms/guardrails; it was handed over assuming a
+separate Python/FastAPI service but is being built on this same Supabase/edge-
+function stack instead, for the same "no server to babysit" reason as the rest
+of this app.
 `SPEC.md` is the original design doc — useful for *why* decisions were made
 (e.g. no self-hosted server), but treat it as historical; the app now covers
 more than what it describes. `DESIGN_QUEUE.md` is the running log of what's
@@ -41,6 +46,10 @@ traditionally-hosted server/API layer.
 - `SPEC.md`, `SETUP.md`, `DESIGN_QUEUE.md` — build history / setup notes /
   UI polish backlog, in that order of "how much has changed since this was
   written."
+- `RECRUITING.md` — the Owner-Operator Recruiting subsystem's handover doc
+  (program terms, lead segments, data model, build order, guardrails). Being
+  built module-by-module per its own section 7; check it before assuming
+  scope for anything under that system.
 
 ## Commands
 
