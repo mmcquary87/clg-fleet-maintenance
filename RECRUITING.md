@@ -66,7 +66,7 @@ Every lead gets exactly one segment. The segment decides the pitch.
 
 | System | Role | Access |
 | --- | --- | --- |
-| Tenstreet | System of record for applications, driver qualification files, MVR/PSP consents | API access requested; until confirmed, use CSV export/import. Do not duplicate DQ data in our DB |
+| Tenstreet | Applications, driver qualification files, MVR/PSP consents | API access requested; until confirmed, use CSV export/import. **2026-09-27 decision:** candidate identity + application/pipeline stage syncs into CLG OS (same `leads`/`onboarding_case_steps` tables recruiters already work in — see below). Sensitive DQF content (SSN, medical cert, drug test result, license image) stays in Tenstreet only; CLG OS links out to the Tenstreet record rather than storing it. Tenstreet remains the compliance system of record for DQF itself |
 | FMCSA QCMobile | Carrier authority, power units, safety and inspection data | Free web key, stored as an Edge Function secret |
 | Aljex (Descartes) | Brokerage carriers and load history — the warmest leads | API or scheduled export (TBD) |
 | Alvys | Asset-side TMS / dispatch | Existing API connection (already integrated elsewhere in this app) |
@@ -117,6 +117,15 @@ Lead status vocabulary (per the adopted schema, replacing this doc's
 original status flow): `new → enriched → qualified → contacted →
 in_conversation → onboarding → signed`, with exits `disqualified`, `lost`,
 `do_not_contact`.
+
+**All recruiting leads already live in CLG OS** — `leads` is the system of
+record regardless of source (FMCSA, Aljex, referral, or a future Tenstreet
+application). Per the 2026-09-27 Tenstreet decision above, once Tenstreet
+API access is confirmed, a Tenstreet-sourced applicant becomes a `leads`
+row (`source_code = 'tenstreet'`, once seeded) that progresses through the
+same `onboarding_cases`/`onboarding_case_steps` every other pathway uses —
+no separate Tenstreet-shaped tables. Only the DQF documents themselves stay
+external, linked out to Tenstreet by reference.
 
 ## 7. Build order and done criteria
 
