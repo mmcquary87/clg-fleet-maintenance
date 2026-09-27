@@ -56,6 +56,12 @@ Deno.serve(async (req) => {
 
     const attempts = await Promise.all([
       dotNumber ? tryEndpoint(`GET /carriers/${dotNumber}`, `/carriers/${dotNumber}`, webKey) : null,
+      // The base carrier snapshot has no authority-granted date and no MC
+      // number directly -- both are confirmed (2026-09-27, DOT 2516954) to
+      // live behind these two sub-resources instead, per that response's
+      // own _links.
+      dotNumber ? tryEndpoint(`GET /carriers/${dotNumber}/authority`, `/carriers/${dotNumber}/authority`, webKey) : null,
+      dotNumber ? tryEndpoint(`GET /carriers/${dotNumber}/docket-numbers`, `/carriers/${dotNumber}/docket-numbers`, webKey) : null,
       mcNumber ? tryEndpoint(`GET /carriers/docket-number/${mcNumber}`, `/carriers/docket-number/${mcNumber}`, webKey) : null,
     ]);
 
