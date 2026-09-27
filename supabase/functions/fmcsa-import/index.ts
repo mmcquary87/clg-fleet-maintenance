@@ -2,16 +2,16 @@
 //
 // Pulls carrier data from FMCSA's QCMobile API for a given list of USDOT
 // numbers and, per DOT number:
-//   1. checks it against `excluded_entities` (never becomes a target -- no
-//      snapshot, no lead, nothing written) via the `check_exclusion` SQL fn,
-//   2. writes an append-only `carrier_snapshots` row,
+//   1. checks it against excluded_entities (never becomes a target -- no
+//      snapshot, no lead, nothing written) via the check_exclusion SQL fn,
+//   2. writes an append-only carrier_snapshots row,
 //   3. derives vetting flags (ported from clg-recruiting's vetting.py --
 //      see that file's git history / RECRUITING.md for the Python original),
 //   4. scores the lead (ported from clg-recruiting's scoring.py, same
 //      config-driven, coverage-based model, config embedded below and
 //      stamped "provisional" until CLG names an approver),
-//   5. upserts `leads` and inserts any newly-raised (not already-open)
-//      `lead_vetting_flags`.
+//   5. upserts leads and inserts any newly-raised (not already-open)
+//      lead_vetting_flags.
 //
 // FMCSA_WEB_KEY is a Supabase Edge Function secret -- it is fetched here via
 // Deno.env and never sent to or read by the browser.
@@ -55,7 +55,7 @@ const corsHeaders = {
 // -----------------------------------------------------------------------
 // Scoring config -- ported from clg-recruiting/config/scoring.yaml.
 // STATUS: PROVISIONAL. Every number below is a placeholder written by the
-// build, not a CLG-approved standard. While `status` is "provisional",
+// build, not a CLG-approved standard. While "status" is "provisional",
 // every score this function writes is stamped score_status = 'provisional'
 // and must not be treated as a governed recruiting decision.
 // To approve: the designated recruiting approval authority reviews these
@@ -127,7 +127,7 @@ function toDateStr(v: unknown): string | null {
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) {
     const [, mo, d, y] = m;
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    return y + "-" + mo.padStart(2, "0") + "-" + d.padStart(2, "0");
   }
   return null;
 }
@@ -232,18 +232,18 @@ function deriveFlags(p: CarrierProfile, segment: string, cfg: typeof SCORING_CON
 
   // --- disqualifying ---
   if (p.allowedToOperate === false) add("NOT_ALLOWED_TO_OPERATE", "disqualifying", "FMCSA reports allowedToOperate = N");
-  if (p.oosDate !== null) add("OUT_OF_SERVICE_ORDER", "disqualifying", `Out-of-service date ${p.oosDate}`);
+  if (p.oosDate !== null) add("OUT_OF_SERVICE_ORDER", "disqualifying", "Out-of-service date " + p.oosDate);
   if (hasActiveAuthority(p) === false) {
-    add("NO_ACTIVE_AUTHORITY", "disqualifying", `common=${p.commonAuthorityStatus} contract=${p.contractAuthorityStatus}`);
+    add("NO_ACTIVE_AUTHORITY", "disqualifying", "common=" + p.commonAuthorityStatus + " contract=" + p.contractAuthorityStatus);
   }
-  if (p.safetyRating && p.safetyRating.startsWith("U")) add("UNSATISFACTORY_RATING", "disqualifying", `Safety rating ${p.safetyRating}`);
+  if (p.safetyRating && p.safetyRating.startsWith("U")) add("UNSATISFACTORY_RATING", "disqualifying", "Safety rating " + p.safetyRating);
   if (p.bipdOnFile !== null && p.bipdRequired !== null && p.bipdOnFile < p.bipdRequired) {
-    add("INSURANCE_BELOW_REQUIRED", "disqualifying", `BIPD on file ${p.bipdOnFile} < required ${p.bipdRequired}`);
+    add("INSURANCE_BELOW_REQUIRED", "disqualifying", "BIPD on file " + p.bipdOnFile + " < required " + p.bipdRequired);
   }
 
   // --- review ---
-  if (p.safetyRating && p.safetyRating.startsWith("C")) add("CONDITIONAL_RATING", "review", `Safety rating ${p.safetyRating}`);
-  if (p.fatalCrash) add("FATAL_CRASH", "review", `${p.fatalCrash} fatal crash(es)`);
+  if (p.safetyRating && p.safetyRating.startsWith("C")) add("CONDITIONAL_RATING", "review", "Safety rating " + p.safetyRating);
+  if (p.fatalCrash) add("FATAL_CRASH", "review", p.fatalCrash + " fatal crash(es)");
 
   const minInsp = cfg.minInspectionsForRate;
   for (const kind of ["driver", "vehicle"] as const) {
@@ -251,7 +251,7 @@ function deriveFlags(p: CarrierProfile, segment: string, cfg: typeof SCORING_CON
     const rate = kind === "driver" ? p.driverOosRate : p.vehicleOosRate;
     const natl = kind === "driver" ? p.driverOosRateNatl : p.vehicleOosRateNatl;
     if (insp !== null && insp >= minInsp && rate !== null && natl && rate > natl) {
-      add(`${kind.toUpperCase()}_OOS_ABOVE_NATL`, "review", `${kind} OOS ${rate.toFixed(1)}% vs national ${natl.toFixed(1)}% (${insp} inspections)`);
+      add(kind.toUpperCase() + "_OOS_ABOVE_NATL", "review", kind + " OOS " + rate.toFixed(1) + "% vs national " + natl.toFixed(1) + "% (" + insp + " inspections)");
     }
   }
 
@@ -262,7 +262,7 @@ function deriveFlags(p: CarrierProfile, segment: string, cfg: typeof SCORING_CON
   if (puCfg && p.powerUnits !== null) {
     const { min: lo, max: hi } = puCfg;
     if ((lo !== undefined && p.powerUnits < lo) || (hi !== undefined && p.powerUnits > hi)) {
-      add("FLEET_SIZE_OUT_OF_RANGE", "review", `${p.powerUnits} power units outside ${lo}-${hi} for ${segment}`);
+      add("FLEET_SIZE_OUT_OF_RANGE", "review", p.powerUnits + " power units outside " + lo + "-" + hi + " for " + segment);
     }
   }
 
@@ -272,7 +272,7 @@ function deriveFlags(p: CarrierProfile, segment: string, cfg: typeof SCORING_CON
   }
   const totalInsp = (p.driverInspections ?? 0) + (p.vehicleInspections ?? 0);
   if (p.driverInspections !== null && totalInsp < minInsp) {
-    add("LOW_INSPECTION_HISTORY", "info", `${totalInsp} total inspections`);
+    add("LOW_INSPECTION_HISTORY", "info", totalInsp + " total inspections");
   }
 
   return flags;
@@ -357,7 +357,7 @@ function scoreLead(p: CarrierProfile | null, segment: string, flags: Flag[], cfg
 
   if (isDisqualified(flags)) {
     const codes = flags.filter((f) => f.severity === "disqualifying").map((f) => f.code);
-    return { outcome: "disqualified", score: null, scoreStatus: null, coverage: 0, version, components: {}, reasons: [`disqualified: ${codes.join(", ")}`] };
+    return { outcome: "disqualified", score: null, scoreStatus: null, coverage: 0, version, components: {}, reasons: ["disqualified: " + codes.join(", ")] };
   }
 
   if (segment === "driver") {
@@ -383,10 +383,10 @@ function scoreLead(p: CarrierProfile | null, segment: string, flags: Flag[], cfg
   const haveW = Object.entries(components).reduce((s, [k, v]) => s + (v !== null ? weights[k] ?? 0 : 0), 0);
   const coverage = totalW ? haveW / totalW : 0;
   const pending = Object.entries(components).filter(([, v]) => v === null).map(([k]) => k);
-  const reasons = pending.length ? [`pending components: ${pending.join(", ")}`] : [];
+  const reasons = pending.length ? ["pending components: " + pending.join(", ")] : [];
 
   if (coverage < cfg.minCoverage || haveW === 0) {
-    reasons.push(`coverage ${(coverage * 100).toFixed(0)}% below minimum ${(cfg.minCoverage * 100).toFixed(0)}%`);
+    reasons.push("coverage " + (coverage * 100).toFixed(0) + "% below minimum " + (cfg.minCoverage * 100).toFixed(0) + "%");
     return { outcome: "pending", score: null, scoreStatus: "pending", coverage, version, components, reasons };
   }
 
@@ -416,11 +416,11 @@ function segmentFor(totalPowerUnits: number | null): "new_mc" | "small_fleet" | 
 }
 
 async function fmcsaGet(path: string, webKey: string) {
-  const url = new URL(`${FMCSA_BASE}${path}`);
+  const url = new URL(FMCSA_BASE + path);
   url.searchParams.set("webKey", webKey);
   const res = await fetch(url);
   const text = await res.text();
-  if (!res.ok) throw new Error(`${path} failed (${res.status}): ${text.slice(0, 300)}`);
+  if (!res.ok) throw new Error(path + " failed (" + res.status + "): " + text.slice(0, 300));
   return JSON.parse(text);
 }
 
@@ -448,8 +448,8 @@ Deno.serve(async (req) => {
     for (const dotNumber of dotNumbers) {
       try {
         const [carrierRes, docketRes] = await Promise.all([
-          fmcsaGet(`/carriers/${dotNumber}`, webKey),
-          fmcsaGet(`/carriers/${dotNumber}/docket-numbers`, webKey),
+          fmcsaGet("/carriers/" + dotNumber, webKey),
+          fmcsaGet("/carriers/" + dotNumber + "/docket-numbers", webKey),
         ]);
         const carrier = carrierRes?.content?.carrier;
         if (!carrier) { skipped.push({ dotNumber, reason: "No carrier record returned" }); continue; }
@@ -477,11 +477,11 @@ Deno.serve(async (req) => {
           if (dbaErr) throw dbaErr;
           excluded = dbaReason as string | null;
         }
-        if (excluded) { skipped.push({ dotNumber, reason: `Excluded entity: ${excluded}` }); continue; }
+        if (excluded) { skipped.push({ dotNumber, reason: "Excluded entity: " + excluded }); continue; }
 
         const segment = segmentFor(profile.powerUnits);
         if (!segment) {
-          skipped.push({ dotNumber, reason: `Power units (${carrier.totalPowerUnits ?? "none on file"}) outside 1-10 target range` });
+          skipped.push({ dotNumber, reason: "Power units (" + (carrier.totalPowerUnits ?? "none on file") + ") outside 1-10 target range" });
           continue;
         }
 
@@ -531,7 +531,7 @@ Deno.serve(async (req) => {
         const scoreResult = scoreLead(profile, segment, flags, SCORING_CONFIG);
         const disqualifyingFlags = flags.filter((f) => f.severity === "disqualifying");
         const disqualifiedReason = disqualifyingFlags.length
-          ? disqualifyingFlags.map((f) => `${f.code}: ${f.detail}`).join("; ")
+          ? disqualifyingFlags.map((f) => f.code + ": " + f.detail).join("; ")
           : null;
 
         const leadRow: Record<string, unknown> = {
