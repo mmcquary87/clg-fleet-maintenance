@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { X, Loader2, Check, ShieldCheck } from "lucide-react";
+import { X, Loader2, Check, ShieldCheck, ArrowRightCircle } from "lucide-react";
 import { Badge, StatusPill, Alert, Button, Input } from "../../ds";
 import { useLeadDetail } from "../../hooks/useLeadDetail";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
+import ConvertLeadForm from "./ConvertLeadForm";
+
+const NOT_CONVERTIBLE_STATUSES = ["disqualified", "lost", "do_not_contact"];
 
 const SEGMENT_LABELS = { new_mc: "New MC", small_fleet: "Small fleet", driver: "Driver" };
 const SEGMENT_TONES = { new_mc: "brand", small_fleet: "neutral", driver: "accent" };
@@ -185,9 +188,16 @@ function Section({ title, children }) {
 }
 
 export default function LeadDetailModal({ leadId, onClose, onLeadChanged }) {
-  const { lead, snapshot, flags, conversations, loading, error, reload } = useLeadDetail(leadId);
+  const { lead, snapshot, flags, conversations, convertedAccount, convertedContact, loading, error, reload } = useLeadDetail(leadId);
   const { session } = useAuth();
   const [resolveError, setResolveError] = useState(null);
+  const [showConvert, setShowConvert] = useState(false);
+
+  const handleConverted = async () => {
+    setShowConvert(false);
+    await reload();
+    onLeadChanged?.();
+  };
 
   const handleResolve = async (flag, state, note) => {
     setResolveError(null);
@@ -251,6 +261,22 @@ export default function LeadDetailModal({ leadId, onClose, onLeadChanged }) {
 
             <div style={{ padding: "20px 24px" }}>
               <ScoreSummary lead={lead} />
+
+              <div style={{ marginTop: 14 }}>
+                {lead.converted_at ? (
+                  <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)" }}>
+                    Converted {fmtDate(lead.converted_at)}
+                    {convertedAccount ? " to account " + (convertedAccount.legal_name || convertedAccount.dba_name) : ""}
+                    {convertedContact ? (convertedAccount ? " · contact " : " to contact ") + [convertedContact.first_name, convertedContact.last_name].filter(Boolean).join(" ") : ""}
+                  </div>
+                ) : NOT_CONVERTIBLE_STATUSES.includes(lead.status) ? null : showConvert ? (
+                  <ConvertLeadForm lead={lead} onCancel={() => setShowConvert(false)} onConverted={handleConverted} />
+                ) : (
+                  <Button variant="outline" size="sm" iconLeft={<ArrowRightCircle size={14} />} onClick={() => setShowConvert(true)}>
+                    Convert to account/contact
+                  </Button>
+                )}
+              </div>
 
               <Section title="FMCSA snapshot">
                 <SnapshotPanel snapshot={snapshot} />

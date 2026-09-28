@@ -10,6 +10,8 @@ export function useLeadDetail(leadId) {
   const [snapshot, setSnapshot] = useState(null);
   const [flags, setFlags] = useState([]);
   const [conversations, setConversations] = useState([]);
+  const [convertedAccount, setConvertedAccount] = useState(null);
+  const [convertedContact, setConvertedContact] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -26,7 +28,7 @@ export function useLeadDetail(leadId) {
     }
     setLead(leadRow);
 
-    const [snapRes, flagsRes, convRes] = await Promise.all([
+    const [snapRes, flagsRes, convRes, accRes, contactRes] = await Promise.all([
       leadRow.latest_snapshot_id
         ? supabase.from("carrier_snapshots").select("*").eq("id", leadRow.latest_snapshot_id).single()
         : Promise.resolve({ data: null }),
@@ -36,10 +38,18 @@ export function useLeadDetail(leadId) {
       supabase.from("lead_conversations")
         .select("id, occurred_at, channel, direction, author, summary, next_step, next_step_due")
         .eq("lead_id", leadId).order("occurred_at", { ascending: false }),
+      leadRow.converted_account_id
+        ? supabase.from("accounts").select("id, legal_name, dba_name").eq("id", leadRow.converted_account_id).single()
+        : Promise.resolve({ data: null }),
+      leadRow.converted_contact_id
+        ? supabase.from("contacts").select("id, first_name, last_name").eq("id", leadRow.converted_contact_id).single()
+        : Promise.resolve({ data: null }),
     ]);
     setSnapshot(snapRes.data ?? null);
     setFlags(flagsRes.data ?? []);
     setConversations(convRes.data ?? []);
+    setConvertedAccount(accRes.data ?? null);
+    setConvertedContact(contactRes.data ?? null);
     setLoading(false);
   }, [leadId]);
 
@@ -48,8 +58,10 @@ export function useLeadDetail(leadId) {
     setSnapshot(null);
     setFlags([]);
     setConversations([]);
+    setConvertedAccount(null);
+    setConvertedContact(null);
     load();
   }, [leadId, load]);
 
-  return { lead, snapshot, flags, conversations, loading, error, reload: load };
+  return { lead, snapshot, flags, conversations, convertedAccount, convertedContact, loading, error, reload: load };
 }
