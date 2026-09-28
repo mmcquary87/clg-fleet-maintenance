@@ -176,9 +176,15 @@ Build one module per session. Each must pass its tests before the next starts.
    6-bucket "by status" stacked bar, three attention cards (leads to
    review, overdue onboarding steps, starting soon), and a merged
    activity feed -- now the default landing tab for a pure recruiter
-   account. Still to build from that handoff: Campaigns, Accounts/
-   Contacts, and the bulk-select-to-campaign/tasks-rail/documents
-   enhancements to the existing Leads/Onboarding record views.
+   account. Campaigns built next (`components/recruiting/campaigns/`):
+   a rich empty state, a filterable list with a mini funnel per row, a
+   campaign record with the funnel as a real trapezoid shape (per-stage
+   drop-off in words, a rail with targeting and a derived "steepest
+   drop" sentence), Launch/Pause/Resume actions, and a bulk-select
+   checkbox column + navy selection bar on Leads feeding an "Add to a
+   campaign" modal. Still to build from that handoff: Accounts/Contacts,
+   and the tasks-rail/documents enhancements to the existing Leads/
+   Onboarding record views.
    `components/recruiting/RecruitingView.jsx`/`LeadDetailModal.jsx` --
    filterable leads table (segment, active/all pipeline), fit score shown
    with its provisional/pending status rather than a bare number, per-lead
