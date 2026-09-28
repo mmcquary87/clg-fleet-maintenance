@@ -15,6 +15,18 @@ segments, data model, guardrails, build order). Read root `CLAUDE.md` for
 *how* it's actually implemented in this repo (migrations convention, edge
 function deploy process, frontend patterns).
 
+**2026-09-27 update:** a much larger CRM/onboarding spec
+(`Recruiting_CRM_Onboarding_Spec.md`, not checked into this repo — ask for
+it if you need the full doc) was handed over on top of this original
+handover doc, along with an already-built (but never live-tested) Python
+reference implementation. Direction given: treat that CRM spec as the
+system's *end-state target*, but keep building at **this file's** pace —
+one module per session — rather than the spec's own faster phasing. Where
+the two disagree on scope, this file wins until told otherwise. Section 6
+and 7 below now reflect the CRM spec's governed data model (adopted and
+adapted in one pass, since it was cheap to do before real data existed),
+not the original doc's simpler starting-point schema.
+
 ---
 
 ## 1. What we're building
@@ -54,7 +66,7 @@ Every lead gets exactly one segment. The segment decides the pitch.
 
 | System | Role | Access |
 | --- | --- | --- |
-| Tenstreet | System of record for applications, driver qualification files, MVR/PSP consents | API access requested; until confirmed, use CSV export/import. Do not duplicate DQ data in our DB |
+| Tenstreet | Applications, driver qualification files, MVR/PSP consents | API access requested; until confirmed, use CSV export/import. **2026-09-27 decision:** candidate identity + application/pipeline stage syncs into CLG OS (same `leads`/`onboarding_case_steps` tables recruiters already work in — see below). Sensitive DQF content (SSN, medical cert, drug test result, license image) stays in Tenstreet only; CLG OS links out to the Tenstreet record rather than storing it. Tenstreet remains the compliance system of record for DQF itself |
 | FMCSA QCMobile | Carrier authority, power units, safety and inspection data | Free web key, stored as an Edge Function secret |
 | Aljex (Descartes) | Brokerage carriers and load history — the warmest leads | API or scheduled export (TBD) |
 | Alvys | Asset-side TMS / dispatch | Existing API connection (already integrated elsewhere in this app) |
@@ -67,29 +79,113 @@ Every lead gets exactly one segment. The segment decides the pitch.
 
 Supabase Postgres (migrations via SQL Editor), Deno Edge Functions (deployed via dashboard), React frontend (this same CLG OS app, a new nav section once there's UI to show), `pg_cron` for anything the original design wanted APScheduler/cron for. No FastAPI, no Alembic, no separately-hosted process.
 
-## 6. Data model (starting point)
+## 6. Data model (as actually built — CRM spec's governed schema, adapted)
 
-- `leads` — id, source (aljex | fmcsa | job_post | referral), segment, status, mc_number, dot_number, name, company, phone, email, home_base, power_units, authority_date, fit_score, opt_in_sms (bool + timestamp + method), created_at
-- `vetting_flags` — lead_id, flag_type, detail, severity, cleared_by, cleared_at
-- `conversations` — lead_id, channel, direction, body, model_extraction (JSON), sent_at
-- `screening_answers` — lead_id, cdl_class, years_experience, equipment, truck_year, truck_make, lanes_wanted, home_time, trade_in_interest
-- `onboarding_steps` — lead_id, step (tenstreet_app | drug_test | lease_esign | fuel_card | samsara_eld), status, updated_at
-- `events` — audit log of every automated action and every human approval
+Adopted from the Python reference implementation's `db/001_init.sql` +
+`db/002_crm_onboarding.sql`, in the `public` schema (not a separate
+`recruiting` schema), reusing this app's existing `profiles`/`user_role`
+instead of new CRM-specific user tables. Live via three migrations
+(`20260927030000`–`20260927040200`):
 
-Status flow: `new → vetted → contacted → screening → qualified → recruiter_review → onboarding → leased_on`, with exits `disqualified`, `not_interested`, `opted_out`.
+- `leads` — segment (`new_mc`/`small_fleet`/`driver`), status, `source_code`
+  (FK to `lead_sources`), dot/mc number, name fields, `latest_snapshot_id`,
+  `fit_score`/`score_status`/`score_coverage`/`score_version`/
+  `score_breakdown`/`scored_at`, `disqualified_reason`, `owner_id` (→
+  `profiles`), `rating`/`tier`, conversion tracking to `accounts`/`contacts`
+- `carrier_snapshots` — append-only raw FMCSA pulls (one row per pull, full
+  field set + `raw jsonb`)
+- `lead_vetting_flags` — flag_code (FK to `vetting_flag_types`), severity
+  (disqualifying/review/info), state (open/cleared/confirmed)
+- `lead_conversations` (append-only), `lead_status_history` (trigger-written)
+- `accounts`, `contacts` — the CRM layer once a lead converts
+- `campaigns`, `campaign_members`
+- `onboarding_templates` (DRAFT/approved/retired, one approved template per
+  pathway max) + `onboarding_template_steps`; `onboarding_cases` +
+  `onboarding_case_steps`, gated by a **clear-to-dispatch trigger** that
+  refuses to move a case to `cleared` unless its template is approved and
+  every required step is complete/waived
+- `roster_candidates` — a cleared lease-on/company-driver case lands here,
+  never writes the driver roster directly; Operations reconciles
+- `documents`, `tasks`, `field_history` (attribution via `auth.email()`)
+- `excluded_entities` + an enforcement trigger — CLG Transportation (MC
+  873396) and Capital Logistics Group (MC 881808) itself, plus Silver Moon
+  Transportation, can never become recruiting targets
+- Broad `authenticated`-role RLS on every table above (fine-grained
+  per-CRM-role RLS is the CRM spec's own Phase 2, not solved yet)
+
+Lead status vocabulary (per the adopted schema, replacing this doc's
+original status flow): `new → enriched → qualified → contacted →
+in_conversation → onboarding → signed`, with exits `disqualified`, `lost`,
+`do_not_contact`.
+
+**All recruiting leads already live in CLG OS** — `leads` is the system of
+record regardless of source (FMCSA, Aljex, referral, or a future Tenstreet
+application). Per the 2026-09-27 Tenstreet decision above, once Tenstreet
+API access is confirmed, a Tenstreet-sourced applicant becomes a `leads`
+row (`source_code = 'tenstreet'`, once seeded) that progresses through the
+same `onboarding_cases`/`onboarding_case_steps` every other pathway uses —
+no separate Tenstreet-shaped tables. Only the DQF documents themselves stay
+external, linked out to Tenstreet by reference.
 
 ## 7. Build order and done criteria
 
 Build one module per session. Each must pass its tests before the next starts.
 
-1. **Lead database** — schema, migrations, seed data. Done when migrations run clean and tests cover the status flow.
-2. **Lead sourcing** — Aljex importer (rank small carriers by CLG loads hauled and lane fit), FMCSA client (filter by authority age, power units, safety, home base), inbound form endpoint. Done when a run produces a deduplicated, scored lead list.
-3. **Vetting** — flags for authority age, inspection and out-of-service history, identity mismatches (name/phone/email vs. FMCSA record). High-severity flags block outreach until a person clears them. Done when flagged leads cannot reach `contacted`.
-4. **AI screener** — Claude-run conversation by email, or SMS only with opt-in. Collects the fields in `screening_answers`. Sends a net-pay estimate: guaranteed floor = $0.75 × expected weekly miles, with assumptions shown. Done when a test conversation extracts every field correctly and stays within the rate sheet.
-5. **Handoff** — qualified leads go to the recruiter by email with a one-paragraph summary. Target recruiter call within 1 business day. Every lease offer requires a logged human approval.
-6. **Onboarding tracker** — tracks the five steps; nudges the candidate and alerts the recruiter after a 48-hour stall. Target lease-on in under 7 days.
-7. **Recruiter dashboard** — pipeline by stage, days to lease-on, cost per lease-on, source performance.
-8. **Retention signals (later)** — falling weekly miles, rejected loads, missed home time from Samsara/Alvys trigger a human call.
+1. **Lead database** — ✅ done. Schema now the full governed CRM/onboarding
+   model above, not just the original placeholder shape.
+2. **Lead sourcing** — FMCSA part ✅ done: `fmcsa-import` Edge Function pulls
+   by DOT number, checks `excluded_entities`, snapshots, derives vetting
+   flags and scores every lead (logic ported from the Python reference's
+   `vetting.py`/`scoring.py`, config-driven, stamped `score_status =
+   'provisional'` until CLG approves a scoring config). Aljex importer and
+   the inbound web form endpoint are **not built** — see the open scope
+   decision below.
+3. **Vetting** — flags are mechanically derived and stored (module 2). A
+   recruiter can see them and act on them: each open flag gets an optional
+   note plus Clear (false positive) / Confirm (accurate, doesn't block)
+   actions, stamping `resolved_at`/`resolved_by` on `lead_vetting_flags`.
+4. **AI screener** — not started.
+5. **Handoff** — not started.
+6. **Onboarding tracker** — UI built: `components/onboarding/OnboardingView.jsx`
+   (filterable case list off the `onboarding_board` view + a "New case"
+   form -- picks an existing account/contact and a template; the DB's own
+   `seed_case_steps` trigger populates the case's steps) and
+   `OnboardingCaseModal.jsx` (step checklist grouped by stage with
+   Start/Complete/Waive actions -- a `requires_document` step prompts for
+   a document link before it can complete, matching the DB's own
+   constraint -- and case-level Hold/Resume/Withdraw/Reject/Clear
+   actions). Deliberately does not replicate the clear-to-dispatch gate's
+   logic in the frontend -- a blocked Clear just surfaces the DB
+   trigger's own raised exception. All seeded templates are still DRAFT,
+   so no case can clear yet until one is approved.
+7. **Recruiter dashboard** — Leads pipeline view done (see below);
+   onboarding board/case UI (above) added to the same Recruiting nav
+   group. Still to build: campaigns UI, the recruiter's own Home view.
+   `components/recruiting/RecruitingView.jsx`/`LeadDetailModal.jsx` --
+   filterable leads table (segment, active/all pipeline), fit score shown
+   with its provisional/pending status rather than a bare number, per-lead
+   detail (FMCSA snapshot, full flag history, activity log), clear/confirm
+   on vetting flags inline. The `recruiter` role lands here instead of a
+   placeholder screen, and is the *only* nav group a pure recruiter
+   account sees (Sidebar); an admin sees it too.
+8. **Retention signals (later)** — not started.
+
+**"Convert lead" action** — done (`components/recruiting/ConvertLeadForm.jsx`,
+surfaced in `LeadDetailModal`). Optionally creates an `accounts` row
+(checked by default for new_mc/small_fleet, unchecked for driver leads),
+always creates a `contacts` row pre-filled from the lead's contact info,
+and stamps `leads.converted_at`/`converted_account_id`/
+`converted_contact_id`. This is what feeds the New Case form's
+account/contact pickers (module 6, above) — convert a lead first, then
+start its onboarding case from the now-populated dropdowns. Hidden for
+disqualified/lost/do-not-contact leads.
+
+**Open scope decision (flagged, not yet resolved):** the CRM spec's own
+Phase 1 also calls for an Aljex tier-import script and 3 more UI pages
+(Recruiting Home, Campaigns, plus richer Leads/Onboarding record views
+than what's built) — beyond this file's one-module-per-session pace.
+Per the note at the top of this file, nothing there is started until scope
+and pace are confirmed.
 
 ## 8. Guardrails (non-negotiable)
 
@@ -133,3 +229,13 @@ registration date, easy to mistake for one.
 - Expected weekly miles to use in the net-pay estimate
 - Who the recruiter is and how they want alerts
 - River City contact and handoff method for trade-in leads
+
+From the CRM spec (2026-09-27 update, still unresolved):
+- Who has authority to approve an onboarding template (moves it out of DRAFT)?
+- PSP report pull policy — who requests it, and when in the pipeline?
+- Insurance requirements to state precisely for owner-operator onboarding
+- Does brokerage-carrier onboarding live in CLG OS at all, or stay a
+  separate brokerage-side process?
+- Where do onboarding documents (licenses, COIs, signed agreements) get
+  stored — Supabase Storage, or somewhere else?
+- Aljex's driver phone field — availability still pending confirmation
