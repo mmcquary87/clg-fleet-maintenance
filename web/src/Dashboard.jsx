@@ -18,6 +18,7 @@ import MechanicView from "./components/mechanic/MechanicView";
 import InsuranceView from "./components/insurance/InsuranceView";
 import AnnualInspectionComplianceView from "./components/compliance/AnnualInspectionComplianceView";
 import RecruitingView from "./components/recruiting/RecruitingView";
+import OnboardingView from "./components/onboarding/OnboardingView";
 import CopilotWidget from "./components/copilot/CopilotWidget";
 import "./ds/tokens.css";
 
@@ -40,8 +41,14 @@ const PAGE_META = {
   hometime: { group: "Drivers", page: "Home time" },
   mechanic: { group: "Shop", page: "Mechanic queue" },
   recruitingLeads: { group: "Recruiting", page: "Leads" },
+  onboarding: { group: "Recruiting", page: "Onboarding" },
   settings: { group: "Admin", page: "Settings" },
 };
+
+// The only tabs a pure (non-admin) recruiter account can ever land on --
+// Sidebar only ever shows them these, so any other stored/requested tab
+// gets pinned back to the first one (see effectiveTab below).
+const RECRUITER_TABS = ["recruitingLeads", "onboarding"];
 
 // Remembers the last tab across a browser refresh -- Dashboard has no
 // router (per CLAUDE.md, plain useState tab switching), so a reload used
@@ -71,8 +78,9 @@ export default function Dashboard({ session }) {
   // too regardless of what's in localStorage/state -- otherwise a stale
   // "board" tab from a previous session, or the sidebar logo's hard-coded
   // onNavigate("board"), would render fleet-maintenance content a
-  // recruiter shouldn't have access to.
-  const effectiveTab = isRecruiter && !isAdmin ? "recruitingLeads" : tab;
+  // recruiter shouldn't have access to. Within the recruiting tabs
+  // themselves, navigation works normally.
+  const effectiveTab = isRecruiter && !isAdmin && !RECRUITER_TABS.includes(tab) ? "recruitingLeads" : tab;
 
   useEffect(() => {
     try { localStorage.setItem(LAST_TAB_STORAGE_KEY, tab); } catch { /* ignore */ }
@@ -138,6 +146,7 @@ export default function Dashboard({ session }) {
           {effectiveTab === "hometime" && <HomeTimeView session={session} />}
           {effectiveTab === "mechanic" && canUseMechanicQueue && <MechanicView />}
           {effectiveTab === "recruitingLeads" && (isRecruiter || isAdmin) && <RecruitingView />}
+          {effectiveTab === "onboarding" && (isRecruiter || isAdmin) && <OnboardingView />}
           {effectiveTab === "settings" && isAdmin && <SettingsView />}
         </div>
       </div>
