@@ -151,7 +151,16 @@ Build one module per session. Each must pass its tests before the next starts.
    recruiter can see them and act on them: each open flag gets an optional
    note plus Clear (false positive) / Confirm (accurate, doesn't block)
    actions, stamping `resolved_at`/`resolved_by` on `lead_vetting_flags`.
-4. **AI screener** — not started.
+4. **AI screener** — not started as a live conversation. A smaller,
+   deliberately scoped piece is done: `lib/outreachTemplates.js` +
+   `OutreachDraftPanel.jsx` (new section on `LeadDetailModal`) generate a
+   draft email or SMS from *only* the pre-approved program terms in
+   section 2 above -- no LLM call, nothing that could vary a number a
+   human hasn't approved. A human reviews, edits, copies, and sends it
+   themselves through their own email/SMS; "Mark as sent" only logs a
+   `lead_conversations` row after the fact. No provider (Twilio,
+   Microsoft Graph) is wired in, and nothing is ever sent automatically
+   -- matches the dry-run-by-default guardrail in section 8 exactly.
 5. **Handoff** — not started.
 6. **Onboarding tracker** — UI built: `components/onboarding/OnboardingView.jsx`
    (filterable case list off the `onboarding_board` view + a "New case"
@@ -182,9 +191,13 @@ Build one module per session. Each must pass its tests before the next starts.
    drop-off in words, a rail with targeting and a derived "steepest
    drop" sentence), Launch/Pause/Resume actions, and a bulk-select
    checkbox column + navy selection bar on Leads feeding an "Add to a
-   campaign" modal. Still to build from that handoff: Accounts/Contacts,
-   and the tasks-rail/documents enhancements to the existing Leads/
-   Onboarding record views.
+   campaign" modal. Tasks built too (the `tasks` table existed with no
+   UI at all): `useTasks`/`TasksPanel` (compact list + quick-add, now on
+   both `LeadDetailModal` and `OnboardingCaseModal`) and a new "Tasks"
+   nav item (`TasksView.jsx`) listing every open task across leads and
+   cases, "Mine only" filter, overdue in Scarlet. Still to build from
+   that handoff: Accounts/Contacts, and the documents-rail enhancement
+   to the existing Leads/Onboarding record views.
    `components/recruiting/RecruitingView.jsx`/`LeadDetailModal.jsx` --
    filterable leads table (segment, active/all pipeline), fit score shown
    with its provisional/pending status rather than a bare number, per-lead
