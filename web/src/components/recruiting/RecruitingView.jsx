@@ -5,6 +5,7 @@ import { useRecruitingLeads } from "../../hooks/useRecruitingLeads";
 import LeadDetailModal from "./LeadDetailModal";
 import NewLeadForm from "./NewLeadForm";
 import TenstreetImportForm from "./TenstreetImportForm";
+import AddToCampaignModal from "./campaigns/AddToCampaignModal";
 
 const SEGMENT_LABELS = { new_mc: "New MC", small_fleet: "Small fleet", driver: "Driver" };
 const SEGMENT_TONES = { new_mc: "brand", small_fleet: "neutral", driver: "accent" };
@@ -39,7 +40,7 @@ function ScoreCell({ lead }) {
 // initialFilter (from Recruiting Home's quick links): { segment?, statuses?
 // (an explicit list of raw lead_status values, e.g. ["onboarding","signed"]
 // for the "converted" status bucket), flagsOnly? }.
-export default function RecruitingView({ initialFilter }) {
+export default function RecruitingView({ initialFilter, onGoToCampaigns, onGoToCampaign }) {
   const { leads, loading, error, reload } = useRecruitingLeads();
   const [segmentFilter, setSegmentFilter] = useState(initialFilter?.segment ?? "");
   const [pipelineFilter, setPipelineFilter] = useState("active");
@@ -48,6 +49,17 @@ export default function RecruitingView({ initialFilter }) {
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [showNewLead, setShowNewLead] = useState(false);
   const [showTenstreetImport, setShowTenstreetImport] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showAddToCampaign, setShowAddToCampaign] = useState(false);
+  const [addedConfirmation, setAddedConfirmation] = useState(null);
+
+  const toggleSelected = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
@@ -63,6 +75,13 @@ export default function RecruitingView({ initialFilter }) {
 
   const rows = filtered.map((l) => ({
     id: l.id,
+    select: (
+      <input
+        type="checkbox" checked={selectedIds.has(l.id)}
+        onClick={(e) => e.stopPropagation()}
+        onChange={() => toggleSelected(l.id)}
+      />
+    ),
     name: (
       <div>
         <div style={{ fontWeight: 600, color: "var(--clg-navy)" }}>{l.legal_name || l.dba_name || "Unnamed lead"}</div>
@@ -81,6 +100,7 @@ export default function RecruitingView({ initialFilter }) {
   }));
 
   const columns = [
+    { key: "select", label: "" },
     { key: "name", label: "Lead" },
     { key: "segment", label: "Segment" },
     { key: "status", label: "Status" },
@@ -124,6 +144,43 @@ export default function RecruitingView({ initialFilter }) {
           <Button size="sm" iconLeft={<Plus size={14} />} onClick={() => setShowNewLead(true)}>New lead</Button>
         </div>
       </div>
+
+      {selectedIds.size > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--clg-navy)", color: "#fff",
+          borderRadius: "var(--clg-radius-sm)", padding: "10px 16px", marginBottom: 16,
+        }}>
+          <span style={{ fontSize: 13 }}>{selectedIds.size} lead{selectedIds.size === 1 ? "" : "s"} selected</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <Button size="sm" onClick={() => setShowAddToCampaign(true)}>Add to a campaign</Button>
+            <button type="button" onClick={() => setSelectedIds(new Set())} style={{ background: "none", border: "none", color: "var(--clg-mercury)", cursor: "pointer", fontSize: 12.5 }}>Clear</button>
+          </div>
+        </div>
+      )}
+
+      {addedConfirmation && (
+        <Alert tone="success" style={{ marginBottom: 16 }} onDismiss={() => setAddedConfirmation(null)}>
+          Added {addedConfirmation.count} lead{addedConfirmation.count === 1 ? "" : "s"} to the campaign.
+          {onGoToCampaign && (
+            <button type="button" onClick={() => onGoToCampaign(addedConfirmation.campaignId)} style={{ marginLeft: 8, background: "none", border: "none", color: "var(--clg-royal)", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: 0 }}>
+              View campaign
+            </button>
+          )}
+        </Alert>
+      )}
+
+      {showAddToCampaign && (
+        <AddToCampaignModal
+          leadIds={[...selectedIds]}
+          onClose={() => setShowAddToCampaign(false)}
+          onGoToCampaigns={onGoToCampaigns}
+          onAdded={(campaignId, count) => {
+            setShowAddToCampaign(false);
+            setSelectedIds(new Set());
+            setAddedConfirmation({ campaignId, count });
+          }}
+        />
+      )}
 
       {showNewLead && (
         <NewLeadForm onCancel={() => setShowNewLead(false)} onSaved={() => { setShowNewLead(false); reload(); }} />

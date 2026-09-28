@@ -20,6 +20,8 @@ import AnnualInspectionComplianceView from "./components/compliance/AnnualInspec
 import RecruitingHomeView from "./components/recruiting/RecruitingHomeView";
 import RecruitingView from "./components/recruiting/RecruitingView";
 import OnboardingView from "./components/onboarding/OnboardingView";
+import CampaignsView from "./components/recruiting/campaigns/CampaignsView";
+import CampaignRecordView from "./components/recruiting/campaigns/CampaignRecordView";
 import CopilotWidget from "./components/copilot/CopilotWidget";
 import "./ds/tokens.css";
 
@@ -44,13 +46,15 @@ const PAGE_META = {
   recruitingHome: { group: "Recruiting", page: "Home" },
   recruitingLeads: { group: "Recruiting", page: "Leads" },
   onboarding: { group: "Recruiting", page: "Onboarding" },
+  campaigns: { group: "Recruiting", page: "Campaigns" },
+  campaignRecord: { group: "Recruiting", page: "Campaign" },
   settings: { group: "Admin", page: "Settings" },
 };
 
 // The only tabs a pure (non-admin) recruiter account can ever land on --
 // Sidebar only ever shows them these, so any other stored/requested tab
 // gets pinned back to the first one (see effectiveTab below).
-const RECRUITER_TABS = ["recruitingHome", "recruitingLeads", "onboarding"];
+const RECRUITER_TABS = ["recruitingHome", "recruitingLeads", "onboarding", "campaigns", "campaignRecord"];
 
 // Remembers the last tab across a browser refresh -- Dashboard has no
 // router (per CLAUDE.md, plain useState tab switching), so a reload used
@@ -85,6 +89,7 @@ export default function Dashboard({ session }) {
   const effectiveTab = isRecruiter && !isAdmin && !RECRUITER_TABS.includes(tab) ? "recruitingHome" : tab;
   const [recruitingLeadsFilter, setRecruitingLeadsFilter] = useState(null);
   const [onboardingFilter, setOnboardingFilter] = useState(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
 
   useEffect(() => {
     try { localStorage.setItem(LAST_TAB_STORAGE_KEY, tab); } catch { /* ignore */ }
@@ -102,6 +107,10 @@ export default function Dashboard({ session }) {
   const goToOnboarding = (filter) => {
     setOnboardingFilter(filter ?? null);
     setTab("onboarding");
+  };
+  const goToCampaign = (campaignId) => {
+    setSelectedCampaignId(campaignId);
+    setTab("campaignRecord");
   };
 
   const { group, page } = PAGE_META[effectiveTab] ?? { group: "", page: "" };
@@ -161,8 +170,24 @@ export default function Dashboard({ session }) {
           {effectiveTab === "recruitingHome" && (isRecruiter || isAdmin) && (
             <RecruitingHomeView onGoToLeads={goToRecruitingLeads} onGoToOnboarding={goToOnboarding} />
           )}
-          {effectiveTab === "recruitingLeads" && (isRecruiter || isAdmin) && <RecruitingView initialFilter={recruitingLeadsFilter} />}
+          {effectiveTab === "recruitingLeads" && (isRecruiter || isAdmin) && (
+            <RecruitingView
+              initialFilter={recruitingLeadsFilter}
+              onGoToCampaigns={() => setTab("campaigns")}
+              onGoToCampaign={goToCampaign}
+            />
+          )}
           {effectiveTab === "onboarding" && (isRecruiter || isAdmin) && <OnboardingView initialFilter={onboardingFilter} />}
+          {effectiveTab === "campaigns" && (isRecruiter || isAdmin) && (
+            <CampaignsView onOpenCampaign={goToCampaign} onGoToLeads={() => setTab("recruitingLeads")} />
+          )}
+          {effectiveTab === "campaignRecord" && (isRecruiter || isAdmin) && (
+            <CampaignRecordView
+              campaignId={selectedCampaignId}
+              onBack={() => setTab("campaigns")}
+              onGoToLeads={() => setTab("recruitingLeads")}
+            />
+          )}
           {effectiveTab === "settings" && isAdmin && <SettingsView />}
         </div>
       </div>
