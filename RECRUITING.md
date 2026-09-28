@@ -216,7 +216,18 @@ Build one module per session. Each must pass its tests before the next starts.
    on vetting flags inline, plus a manual "New lead" form and a Tenstreet
    CSV import. The `recruiter` role lands on Home instead of a placeholder
    screen, and is the *only* nav group a pure recruiter account sees
-   (Sidebar); an admin sees it too.
+   (Sidebar); an admin sees it too. **2026-09-28: added the two pieces
+   needed to actually work a lead day to day** -- a "Log a call or
+   interaction" action (`LogInteractionForm.jsx`, any `conv_channel`
+   value and direction, not just phone) writing to the same
+   `lead_conversations` table the outreach panel's "mark as sent"
+   already logs to, so both show up in one Activity feed; and a status
+   control on the lead header so a recruiter can move a lead by hand
+   through the full pipeline (new → enriched → qualified → contacted →
+   in_conversation → onboarding/signed, or disqualified/lost/do not
+   contact) — writes straight to `leads.status`, and the existing
+   `leads_status_log` DB trigger takes care of `lead_status_history`
+   from there (so it also feeds Recruiting Home's activity feed).
 8. **Retention signals (later)** — not started.
 
 **"Convert lead" action** — done (`components/recruiting/ConvertLeadForm.jsx`,
