@@ -170,10 +170,20 @@ Build one module per session. Each must pass its tests before the next starts.
    account sees (Sidebar); an admin sees it too.
 8. **Retention signals (later)** — not started.
 
+**"Convert lead" action** — done (`components/recruiting/ConvertLeadForm.jsx`,
+surfaced in `LeadDetailModal`). Optionally creates an `accounts` row
+(checked by default for new_mc/small_fleet, unchecked for driver leads),
+always creates a `contacts` row pre-filled from the lead's contact info,
+and stamps `leads.converted_at`/`converted_account_id`/
+`converted_contact_id`. This is what feeds the New Case form's
+account/contact pickers (module 6, above) — convert a lead first, then
+start its onboarding case from the now-populated dropdowns. Hidden for
+disqualified/lost/do-not-contact leads.
+
 **Open scope decision (flagged, not yet resolved):** the CRM spec's own
-Phase 1 also calls for an Aljex tier-import script, a "convert lead"
-action, and 5 new UI pages (Recruiting Home, Leads list/record, Campaigns,
-Onboarding board/case) — beyond this file's one-module-per-session pace.
+Phase 1 also calls for an Aljex tier-import script and 3 more UI pages
+(Recruiting Home, Campaigns, plus richer Leads/Onboarding record views
+than what's built) — beyond this file's one-module-per-session pace.
 Per the note at the top of this file, nothing there is started until scope
 and pace are confirmed.
 
