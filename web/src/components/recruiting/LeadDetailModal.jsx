@@ -1,12 +1,30 @@
 import { useState } from "react";
-import { X, Loader2, Check, ShieldCheck, ArrowRightCircle } from "lucide-react";
-import { Badge, StatusPill, Alert, Button, Input } from "../../ds";
+import { X, Loader2, Check, ShieldCheck, ArrowRightCircle, Phone } from "lucide-react";
+import { Badge, StatusPill, Select, Alert, Button, Input } from "../../ds";
 import { useLeadDetail } from "../../hooks/useLeadDetail";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 import ConvertLeadForm from "./ConvertLeadForm";
 import OutreachDraftPanel from "./OutreachDraftPanel";
+import LogInteractionForm from "./LogInteractionForm";
 import TasksPanel from "./TasksPanel";
+
+// The full lead_status pipeline (supabase/migrations/20260927040000), in
+// pipeline order -- a manual move writes straight to leads.status; the
+// leads_status_log DB trigger (20260927040200) takes care of appending to
+// lead_status_history from there, same as any other status change.
+const STATUS_OPTIONS = [
+  { value: "new", label: "New" },
+  { value: "enriched", label: "Enriched" },
+  { value: "qualified", label: "Qualified" },
+  { value: "contacted", label: "Contacted" },
+  { value: "in_conversation", label: "In conversation" },
+  { value: "onboarding", label: "Onboarding" },
+  { value: "signed", label: "Signed" },
+  { value: "disqualified", label: "Disqualified" },
+  { value: "lost", label: "Lost" },
+  { value: "do_not_contact", label: "Do not contact" },
+];
 
 const NOT_CONVERTIBLE_STATUSES = ["disqualified", "lost", "do_not_contact"];
 
@@ -164,7 +182,7 @@ function ConversationsPanel({ conversations }) {
       {conversations.map((c) => (
         <div key={c.id} style={{ borderLeft: "2px solid var(--clg-border-default)", paddingLeft: 10 }}>
           <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>
-            {fmtDateTime(c.occurred_at)} · {c.channel} · {c.direction} · {c.author}
+            {fmtDateTime(c.occurred_at)} · {c.channel.replace(/_/g, " ")} · {c.direction.replace(/_/g, " ")} · {c.author}
           </div>
           <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginTop: 2 }}>{c.summary}</div>
           {c.next_step && (
@@ -194,6 +212,26 @@ export default function LeadDetailModal({ leadId, onClose, onLeadChanged }) {
   const { session } = useAuth();
   const [resolveError, setResolveError] = useState(null);
   const [showConvert, setShowConvert] = useState(false);
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState(null);
+
+  const updateStatus = async (newStatus) => {
+    if (!newStatus || newStatus === lead.status) return;
+    setStatusSaving(true);
+    setStatusError(null);
+    const { error: err } = await supabase.from("leads").update({ status: newStatus }).eq("id", lead.id);
+    setStatusSaving(false);
+    if (err) { setStatusError(err.message); return; }
+    await reload();
+    onLeadChanged?.();
+  };
+
+  const handleLogged = async () => {
+    setShowLogForm(false);
+    await reload();
+    onLeadChanged?.();
+  };
 
   const handleConverted = async () => {
     setShowConvert(false);
@@ -257,6 +295,14 @@ export default function LeadDetailModal({ leadId, onClose, onLeadChanged }) {
                 <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 2 }}>
                   {[lead.dot_number ? `DOT ${lead.dot_number}` : null, lead.mc_number ? `MC ${lead.mc_number}` : null, [lead.city, lead.state].filter(Boolean).join(", ") || null, lead.sourceLabel].filter(Boolean).join(" · ")}
                 </div>
+                <div style={{ marginTop: 10, width: 190 }}>
+                  <Select
+                    options={STATUS_OPTIONS} value={lead.status} disabled={statusSaving}
+                    onChange={(e) => updateStatus(e.target.value)}
+                    style={{ padding: "6px 30px 6px 10px", fontSize: 12.5 }}
+                  />
+                </div>
+                {statusError && <Alert tone="critical" style={{ marginTop: 8 }}>{statusError}</Alert>}
               </div>
               <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}><X size={18} /></button>
             </div>
@@ -294,6 +340,13 @@ export default function LeadDetailModal({ leadId, onClose, onLeadChanged }) {
               </Section>
 
               <Section title="Activity">
+                {showLogForm ? (
+                  <LogInteractionForm leadId={lead.id} onCancel={() => setShowLogForm(false)} onLogged={handleLogged} />
+                ) : (
+                  <Button variant="outline" size="sm" iconLeft={<Phone size={12} />} onClick={() => setShowLogForm(true)} style={{ marginBottom: 12 }}>
+                    Log a call or interaction
+                  </Button>
+                )}
                 <ConversationsPanel conversations={conversations} />
               </Section>
 
