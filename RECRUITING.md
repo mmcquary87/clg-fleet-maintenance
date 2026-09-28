@@ -195,9 +195,20 @@ Build one module per session. Each must pass its tests before the next starts.
    UI at all): `useTasks`/`TasksPanel` (compact list + quick-add, now on
    both `LeadDetailModal` and `OnboardingCaseModal`) and a new "Tasks"
    nav item (`TasksView.jsx`) listing every open task across leads and
-   cases, "Mine only" filter, overdue in Scarlet. Still to build from
-   that handoff: Accounts/Contacts, and the documents-rail enhancement
-   to the existing Leads/Onboarding record views.
+   cases, "Mine only" filter, overdue in Scarlet. Accounts/Contacts
+   built next (`components/recruiting/accounts/`): list + full record
+   views for both (matching the Campaign record's "swapped view, not a
+   modal" pattern), new "Accounts"/"Contacts" nav items, each record
+   linking out to its originating lead, onboarding cases, and campaign
+   memberships (opening the existing Lead/Case modals rather than
+   duplicating their detail UI). `contacts.do_not_contact` withholds
+   phone/email everywhere a contact is shown, including retrofitted
+   into the Campaign record's member list. **Schema-vs-handoff gap**:
+   the handoff's do-not-contact card calls for showing a *reason* — the
+   `contacts` table has no such column, so the built banner has no
+   reason text; flagged rather than silently adding a column. Still to
+   build from that handoff: the documents-rail enhancement to the
+   existing Leads/Onboarding record views.
    `components/recruiting/RecruitingView.jsx`/`LeadDetailModal.jsx` --
    filterable leads table (segment, active/all pipeline), fit score shown
    with its provisional/pending status rather than a bare number, per-lead
