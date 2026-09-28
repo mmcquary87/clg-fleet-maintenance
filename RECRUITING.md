@@ -167,14 +167,26 @@ Build one module per session. Each must pass its tests before the next starts.
    so no case can clear yet until one is approved.
 7. **Recruiter dashboard** — Leads pipeline view done (see below);
    onboarding board/case UI (above) added to the same Recruiting nav
-   group. Still to build: campaigns UI, the recruiter's own Home view.
+   group. **2026-09-28: a Claude Design handoff arrived** (a design
+   package covering Home, Campaigns, Accounts/Contacts, and enhancements
+   to the existing Leads/Onboarding views -- reference only, rebuilt with
+   this app's own `web/src/ds` primitives, not ported from its
+   HTML/runtime). Home is built first (`RecruitingHomeView.jsx`,
+   `useRecruitingHome.js`): derived heading/lede, segment tiles, a
+   6-bucket "by status" stacked bar, three attention cards (leads to
+   review, overdue onboarding steps, starting soon), and a merged
+   activity feed -- now the default landing tab for a pure recruiter
+   account. Still to build from that handoff: Campaigns, Accounts/
+   Contacts, and the bulk-select-to-campaign/tasks-rail/documents
+   enhancements to the existing Leads/Onboarding record views.
    `components/recruiting/RecruitingView.jsx`/`LeadDetailModal.jsx` --
    filterable leads table (segment, active/all pipeline), fit score shown
    with its provisional/pending status rather than a bare number, per-lead
    detail (FMCSA snapshot, full flag history, activity log), clear/confirm
-   on vetting flags inline. The `recruiter` role lands here instead of a
-   placeholder screen, and is the *only* nav group a pure recruiter
-   account sees (Sidebar); an admin sees it too.
+   on vetting flags inline, plus a manual "New lead" form and a Tenstreet
+   CSV import. The `recruiter` role lands on Home instead of a placeholder
+   screen, and is the *only* nav group a pure recruiter account sees
+   (Sidebar); an admin sees it too.
 8. **Retention signals (later)** — not started.
 
 **"Convert lead" action** — done (`components/recruiting/ConvertLeadForm.jsx`,
