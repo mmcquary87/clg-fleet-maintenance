@@ -119,13 +119,20 @@ in_conversation → onboarding → signed`, with exits `disqualified`, `lost`,
 `do_not_contact`.
 
 **All recruiting leads already live in CLG OS** — `leads` is the system of
-record regardless of source (FMCSA, Aljex, referral, or a future Tenstreet
-application). Per the 2026-09-27 Tenstreet decision above, once Tenstreet
-API access is confirmed, a Tenstreet-sourced applicant becomes a `leads`
-row (`source_code = 'tenstreet'`, once seeded) that progresses through the
-same `onboarding_cases`/`onboarding_case_steps` every other pathway uses —
-no separate Tenstreet-shaped tables. Only the DQF documents themselves stay
+record regardless of source (FMCSA, Aljex, referral, Tenstreet, or manual
+entry). A Tenstreet-sourced applicant becomes a `leads` row
+(`source_code = 'tenstreet'`) that progresses through the same
+`onboarding_cases`/`onboarding_case_steps` every other pathway uses — no
+separate Tenstreet-shaped tables. Only the DQF documents themselves stay
 external, linked out to Tenstreet by reference.
+
+**2026-09-28: manual entry + Tenstreet CSV import built** (no API access
+confirmed yet, so no live integration — see the open question below).
+`components/recruiting/NewLeadForm.jsx` adds one lead by hand;
+`TenstreetImportForm.jsx` uploads a CSV export from Tenstreet, maps its
+columns to lead fields (auto-guessed from the header row, always
+overridable), previews, then bulk-inserts, de-duping against existing
+leads' phone/email. Both live behind buttons on the Leads view.
 
 ## 7. Build order and done criteria
 
@@ -144,7 +151,16 @@ Build one module per session. Each must pass its tests before the next starts.
    recruiter can see them and act on them: each open flag gets an optional
    note plus Clear (false positive) / Confirm (accurate, doesn't block)
    actions, stamping `resolved_at`/`resolved_by` on `lead_vetting_flags`.
-4. **AI screener** — not started.
+4. **AI screener** — not started as a live conversation. A smaller,
+   deliberately scoped piece is done: `lib/outreachTemplates.js` +
+   `OutreachDraftPanel.jsx` (new section on `LeadDetailModal`) generate a
+   draft email or SMS from *only* the pre-approved program terms in
+   section 2 above -- no LLM call, nothing that could vary a number a
+   human hasn't approved. A human reviews, edits, copies, and sends it
+   themselves through their own email/SMS; "Mark as sent" only logs a
+   `lead_conversations` row after the fact. No provider (Twilio,
+   Microsoft Graph) is wired in, and nothing is ever sent automatically
+   -- matches the dry-run-by-default guardrail in section 8 exactly.
 5. **Handoff** — not started.
 6. **Onboarding tracker** — UI built: `components/onboarding/OnboardingView.jsx`
    (filterable case list off the `onboarding_board` view + a "New case"
@@ -160,14 +176,47 @@ Build one module per session. Each must pass its tests before the next starts.
    so no case can clear yet until one is approved.
 7. **Recruiter dashboard** — Leads pipeline view done (see below);
    onboarding board/case UI (above) added to the same Recruiting nav
-   group. Still to build: campaigns UI, the recruiter's own Home view.
+   group. **2026-09-28: a Claude Design handoff arrived** (a design
+   package covering Home, Campaigns, Accounts/Contacts, and enhancements
+   to the existing Leads/Onboarding views -- reference only, rebuilt with
+   this app's own `web/src/ds` primitives, not ported from its
+   HTML/runtime). Home is built first (`RecruitingHomeView.jsx`,
+   `useRecruitingHome.js`): derived heading/lede, segment tiles, a
+   6-bucket "by status" stacked bar, three attention cards (leads to
+   review, overdue onboarding steps, starting soon), and a merged
+   activity feed -- now the default landing tab for a pure recruiter
+   account. Campaigns built next (`components/recruiting/campaigns/`):
+   a rich empty state, a filterable list with a mini funnel per row, a
+   campaign record with the funnel as a real trapezoid shape (per-stage
+   drop-off in words, a rail with targeting and a derived "steepest
+   drop" sentence), Launch/Pause/Resume actions, and a bulk-select
+   checkbox column + navy selection bar on Leads feeding an "Add to a
+   campaign" modal. Tasks built too (the `tasks` table existed with no
+   UI at all): `useTasks`/`TasksPanel` (compact list + quick-add, now on
+   both `LeadDetailModal` and `OnboardingCaseModal`) and a new "Tasks"
+   nav item (`TasksView.jsx`) listing every open task across leads and
+   cases, "Mine only" filter, overdue in Scarlet. Accounts/Contacts
+   built next (`components/recruiting/accounts/`): list + full record
+   views for both (matching the Campaign record's "swapped view, not a
+   modal" pattern), new "Accounts"/"Contacts" nav items, each record
+   linking out to its originating lead, onboarding cases, and campaign
+   memberships (opening the existing Lead/Case modals rather than
+   duplicating their detail UI). `contacts.do_not_contact` withholds
+   phone/email everywhere a contact is shown, including retrofitted
+   into the Campaign record's member list. **Schema-vs-handoff gap**:
+   the handoff's do-not-contact card calls for showing a *reason* — the
+   `contacts` table has no such column, so the built banner has no
+   reason text; flagged rather than silently adding a column. Still to
+   build from that handoff: the documents-rail enhancement to the
+   existing Leads/Onboarding record views.
    `components/recruiting/RecruitingView.jsx`/`LeadDetailModal.jsx` --
    filterable leads table (segment, active/all pipeline), fit score shown
    with its provisional/pending status rather than a bare number, per-lead
    detail (FMCSA snapshot, full flag history, activity log), clear/confirm
-   on vetting flags inline. The `recruiter` role lands here instead of a
-   placeholder screen, and is the *only* nav group a pure recruiter
-   account sees (Sidebar); an admin sees it too.
+   on vetting flags inline, plus a manual "New lead" form and a Tenstreet
+   CSV import. The `recruiter` role lands on Home instead of a placeholder
+   screen, and is the *only* nav group a pure recruiter account sees
+   (Sidebar); an admin sees it too.
 8. **Retention signals (later)** — not started.
 
 **"Convert lead" action** — done (`components/recruiting/ConvertLeadForm.jsx`,

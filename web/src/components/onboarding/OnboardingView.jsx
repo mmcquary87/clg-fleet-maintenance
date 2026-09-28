@@ -22,20 +22,29 @@ const PATHWAY_OPTIONS = [
   { value: "brokerage_carrier", label: "Brokerage carrier" },
 ];
 
-export default function OnboardingView() {
+// initialFilter (from Recruiting Home's quick links): { overdueOnly?,
+// startingSoon? }.
+export default function OnboardingView({ initialFilter }) {
   const { cases, loading, error, reload } = useOnboardingCases();
   const [statusFilter, setStatusFilter] = useState("open");
   const [pathwayFilter, setPathwayFilter] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(!!initialFilter?.overdueOnly);
+  const [startingSoon, setStartingSoon] = useState(!!initialFilter?.startingSoon);
   const [showNewCase, setShowNewCase] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState(null);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const soonCutoff = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const filtered = useMemo(() => {
     return cases.filter((c) => {
       if (statusFilter && c.status !== statusFilter) return false;
       if (pathwayFilter && c.pathway !== pathwayFilter) return false;
+      if (overdueOnly && !((c.overdue_steps ?? 0) > 0)) return false;
+      if (startingSoon && !(c.target_start && c.target_start >= today && c.target_start <= soonCutoff)) return false;
       return true;
     });
-  }, [cases, statusFilter, pathwayFilter]);
+  }, [cases, statusFilter, pathwayFilter, overdueOnly, startingSoon, today, soonCutoff]);
 
   const columns = [
     { key: "recruit", label: "Recruit / account" },
@@ -78,6 +87,22 @@ export default function OnboardingView() {
           <div style={{ width: 190 }}>
             <Select options={PATHWAY_OPTIONS} value={pathwayFilter} onChange={(e) => setPathwayFilter(e.target.value)} />
           </div>
+          {[
+            { active: overdueOnly, onClick: () => setOverdueOnly((v) => !v), label: "Overdue step" },
+            { active: startingSoon, onClick: () => setStartingSoon((v) => !v), label: "Starting within 14 days" },
+          ].map((chip) => (
+            <button
+              key={chip.label} type="button" onClick={chip.onClick}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: "var(--clg-radius-pill)",
+                border: "1px solid " + (chip.active ? "var(--clg-royal)" : "var(--clg-border-default)"),
+                background: chip.active ? "var(--clg-royal)" : "transparent", color: chip.active ? "#fff" : "var(--clg-text-body)",
+                fontSize: 12.5, cursor: "pointer", whiteSpace: "nowrap",
+              }}
+            >
+              {chip.label}
+            </button>
+          ))}
           <Button size="sm" iconLeft={<Plus size={14} />} onClick={() => setShowNewCase(true)}>New case</Button>
         </div>
       </div>

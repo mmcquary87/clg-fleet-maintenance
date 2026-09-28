@@ -5,6 +5,8 @@ import { useLeadDetail } from "../../hooks/useLeadDetail";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 import ConvertLeadForm from "./ConvertLeadForm";
+import OutreachDraftPanel from "./OutreachDraftPanel";
+import TasksPanel from "./TasksPanel";
 
 const NOT_CONVERTIBLE_STATUSES = ["disqualified", "lost", "do_not_contact"];
 
@@ -287,8 +289,16 @@ export default function LeadDetailModal({ leadId, onClose, onLeadChanged }) {
                 <FlagsPanel flags={flags} onResolve={handleResolve} />
               </Section>
 
+              <Section title="Outreach">
+                <OutreachDraftPanel lead={lead} onLogged={reload} />
+              </Section>
+
               <Section title="Activity">
                 <ConversationsPanel conversations={conversations} />
+              </Section>
+
+              <Section title="Tasks">
+                <TasksPanel leadId={lead.id} />
               </Section>
             </div>
           </>
