@@ -236,6 +236,17 @@ Build one module per session. Each must pass its tests before the next starts.
    extracted the read-only feed into a shared `ConversationsPanel` so
    both the lead and case detail views render the same Activity
    section off the same table.
+   **2026-09-28: added standardized driver profile fields** -- home
+   time cadence, willing-to-run preference, years of CDL experience,
+   equipment experience, and endorsements are now dropdowns/toggles on
+   a driver lead (`supabase/migrations/20260928000000_recruiting_driver_profile.sql`
+   adds the enums/columns; `lib/driverProfile.js` is the single source
+   of truth for the option lists), shown on New lead's form and the
+   lead detail view, saving immediately per field. Deliberately kept
+   to a short, reportable list -- anything else still goes in the call
+   log, not a new column. Not yet carried into Tenstreet import's
+   column mapping or into contacts after conversion -- both explicitly
+   out of scope for this round.
 8. **Retention signals (later)** — not started.
 
 **"Convert lead" action** — done (`components/recruiting/ConvertLeadForm.jsx`,
