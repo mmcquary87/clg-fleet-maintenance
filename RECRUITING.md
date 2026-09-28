@@ -228,6 +228,14 @@ Build one module per session. Each must pass its tests before the next starts.
    contact) — writes straight to `leads.status`, and the existing
    `leads_status_log` DB trigger takes care of `lead_status_history`
    from there (so it also feeds Recruiting Home's activity feed).
+   **2026-09-28: carried the same notes/call-log into onboarding
+   cases** -- `OnboardingCaseModal` had step checklists and Tasks but
+   nowhere to log a call or note during onboarding itself, even though
+   `lead_conversations` already allowed a case_id-only row. Generalized
+   `LogInteractionForm` to take either `leadId` or `caseId`, and
+   extracted the read-only feed into a shared `ConversationsPanel` so
+   both the lead and case detail views render the same Activity
+   section off the same table.
 8. **Retention signals (later)** — not started.
 
 **"Convert lead" action** — done (`components/recruiting/ConvertLeadForm.jsx`,
