@@ -36,10 +36,15 @@ function ScoreCell({ lead }) {
   );
 }
 
-export default function RecruitingView() {
+// initialFilter (from Recruiting Home's quick links): { segment?, statuses?
+// (an explicit list of raw lead_status values, e.g. ["onboarding","signed"]
+// for the "converted" status bucket), flagsOnly? }.
+export default function RecruitingView({ initialFilter }) {
   const { leads, loading, error, reload } = useRecruitingLeads();
-  const [segmentFilter, setSegmentFilter] = useState("");
+  const [segmentFilter, setSegmentFilter] = useState(initialFilter?.segment ?? "");
   const [pipelineFilter, setPipelineFilter] = useState("active");
+  const [flagsOnly, setFlagsOnly] = useState(!!initialFilter?.flagsOnly);
+  const [statusesFilter] = useState(initialFilter?.statuses ?? null);
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [showNewLead, setShowNewLead] = useState(false);
   const [showTenstreetImport, setShowTenstreetImport] = useState(false);
@@ -47,10 +52,12 @@ export default function RecruitingView() {
   const filtered = useMemo(() => {
     return leads.filter((l) => {
       if (segmentFilter && l.segment !== segmentFilter) return false;
-      if (pipelineFilter === "active" && CLOSED_STATUSES.includes(l.status)) return false;
+      if (statusesFilter && !statusesFilter.includes(l.status)) return false;
+      if (!statusesFilter && pipelineFilter === "active" && CLOSED_STATUSES.includes(l.status)) return false;
+      if (flagsOnly && !(l.openReviewFlags > 0)) return false;
       return true;
     });
-  }, [leads, segmentFilter, pipelineFilter]);
+  }, [leads, segmentFilter, pipelineFilter, statusesFilter, flagsOnly]);
 
   const flaggedCount = filtered.filter((l) => l.openReviewFlags > 0).length;
 
@@ -102,6 +109,17 @@ export default function RecruitingView() {
           <div style={{ width: 190 }}>
             <Select options={PIPELINE_OPTIONS} value={pipelineFilter} onChange={(e) => setPipelineFilter(e.target.value)} />
           </div>
+          <button
+            type="button" onClick={() => setFlagsOnly((v) => !v)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: "var(--clg-radius-pill)",
+              border: "1px solid " + (flagsOnly ? "var(--clg-royal)" : "var(--clg-border-default)"),
+              background: flagsOnly ? "var(--clg-royal)" : "transparent", color: flagsOnly ? "#fff" : "var(--clg-text-body)",
+              fontSize: 12.5, cursor: "pointer",
+            }}
+          >
+            Open flags only
+          </button>
           <Button variant="outline" size="sm" iconLeft={<Upload size={14} />} onClick={() => setShowTenstreetImport(true)}>Import Tenstreet CSV</Button>
           <Button size="sm" iconLeft={<Plus size={14} />} onClick={() => setShowNewLead(true)}>New lead</Button>
         </div>

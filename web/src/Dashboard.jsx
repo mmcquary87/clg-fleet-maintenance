@@ -17,6 +17,7 @@ import ReloadsView from "./components/reloads/ReloadsView";
 import MechanicView from "./components/mechanic/MechanicView";
 import InsuranceView from "./components/insurance/InsuranceView";
 import AnnualInspectionComplianceView from "./components/compliance/AnnualInspectionComplianceView";
+import RecruitingHomeView from "./components/recruiting/RecruitingHomeView";
 import RecruitingView from "./components/recruiting/RecruitingView";
 import OnboardingView from "./components/onboarding/OnboardingView";
 import CopilotWidget from "./components/copilot/CopilotWidget";
@@ -40,6 +41,7 @@ const PAGE_META = {
   roster: { group: "Drivers", page: "Drivers" },
   hometime: { group: "Drivers", page: "Home time" },
   mechanic: { group: "Shop", page: "Mechanic queue" },
+  recruitingHome: { group: "Recruiting", page: "Home" },
   recruitingLeads: { group: "Recruiting", page: "Leads" },
   onboarding: { group: "Recruiting", page: "Onboarding" },
   settings: { group: "Admin", page: "Settings" },
@@ -48,7 +50,7 @@ const PAGE_META = {
 // The only tabs a pure (non-admin) recruiter account can ever land on --
 // Sidebar only ever shows them these, so any other stored/requested tab
 // gets pinned back to the first one (see effectiveTab below).
-const RECRUITER_TABS = ["recruitingLeads", "onboarding"];
+const RECRUITER_TABS = ["recruitingHome", "recruitingLeads", "onboarding"];
 
 // Remembers the last tab across a browser refresh -- Dashboard has no
 // router (per CLAUDE.md, plain useState tab switching), so a reload used
@@ -80,7 +82,9 @@ export default function Dashboard({ session }) {
   // onNavigate("board"), would render fleet-maintenance content a
   // recruiter shouldn't have access to. Within the recruiting tabs
   // themselves, navigation works normally.
-  const effectiveTab = isRecruiter && !isAdmin && !RECRUITER_TABS.includes(tab) ? "recruitingLeads" : tab;
+  const effectiveTab = isRecruiter && !isAdmin && !RECRUITER_TABS.includes(tab) ? "recruitingHome" : tab;
+  const [recruitingLeadsFilter, setRecruitingLeadsFilter] = useState(null);
+  const [onboardingFilter, setOnboardingFilter] = useState(null);
 
   useEffect(() => {
     try { localStorage.setItem(LAST_TAB_STORAGE_KEY, tab); } catch { /* ignore */ }
@@ -89,6 +93,15 @@ export default function Dashboard({ session }) {
   const goToWorkOrders = (category) => {
     setWoInitialCategory(category ?? null);
     setTab("workorders");
+  };
+
+  const goToRecruitingLeads = (filter) => {
+    setRecruitingLeadsFilter(filter ?? null);
+    setTab("recruitingLeads");
+  };
+  const goToOnboarding = (filter) => {
+    setOnboardingFilter(filter ?? null);
+    setTab("onboarding");
   };
 
   const { group, page } = PAGE_META[effectiveTab] ?? { group: "", page: "" };
@@ -145,8 +158,11 @@ export default function Dashboard({ session }) {
           {effectiveTab === "roster" && <RosterView session={session} />}
           {effectiveTab === "hometime" && <HomeTimeView session={session} />}
           {effectiveTab === "mechanic" && canUseMechanicQueue && <MechanicView />}
-          {effectiveTab === "recruitingLeads" && (isRecruiter || isAdmin) && <RecruitingView />}
-          {effectiveTab === "onboarding" && (isRecruiter || isAdmin) && <OnboardingView />}
+          {effectiveTab === "recruitingHome" && (isRecruiter || isAdmin) && (
+            <RecruitingHomeView onGoToLeads={goToRecruitingLeads} onGoToOnboarding={goToOnboarding} />
+          )}
+          {effectiveTab === "recruitingLeads" && (isRecruiter || isAdmin) && <RecruitingView initialFilter={recruitingLeadsFilter} />}
+          {effectiveTab === "onboarding" && (isRecruiter || isAdmin) && <OnboardingView initialFilter={onboardingFilter} />}
           {effectiveTab === "settings" && isAdmin && <SettingsView />}
         </div>
       </div>
