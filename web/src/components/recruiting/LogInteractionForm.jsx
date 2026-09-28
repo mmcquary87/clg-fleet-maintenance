@@ -4,8 +4,9 @@ import { Field, Input, Select, Button, Alert } from "../../ds";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 
-// Free-form activity logging for a lead -- a call, a text exchange, an
-// in-person conversation, or just an internal note -- distinct from
+// Free-form activity logging for a lead or an onboarding case (pass exactly
+// one of leadId/caseId) -- a call, a text exchange, an in-person
+// conversation, or just an internal note -- distinct from
 // OutreachDraftPanel's "mark as sent" (which only ever logs an outbound
 // email/sms draft). Writes straight to lead_conversations; there's no
 // separate "calls" table, so a phone call is just channel: "phone" here.
@@ -24,7 +25,7 @@ const DIRECTION_OPTIONS = [
   { value: "internal_note", label: "Internal note (no contact)" },
 ];
 
-export default function LogInteractionForm({ leadId, onCancel, onLogged }) {
+export default function LogInteractionForm({ leadId, caseId, onCancel, onLogged }) {
   const { session } = useAuth();
   const [channel, setChannel] = useState("phone");
   const [direction, setDirection] = useState("outbound");
@@ -43,7 +44,8 @@ export default function LogInteractionForm({ leadId, onCancel, onLogged }) {
     setSubmitting(true);
     setError(null);
     const { error: err } = await supabase.from("lead_conversations").insert({
-      lead_id: leadId,
+      lead_id: leadId ?? null,
+      case_id: caseId ?? null,
       channel,
       direction,
       author: session?.user?.email || "unknown",

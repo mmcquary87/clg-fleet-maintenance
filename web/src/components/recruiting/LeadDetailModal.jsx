@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabaseClient";
 import ConvertLeadForm from "./ConvertLeadForm";
 import OutreachDraftPanel from "./OutreachDraftPanel";
 import LogInteractionForm from "./LogInteractionForm";
+import ConversationsPanel from "./ConversationsPanel";
 import TasksPanel from "./TasksPanel";
 
 // The full lead_status pipeline (supabase/migrations/20260927040000), in
@@ -39,9 +40,6 @@ const FLAG_SEVERITY_TONE = { disqualifying: "red", review: "yellow", info: "neut
 
 function fmtDate(iso) {
   return iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
-}
-function fmtDateTime(iso) {
-  return iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
 }
 function prettifyCode(code) {
   return (code || "").replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
@@ -168,29 +166,6 @@ function FlagsPanel({ flags, onResolve }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {sorted.map((f) => (
         <FlagRow key={f.id} flag={f} onResolve={onResolve} />
-      ))}
-    </div>
-  );
-}
-
-function ConversationsPanel({ conversations }) {
-  if (conversations.length === 0) {
-    return <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>No activity logged yet.</div>;
-  }
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {conversations.map((c) => (
-        <div key={c.id} style={{ borderLeft: "2px solid var(--clg-border-default)", paddingLeft: 10 }}>
-          <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>
-            {fmtDateTime(c.occurred_at)} · {c.channel.replace(/_/g, " ")} · {c.direction.replace(/_/g, " ")} · {c.author}
-          </div>
-          <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginTop: 2 }}>{c.summary}</div>
-          {c.next_step && (
-            <div style={{ fontSize: 12, color: "var(--clg-text-muted)", marginTop: 2 }}>
-              Next: {c.next_step}{c.next_step_due ? ` by ${fmtDate(c.next_step_due)}` : ""}
-            </div>
-          )}
-        </div>
       ))}
     </div>
   );
