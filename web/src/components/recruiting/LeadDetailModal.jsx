@@ -9,6 +9,8 @@ import OutreachDraftPanel from "./OutreachDraftPanel";
 import LogInteractionForm from "./LogInteractionForm";
 import ConversationsPanel from "./ConversationsPanel";
 import TasksPanel from "./TasksPanel";
+import PillMultiSelect from "./PillMultiSelect";
+import { HOME_TIME_OPTIONS, RUN_PREFERENCE_OPTIONS, EXPERIENCE_OPTIONS, EQUIPMENT_OPTIONS, ENDORSEMENT_OPTIONS } from "../../lib/driverProfile";
 
 // The full lead_status pipeline (supabase/migrations/20260927040000), in
 // pipeline order -- a manual move writes straight to leads.status; the
@@ -171,6 +173,81 @@ function FlagsPanel({ flags, onResolve }) {
   );
 }
 
+function LabeledControl({ label, children }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+// Standardized driver fields (supabase/migrations/20260928000000) --
+// dropdowns/toggles save immediately on change, same as the status
+// control above; preferred_lanes (free text) saves on blur so it isn't
+// firing a write per keystroke. Anything that doesn't fit one of these
+// belongs in Activity below, not a new field here.
+function DriverProfilePanel({ lead, onSaved }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [preferredLanes, setPreferredLanes] = useState(lead.preferred_lanes || "");
+
+  const save = async (patch) => {
+    setSaving(true);
+    setError(null);
+    const { error: err } = await supabase.from("leads").update(patch).eq("id", lead.id);
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    onSaved();
+  };
+
+  const savePreferredLanes = () => {
+    if ((preferredLanes.trim() || null) !== lead.preferred_lanes) {
+      save({ preferred_lanes: preferredLanes.trim() || null });
+    }
+  };
+
+  return (
+    <div>
+      {error && <Alert tone="critical" style={{ marginBottom: 10 }}>{error}</Alert>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14, marginBottom: 14 }}>
+        <LabeledControl label="Home time cadence">
+          <Select
+            options={HOME_TIME_OPTIONS} value={lead.home_time_cadence || ""} disabled={saving} placeholder="Not set"
+            onChange={(e) => save({ home_time_cadence: e.target.value || null })}
+          />
+        </LabeledControl>
+        <LabeledControl label="Willing to run">
+          <Select
+            options={RUN_PREFERENCE_OPTIONS} value={lead.run_preference || ""} disabled={saving} placeholder="Not set"
+            onChange={(e) => save({ run_preference: e.target.value || null })}
+          />
+        </LabeledControl>
+        <LabeledControl label="Years of CDL experience">
+          <Select
+            options={EXPERIENCE_OPTIONS} value={lead.experience_bucket || ""} disabled={saving} placeholder="Not set"
+            onChange={(e) => save({ experience_bucket: e.target.value || null })}
+          />
+        </LabeledControl>
+        <LabeledControl label="Preferred lanes / region">
+          <Input
+            value={preferredLanes} disabled={saving} placeholder="e.g. Southeast, no Northeast"
+            onChange={(e) => setPreferredLanes(e.target.value)} onBlur={savePreferredLanes}
+          />
+        </LabeledControl>
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <LabeledControl label="Equipment experience">
+          <PillMultiSelect options={EQUIPMENT_OPTIONS} values={lead.equipment_experience} disabled={saving} onChange={(v) => save({ equipment_experience: v })} />
+        </LabeledControl>
+      </div>
+      <LabeledControl label="Endorsements">
+        <PillMultiSelect options={ENDORSEMENT_OPTIONS} values={lead.endorsements} disabled={saving} onChange={(v) => save({ endorsements: v })} />
+      </LabeledControl>
+    </div>
+  );
+}
+
 function Section({ title, children }) {
   return (
     <div style={{ marginTop: 20 }}>
@@ -304,6 +381,12 @@ export default function LeadDetailModal({ leadId, onClose, onLeadChanged }) {
               <Section title="FMCSA snapshot">
                 <SnapshotPanel snapshot={snapshot} />
               </Section>
+
+              {lead.segment === "driver" && (
+                <Section title="Driver profile">
+                  <DriverProfilePanel lead={lead} onSaved={reload} />
+                </Section>
+              )}
 
               <Section title="Vetting flags">
                 {resolveError && <Alert tone="critical" title="Couldn't update flag" style={{ marginBottom: 10 }}>{resolveError}</Alert>}

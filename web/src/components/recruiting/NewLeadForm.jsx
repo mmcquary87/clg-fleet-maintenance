@@ -2,6 +2,8 @@ import { useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
+import PillMultiSelect from "./PillMultiSelect";
+import { HOME_TIME_OPTIONS, RUN_PREFERENCE_OPTIONS, EXPERIENCE_OPTIONS, EQUIPMENT_OPTIONS, ENDORSEMENT_OPTIONS } from "../../lib/driverProfile";
 
 const SEGMENT_OPTIONS = [
   { value: "driver", label: "Driver" },
@@ -20,6 +22,12 @@ export default function NewLeadForm({ onCancel, onSaved }) {
   const [email, setEmail] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [homeTimeCadence, setHomeTimeCadence] = useState("");
+  const [runPreference, setRunPreference] = useState("");
+  const [preferredLanes, setPreferredLanes] = useState("");
+  const [experienceBucket, setExperienceBucket] = useState("");
+  const [equipmentExperience, setEquipmentExperience] = useState([]);
+  const [endorsements, setEndorsements] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -43,6 +51,12 @@ export default function NewLeadForm({ onCancel, onSaved }) {
       email: email.trim() || null,
       city: city.trim() || null,
       state: state.trim() || null,
+      home_time_cadence: homeTimeCadence || null,
+      run_preference: runPreference || null,
+      preferred_lanes: preferredLanes.trim() || null,
+      experience_bucket: experienceBucket || null,
+      equipment_experience: equipmentExperience,
+      endorsements,
     });
     setSubmitting(false);
     if (err) {
@@ -96,6 +110,34 @@ export default function NewLeadForm({ onCancel, onSaved }) {
             <Input value={state} onChange={(e) => setState(e.target.value)} placeholder="e.g. FL" />
           </Field>
         </div>
+
+        {segment === "driver" && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-navy)", marginBottom: 12 }}>
+              Driver profile
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, marginBottom: 16 }}>
+              <Field label="Home time cadence" help="Optional">
+                <Select value={homeTimeCadence} onChange={(e) => setHomeTimeCadence(e.target.value)} options={HOME_TIME_OPTIONS} placeholder="Not set" />
+              </Field>
+              <Field label="Willing to run" help="Optional">
+                <Select value={runPreference} onChange={(e) => setRunPreference(e.target.value)} options={RUN_PREFERENCE_OPTIONS} placeholder="Not set" />
+              </Field>
+              <Field label="Years of CDL experience" help="Optional">
+                <Select value={experienceBucket} onChange={(e) => setExperienceBucket(e.target.value)} options={EXPERIENCE_OPTIONS} placeholder="Not set" />
+              </Field>
+              <Field label="Preferred lanes / region" help="Optional -- free text">
+                <Input value={preferredLanes} onChange={(e) => setPreferredLanes(e.target.value)} placeholder="e.g. Southeast, no Northeast" />
+              </Field>
+            </div>
+            <Field label="Equipment experience" help="Optional" style={{ marginBottom: 16 }}>
+              <PillMultiSelect options={EQUIPMENT_OPTIONS} values={equipmentExperience} onChange={setEquipmentExperience} />
+            </Field>
+            <Field label="Endorsements" help="Optional">
+              <PillMultiSelect options={ENDORSEMENT_OPTIONS} values={endorsements} onChange={setEndorsements} />
+            </Field>
+          </div>
+        )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
