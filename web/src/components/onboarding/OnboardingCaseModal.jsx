@@ -4,6 +4,7 @@ import { Badge, StatusPill, Alert, Button, Input } from "../../ds";
 import { useOnboardingCaseDetail } from "../../hooks/useOnboardingCaseDetail";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
+import TasksPanel from "../recruiting/TasksPanel";
 
 const PATHWAY_LABELS = { lease_on: "Lease-on", company_driver: "Company driver", brokerage_carrier: "Brokerage carrier" };
 const CASE_STATUS_TONES = { cleared: "green", withdrawn: "red", rejected: "red", on_hold: "neutral", open: "brand" };
@@ -205,6 +206,13 @@ export default function OnboardingCaseModal({ caseId, onClose, onCaseChanged }) 
                   </div>
                 </div>
               ))}
+
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-navy)", marginBottom: 10 }}>
+                  Tasks
+                </div>
+                <TasksPanel caseId={caseRow.id} />
+              </div>
 
               {actionError && <Alert tone="critical" style={{ marginTop: 16 }}>{actionError}</Alert>}
 
