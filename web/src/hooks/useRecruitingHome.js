@@ -75,7 +75,7 @@ export function useRecruitingHome() {
 
   const activeLeads = leads.filter((l) => !CLOSED_STATUSES.includes(l.status));
   const segmentStats = {};
-  for (const seg of ["new_mc", "small_fleet", "driver"]) {
+  for (const seg of ["driver", "new_mc", "small_fleet"]) {
     const inSeg = leads.filter((l) => l.segment === seg);
     const activeInSeg = inSeg.filter((l) => !CLOSED_STATUSES.includes(l.status));
     segmentStats[seg] = {

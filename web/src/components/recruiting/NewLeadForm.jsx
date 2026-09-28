@@ -4,13 +4,13 @@ import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 
 const SEGMENT_OPTIONS = [
+  { value: "driver", label: "Driver" },
   { value: "new_mc", label: "New MC" },
   { value: "small_fleet", label: "Small fleet" },
-  { value: "driver", label: "Driver" },
 ];
 
 export default function NewLeadForm({ onCancel, onSaved }) {
-  const [segment, setSegment] = useState("new_mc");
+  const [segment, setSegment] = useState("driver");
   const [legalName, setLegalName] = useState("");
   const [dbaName, setDbaName] = useState("");
   const [dotNumber, setDotNumber] = useState("");

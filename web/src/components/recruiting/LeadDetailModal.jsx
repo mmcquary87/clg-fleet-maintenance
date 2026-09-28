@@ -28,8 +28,8 @@ const STATUS_OPTIONS = [
 
 const NOT_CONVERTIBLE_STATUSES = ["disqualified", "lost", "do_not_contact"];
 
-const SEGMENT_LABELS = { new_mc: "New MC", small_fleet: "Small fleet", driver: "Driver" };
-const SEGMENT_TONES = { new_mc: "brand", small_fleet: "neutral", driver: "accent" };
+const SEGMENT_LABELS = { driver: "Driver", new_mc: "New MC", small_fleet: "Small fleet" };
+const SEGMENT_TONES = { driver: "accent", new_mc: "brand", small_fleet: "neutral" };
 const STATUS_TONES = {
   signed: "green", onboarding: "green",
   disqualified: "red", lost: "red", do_not_contact: "red",

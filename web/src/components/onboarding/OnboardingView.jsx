@@ -5,7 +5,7 @@ import { useOnboardingCases } from "../../hooks/useOnboardingCases";
 import NewCaseForm from "./NewCaseForm";
 import OnboardingCaseModal from "./OnboardingCaseModal";
 
-const PATHWAY_LABELS = { lease_on: "Lease-on", company_driver: "Company driver", brokerage_carrier: "Brokerage carrier" };
+const PATHWAY_LABELS = { company_driver: "Company driver", lease_on: "Lease-on", brokerage_carrier: "Brokerage carrier" };
 const CASE_STATUS_TONES = { cleared: "green", withdrawn: "red", rejected: "red", on_hold: "neutral", open: "brand" };
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -17,8 +17,8 @@ const STATUS_OPTIONS = [
 ];
 const PATHWAY_OPTIONS = [
   { value: "", label: "All pathways" },
-  { value: "lease_on", label: "Lease-on" },
   { value: "company_driver", label: "Company driver" },
+  { value: "lease_on", label: "Lease-on" },
   { value: "brokerage_carrier", label: "Brokerage carrier" },
 ];
 

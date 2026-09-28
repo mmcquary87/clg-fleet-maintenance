@@ -5,14 +5,14 @@ import { supabase } from "../../lib/supabaseClient";
 import { useOnboardingFormOptions } from "../../hooks/useOnboardingFormOptions";
 
 const PATHWAY_OPTIONS = [
-  { value: "lease_on", label: "Lease-on (owner-operator)" },
   { value: "company_driver", label: "Company driver" },
+  { value: "lease_on", label: "Lease-on (owner-operator)" },
   { value: "brokerage_carrier", label: "Brokerage carrier" },
 ];
 
 export default function NewCaseForm({ onCancel, onSaved }) {
   const { templates, accounts, contacts, loading } = useOnboardingFormOptions();
-  const [pathway, setPathway] = useState("lease_on");
+  const [pathway, setPathway] = useState("company_driver");
   const [templateId, setTemplateId] = useState("");
   const [accountId, setAccountId] = useState("");
   const [contactId, setContactId] = useState("");

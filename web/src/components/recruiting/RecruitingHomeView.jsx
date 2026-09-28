@@ -5,8 +5,8 @@ import { useRecruitingHome } from "../../hooks/useRecruitingHome";
 import LeadDetailModal from "./LeadDetailModal";
 import OnboardingCaseModal from "../onboarding/OnboardingCaseModal";
 
-const SEGMENT_LABELS = { new_mc: "New MC", small_fleet: "Small fleet", driver: "Driver" };
-const SEGMENT_ORDER = ["new_mc", "small_fleet", "driver"];
+const SEGMENT_LABELS = { driver: "Driver", new_mc: "New MC", small_fleet: "Small fleet" };
+const SEGMENT_ORDER = ["driver", "new_mc", "small_fleet"];
 
 // A light-to-dark sequential ramp (the app's own existing gray-to-navy
 // scale, tokens.css) for the "by status" bar -- these 6 buckets are an
