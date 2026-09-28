@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   LayoutGrid, MapPin, RefreshCw, BarChart3, ClipboardList, CircleDollarSign, Truck, Briefcase, User, Wrench,
   Settings, LogOut, ChevronsLeft, ChevronsRight, Shield, ClipboardCheck, UserPlus, FileCheck2, Home, Megaphone, ListChecks,
+  Building2, Contact,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -46,6 +47,8 @@ const RECRUITING_GROUP = {
     { id: "recruitingLeads", label: "Leads", Icon: UserPlus },
     { id: "onboarding", label: "Onboarding", Icon: FileCheck2 },
     { id: "campaigns", label: "Campaigns", Icon: Megaphone },
+    { id: "accounts", label: "Accounts", Icon: Building2 },
+    { id: "contacts", label: "Contacts", Icon: Contact },
     { id: "recruitingTasks", label: "Tasks", Icon: ListChecks },
   ],
 };

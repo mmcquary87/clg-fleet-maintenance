@@ -34,7 +34,7 @@ export function useCampaignDetail(campaignId) {
     const contactIds = memberRows.filter((m) => m.contact_id).map((m) => m.contact_id);
     const [leadsRes, contactsRes] = await Promise.all([
       leadIds.length ? supabase.from("leads").select("id, legal_name, dba_name, contact_name, city, state").in("id", leadIds) : Promise.resolve({ data: [] }),
-      contactIds.length ? supabase.from("contacts").select("id, first_name, last_name, phone, email").in("id", contactIds) : Promise.resolve({ data: [] }),
+      contactIds.length ? supabase.from("contacts").select("id, first_name, last_name, phone, email, do_not_contact").in("id", contactIds) : Promise.resolve({ data: [] }),
     ]);
     const leadsById = Object.fromEntries((leadsRes.data ?? []).map((l) => [l.id, l]));
     const contactsById = Object.fromEntries((contactsRes.data ?? []).map((c) => [c.id, c]));
@@ -45,7 +45,10 @@ export function useCampaignDetail(campaignId) {
         return { ...m, name: l?.legal_name || l?.dba_name || l?.contact_name || "Unnamed lead", subline: [l?.city, l?.state].filter(Boolean).join(", "), kind: "lead" };
       }
       const c = contactsById[m.contact_id];
-      return { ...m, name: [c?.first_name, c?.last_name].filter(Boolean).join(" ") || "Unnamed contact", subline: c?.phone || c?.email || "", kind: "contact" };
+      // do_not_contact withholds phone/email everywhere in this app, per
+      // RECRUITING.md -- including here, a member row that would otherwise
+      // display it directly.
+      return { ...m, name: [c?.first_name, c?.last_name].filter(Boolean).join(" ") || "Unnamed contact", subline: c?.do_not_contact ? "Do not contact" : (c?.phone || c?.email || ""), kind: "contact" };
     }));
     setLoading(false);
   }, [campaignId]);

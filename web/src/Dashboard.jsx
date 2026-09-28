@@ -23,6 +23,10 @@ import OnboardingView from "./components/onboarding/OnboardingView";
 import CampaignsView from "./components/recruiting/campaigns/CampaignsView";
 import CampaignRecordView from "./components/recruiting/campaigns/CampaignRecordView";
 import TasksView from "./components/recruiting/TasksView";
+import AccountsView from "./components/recruiting/accounts/AccountsView";
+import AccountRecordView from "./components/recruiting/accounts/AccountRecordView";
+import ContactsView from "./components/recruiting/accounts/ContactsView";
+import ContactRecordView from "./components/recruiting/accounts/ContactRecordView";
 import CopilotWidget from "./components/copilot/CopilotWidget";
 import "./ds/tokens.css";
 
@@ -49,6 +53,10 @@ const PAGE_META = {
   onboarding: { group: "Recruiting", page: "Onboarding" },
   campaigns: { group: "Recruiting", page: "Campaigns" },
   campaignRecord: { group: "Recruiting", page: "Campaign" },
+  accounts: { group: "Recruiting", page: "Accounts" },
+  accountRecord: { group: "Recruiting", page: "Account" },
+  contacts: { group: "Recruiting", page: "Contacts" },
+  contactRecord: { group: "Recruiting", page: "Contact" },
   recruitingTasks: { group: "Recruiting", page: "Tasks" },
   settings: { group: "Admin", page: "Settings" },
 };
@@ -56,7 +64,7 @@ const PAGE_META = {
 // The only tabs a pure (non-admin) recruiter account can ever land on --
 // Sidebar only ever shows them these, so any other stored/requested tab
 // gets pinned back to the first one (see effectiveTab below).
-const RECRUITER_TABS = ["recruitingHome", "recruitingLeads", "onboarding", "campaigns", "campaignRecord", "recruitingTasks"];
+const RECRUITER_TABS = ["recruitingHome", "recruitingLeads", "onboarding", "campaigns", "campaignRecord", "accounts", "accountRecord", "contacts", "contactRecord", "recruitingTasks"];
 
 // Remembers the last tab across a browser refresh -- Dashboard has no
 // router (per CLAUDE.md, plain useState tab switching), so a reload used
@@ -92,6 +100,8 @@ export default function Dashboard({ session }) {
   const [recruitingLeadsFilter, setRecruitingLeadsFilter] = useState(null);
   const [onboardingFilter, setOnboardingFilter] = useState(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const [selectedContactId, setSelectedContactId] = useState(null);
 
   useEffect(() => {
     try { localStorage.setItem(LAST_TAB_STORAGE_KEY, tab); } catch { /* ignore */ }
@@ -113,6 +123,14 @@ export default function Dashboard({ session }) {
   const goToCampaign = (campaignId) => {
     setSelectedCampaignId(campaignId);
     setTab("campaignRecord");
+  };
+  const goToAccount = (accountId) => {
+    setSelectedAccountId(accountId);
+    setTab("accountRecord");
+  };
+  const goToContact = (contactId) => {
+    setSelectedContactId(contactId);
+    setTab("contactRecord");
   };
 
   const { group, page } = PAGE_META[effectiveTab] ?? { group: "", page: "" };
@@ -188,6 +206,23 @@ export default function Dashboard({ session }) {
               campaignId={selectedCampaignId}
               onBack={() => setTab("campaigns")}
               onGoToLeads={() => setTab("recruitingLeads")}
+            />
+          )}
+          {effectiveTab === "accounts" && (isRecruiter || isAdmin) && <AccountsView onOpenAccount={goToAccount} />}
+          {effectiveTab === "accountRecord" && (isRecruiter || isAdmin) && (
+            <AccountRecordView
+              accountId={selectedAccountId}
+              onBack={() => setTab("accounts")}
+              onOpenCampaign={goToCampaign}
+            />
+          )}
+          {effectiveTab === "contacts" && (isRecruiter || isAdmin) && <ContactsView onOpenContact={goToContact} />}
+          {effectiveTab === "contactRecord" && (isRecruiter || isAdmin) && (
+            <ContactRecordView
+              contactId={selectedContactId}
+              onBack={() => setTab("contacts")}
+              onOpenAccount={goToAccount}
+              onOpenCampaign={goToCampaign}
             />
           )}
           {effectiveTab === "recruitingTasks" && (isRecruiter || isAdmin) && <TasksView />}
