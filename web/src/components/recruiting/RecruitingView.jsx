@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Upload } from "lucide-react";
 import { Badge, StatusPill, Select, Alert, Eyebrow, Button } from "../../ds";
 import { useRecruitingLeads } from "../../hooks/useRecruitingLeads";
 import LeadDetailModal from "./LeadDetailModal";
 import NewLeadForm from "./NewLeadForm";
+import TenstreetImportForm from "./TenstreetImportForm";
 
 const SEGMENT_LABELS = { new_mc: "New MC", small_fleet: "Small fleet", driver: "Driver" };
 const SEGMENT_TONES = { new_mc: "brand", small_fleet: "neutral", driver: "accent" };
@@ -41,6 +42,7 @@ export default function RecruitingView() {
   const [pipelineFilter, setPipelineFilter] = useState("active");
   const [selectedLeadId, setSelectedLeadId] = useState(null);
   const [showNewLead, setShowNewLead] = useState(false);
+  const [showTenstreetImport, setShowTenstreetImport] = useState(false);
 
   const filtered = useMemo(() => {
     return leads.filter((l) => {
@@ -100,12 +102,17 @@ export default function RecruitingView() {
           <div style={{ width: 190 }}>
             <Select options={PIPELINE_OPTIONS} value={pipelineFilter} onChange={(e) => setPipelineFilter(e.target.value)} />
           </div>
+          <Button variant="outline" size="sm" iconLeft={<Upload size={14} />} onClick={() => setShowTenstreetImport(true)}>Import Tenstreet CSV</Button>
           <Button size="sm" iconLeft={<Plus size={14} />} onClick={() => setShowNewLead(true)}>New lead</Button>
         </div>
       </div>
 
       {showNewLead && (
         <NewLeadForm onCancel={() => setShowNewLead(false)} onSaved={() => { setShowNewLead(false); reload(); }} />
+      )}
+
+      {showTenstreetImport && (
+        <TenstreetImportForm onCancel={() => setShowTenstreetImport(false)} onImported={reload} />
       )}
 
       {error && <Alert tone="critical" title="Couldn't load leads" style={{ marginBottom: 16 }}>{error}</Alert>}
