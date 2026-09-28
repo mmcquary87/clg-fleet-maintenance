@@ -146,18 +146,28 @@ Build one module per session. Each must pass its tests before the next starts.
    actions, stamping `resolved_at`/`resolved_by` on `lead_vetting_flags`.
 4. **AI screener** — not started.
 5. **Handoff** — not started.
-6. **Onboarding tracker** — the governed data model is live (templates,
-   cases, steps, clear-to-dispatch gate, roster handoff), but there's no UI
-   to drive it, and all seeded templates are DRAFT — nothing is approved.
-7. **Recruiter dashboard** — first slice done: a Leads pipeline view
-   (`components/recruiting/RecruitingView.jsx`, `LeadDetailModal.jsx`) —
+6. **Onboarding tracker** — UI built: `components/onboarding/OnboardingView.jsx`
+   (filterable case list off the `onboarding_board` view + a "New case"
+   form -- picks an existing account/contact and a template; the DB's own
+   `seed_case_steps` trigger populates the case's steps) and
+   `OnboardingCaseModal.jsx` (step checklist grouped by stage with
+   Start/Complete/Waive actions -- a `requires_document` step prompts for
+   a document link before it can complete, matching the DB's own
+   constraint -- and case-level Hold/Resume/Withdraw/Reject/Clear
+   actions). Deliberately does not replicate the clear-to-dispatch gate's
+   logic in the frontend -- a blocked Clear just surfaces the DB
+   trigger's own raised exception. All seeded templates are still DRAFT,
+   so no case can clear yet until one is approved.
+7. **Recruiter dashboard** — Leads pipeline view done (see below);
+   onboarding board/case UI (above) added to the same Recruiting nav
+   group. Still to build: campaigns UI, the recruiter's own Home view.
+   `components/recruiting/RecruitingView.jsx`/`LeadDetailModal.jsx` --
    filterable leads table (segment, active/all pipeline), fit score shown
    with its provisional/pending status rather than a bare number, per-lead
-   detail (FMCSA snapshot, full flag history, activity log). The
-   `recruiter` role now lands here instead of a placeholder screen, and is
-   the *only* nav group a pure recruiter account sees (Sidebar); an admin
-   sees it too, and can clear/confirm vetting flags inline. Still to build:
-   campaigns, onboarding board/case UI, the recruiter's own Home view.
+   detail (FMCSA snapshot, full flag history, activity log), clear/confirm
+   on vetting flags inline. The `recruiter` role lands here instead of a
+   placeholder screen, and is the *only* nav group a pure recruiter
+   account sees (Sidebar); an admin sees it too.
 8. **Retention signals (later)** — not started.
 
 **Open scope decision (flagged, not yet resolved):** the CRM spec's own
