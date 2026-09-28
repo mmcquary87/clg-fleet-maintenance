@@ -7,8 +7,8 @@ import NewLeadForm from "./NewLeadForm";
 import TenstreetImportForm from "./TenstreetImportForm";
 import AddToCampaignModal from "./campaigns/AddToCampaignModal";
 
-const SEGMENT_LABELS = { new_mc: "New MC", small_fleet: "Small fleet", driver: "Driver" };
-const SEGMENT_TONES = { new_mc: "brand", small_fleet: "neutral", driver: "accent" };
+const SEGMENT_LABELS = { driver: "Driver", new_mc: "New MC", small_fleet: "Small fleet" };
+const SEGMENT_TONES = { driver: "accent", new_mc: "brand", small_fleet: "neutral" };
 const STATUS_TONES = {
   signed: "green", onboarding: "green",
   disqualified: "red", lost: "red", do_not_contact: "red",
@@ -17,9 +17,9 @@ const CLOSED_STATUSES = ["disqualified", "lost", "do_not_contact", "signed"];
 
 const SEGMENT_OPTIONS = [
   { value: "", label: "All segments" },
+  { value: "driver", label: "Driver" },
   { value: "new_mc", label: "New MC" },
   { value: "small_fleet", label: "Small fleet" },
-  { value: "driver", label: "Driver" },
 ];
 const PIPELINE_OPTIONS = [
   { value: "active", label: "Active pipeline" },

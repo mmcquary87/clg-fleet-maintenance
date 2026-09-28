@@ -7,12 +7,17 @@
 // writing it from scratch.
 
 const SEGMENT_OPENING = {
+  driver: "an opportunity to drive for CLG Transportation, including a path to owning your own truck",
   new_mc: "an opportunity to lease onto CLG Transportation's authority and insurance",
   small_fleet: "CLG's brokerage carrier program",
-  driver: "an opportunity to drive for CLG Transportation, including a path to owning your own truck",
 };
 
 const SEGMENT_TERMS = {
+  driver: [
+    "A Net Mileage Guarantee of at least $0.75 per mile net -- non-recoverable, so a slow week is never owed back.",
+    "If you don't have your own truck, CLG's lease-purchase program: weekly payments from settlements, building equity with every payment, on a new or newer truck leased onto CLG.",
+    "CLG's Love's and TA/Petro fuel discount program.",
+  ],
   new_mc: [
     "A Net Mileage Guarantee of at least $0.75 per mile net -- non-recoverable, so a slow week is never owed back.",
     "CLG's Love's and TA/Petro fuel discount program.",
@@ -23,11 +28,6 @@ const SEGMENT_TERMS = {
     "CLG's Love's and TA/Petro fuel discount program.",
     "QuickPay through Triumph available.",
   ],
-  driver: [
-    "A Net Mileage Guarantee of at least $0.75 per mile net -- non-recoverable, so a slow week is never owed back.",
-    "If you don't have your own truck, CLG's lease-purchase program: weekly payments from settlements, building equity with every payment, on a new or newer truck leased onto CLG.",
-    "CLG's Love's and TA/Petro fuel discount program.",
-  ],
 };
 
 function contactFirstName(lead) {
@@ -37,8 +37,8 @@ function contactFirstName(lead) {
 export function draftEmail(lead, recruiterName) {
   const first = contactFirstName(lead);
   const greeting = first ? "Hi " + first + "," : "Hi there,";
-  const opening = SEGMENT_OPENING[lead.segment] || SEGMENT_OPENING.new_mc;
-  const terms = (SEGMENT_TERMS[lead.segment] || SEGMENT_TERMS.new_mc).map((t) => "- " + t).join("\n");
+  const opening = SEGMENT_OPENING[lead.segment] || SEGMENT_OPENING.driver;
+  const terms = (SEGMENT_TERMS[lead.segment] || SEGMENT_TERMS.driver).map((t) => "- " + t).join("\n");
   const subject = lead.segment === "small_fleet" ? "CLG Transportation — Carrier Partnership" : "CLG Transportation — Owner-Operator Opportunity";
   const body = greeting + "\n\n" +
     "I'm reaching out from CLG Transportation about " + opening + ".\n\n" +

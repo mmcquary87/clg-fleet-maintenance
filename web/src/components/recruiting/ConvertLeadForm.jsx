@@ -17,8 +17,8 @@ const CONTACT_ROLE_OPTIONS = [
   { value: "office", label: "Office" },
   { value: "other", label: "Other" },
 ];
-const DEFAULT_ACCOUNT_TYPE = { new_mc: "owner_operator", small_fleet: "small_fleet", driver: "individual" };
-const DEFAULT_CONTACT_ROLE = { new_mc: "owner", small_fleet: "owner", driver: "driver" };
+const DEFAULT_ACCOUNT_TYPE = { driver: "individual", new_mc: "owner_operator", small_fleet: "small_fleet" };
+const DEFAULT_CONTACT_ROLE = { driver: "driver", new_mc: "owner", small_fleet: "owner" };
 
 function splitName(name) {
   const parts = (name || "").trim().split(/\s+/);

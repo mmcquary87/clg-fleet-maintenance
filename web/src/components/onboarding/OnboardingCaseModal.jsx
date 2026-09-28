@@ -6,7 +6,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 import TasksPanel from "../recruiting/TasksPanel";
 
-const PATHWAY_LABELS = { lease_on: "Lease-on", company_driver: "Company driver", brokerage_carrier: "Brokerage carrier" };
+const PATHWAY_LABELS = { company_driver: "Company driver", lease_on: "Lease-on", brokerage_carrier: "Brokerage carrier" };
 const CASE_STATUS_TONES = { cleared: "green", withdrawn: "red", rejected: "red", on_hold: "neutral", open: "brand" };
 const STEP_STATUS_TONES = { complete: "green", waived: "neutral", failed: "red", in_progress: "yellow", not_started: "pending" };
 

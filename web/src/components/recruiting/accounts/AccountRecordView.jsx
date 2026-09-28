@@ -6,7 +6,7 @@ import LeadDetailModal from "../LeadDetailModal";
 import OnboardingCaseModal from "../../onboarding/OnboardingCaseModal";
 
 const TYPE_LABELS = { owner_operator: "Owner-operator", small_fleet: "Small fleet", brokerage_carrier: "Brokerage carrier", individual: "Individual" };
-const PATHWAY_LABELS = { lease_on: "Lease-on", company_driver: "Company driver", brokerage_carrier: "Brokerage carrier" };
+const PATHWAY_LABELS = { company_driver: "Company driver", lease_on: "Lease-on", brokerage_carrier: "Brokerage carrier" };
 const CASE_STATUS_TONES = { cleared: "green", withdrawn: "red", rejected: "red", on_hold: "neutral", open: "brand" };
 
 function fmtDate(iso) {
