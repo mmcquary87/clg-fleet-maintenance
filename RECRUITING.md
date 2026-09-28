@@ -119,13 +119,20 @@ in_conversation → onboarding → signed`, with exits `disqualified`, `lost`,
 `do_not_contact`.
 
 **All recruiting leads already live in CLG OS** — `leads` is the system of
-record regardless of source (FMCSA, Aljex, referral, or a future Tenstreet
-application). Per the 2026-09-27 Tenstreet decision above, once Tenstreet
-API access is confirmed, a Tenstreet-sourced applicant becomes a `leads`
-row (`source_code = 'tenstreet'`, once seeded) that progresses through the
-same `onboarding_cases`/`onboarding_case_steps` every other pathway uses —
-no separate Tenstreet-shaped tables. Only the DQF documents themselves stay
+record regardless of source (FMCSA, Aljex, referral, Tenstreet, or manual
+entry). A Tenstreet-sourced applicant becomes a `leads` row
+(`source_code = 'tenstreet'`) that progresses through the same
+`onboarding_cases`/`onboarding_case_steps` every other pathway uses — no
+separate Tenstreet-shaped tables. Only the DQF documents themselves stay
 external, linked out to Tenstreet by reference.
+
+**2026-09-28: manual entry + Tenstreet CSV import built** (no API access
+confirmed yet, so no live integration — see the open question below).
+`components/recruiting/NewLeadForm.jsx` adds one lead by hand;
+`TenstreetImportForm.jsx` uploads a CSV export from Tenstreet, maps its
+columns to lead fields (auto-guessed from the header row, always
+overridable), previews, then bulk-inserts, de-duping against existing
+leads' phone/email. Both live behind buttons on the Leads view.
 
 ## 7. Build order and done criteria
 
