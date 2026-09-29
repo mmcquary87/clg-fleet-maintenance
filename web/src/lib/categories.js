@@ -5,6 +5,18 @@ export const CATEGORIES = [
   "Additives / Fluids",
 ];
 
+// scan-invoice is a manually-deployed Edge Function (CLAUDE.md) -- its own
+// CATEGORIES enum can silently drift behind this file's after a taxonomy
+// change (a rename or a new category) if nobody redeploys it. When that
+// happens, Claude picks a category string that no longer exists here, and
+// a <select value={that}> with no matching <option> renders as if the
+// first option were chosen while its real state stays the stale value --
+// invisible until save fails on the DB's own enum check. Coerce scan
+// results through this so state always matches what's displayed.
+export function sanitizeCategory(category) {
+  return CATEGORIES.includes(category) ? category : CATEGORIES[0];
+}
+
 // Built from CLG's own brand hues (royal blue #1155A1, scarlet #EB2127) --
 // every color sits on the arc that bridges those two anchors (blue ->
 // teal/green/gold -> red), not an unrelated generic rainbow. Validated

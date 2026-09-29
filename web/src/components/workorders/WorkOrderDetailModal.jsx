@@ -9,7 +9,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { buildMailto } from "../../lib/mailto";
 import { uploadReceipt, fileToBase64 } from "../../lib/invoiceFiles";
 import { describeFunctionError } from "../../lib/functionError";
-import { CATEGORIES } from "../../lib/categories";
+import { CATEGORIES, sanitizeCategory } from "../../lib/categories";
 import { PAYMENT_METHODS } from "../../lib/paymentMethods";
 import FileDropzone from "../shared/FileDropzone";
 import ChargebackDriverPicker from "../shared/ChargebackDriverPicker";
@@ -390,7 +390,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       }));
       setCloseLineItems(
         data.lineItems?.length > 0
-          ? data.lineItems.map((li) => emptyCloseLineItem({ category: li.category, description: li.description, cost: li.cost }))
+          ? data.lineItems.map((li) => emptyCloseLineItem({ category: sanitizeCategory(li.category), description: li.description, cost: li.cost }))
           : [emptyCloseLineItem({ category: order.category })],
       );
       setCloseScanApplied(true);
