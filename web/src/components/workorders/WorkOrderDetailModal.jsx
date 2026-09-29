@@ -8,6 +8,7 @@ import { useProfile } from "../../hooks/useProfile";
 import { supabase } from "../../lib/supabaseClient";
 import { buildMailto } from "../../lib/mailto";
 import { uploadReceipt, fileToBase64 } from "../../lib/invoiceFiles";
+import { describeFunctionError } from "../../lib/functionError";
 import { CATEGORIES } from "../../lib/categories";
 import { PAYMENT_METHODS } from "../../lib/paymentMethods";
 import FileDropzone from "../shared/FileDropzone";
@@ -394,7 +395,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       );
       setCloseScanApplied(true);
     } catch (err) {
-      setStatusError(`AI scan failed: ${err.message}. You can still fill this out manually.`);
+      setStatusError(`AI scan failed: ${await describeFunctionError(err)}. You can still fill this out manually.`);
     } finally {
       setCloseScanning(false);
     }
