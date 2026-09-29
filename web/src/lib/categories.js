@@ -1,7 +1,8 @@
 export const CATEGORIES = [
   "PM / Oil", "Tires", "Brakes", "Suspension", "Transmission", "Electrical", "Batteries",
-  "Engine", "Emissions / Aftertreatment", "HVAC", "Body / Structural",
+  "Engine", "Emissions / Aftertreatment", "AC / HVAC", "Body / Structural",
   "DOT Inspection", "Mid-Trip Inspection", "Tow", "Detailing / Cleaning", "General Repair",
+  "Additives / Fluids",
 ];
 
 // Built from CLG's own brand hues (royal blue #1155A1, scarlet #EB2127) --
@@ -30,8 +31,9 @@ export const CAT_COLORS = {
   "Tow": "#099AFF",
   "Suspension": "#6B4C9A",
   "Emissions / Aftertreatment": "#B2555C",
-  "HVAC": "#2D8FBF",
+  "AC / HVAC": "#2D8FBF",
   "Detailing / Cleaning": "#7A8C3A",
   "Mid-Trip Inspection": "#3D5A99",
   "Batteries": "#C99A00",
+  "Additives / Fluids": "#7A4CA0",
 };

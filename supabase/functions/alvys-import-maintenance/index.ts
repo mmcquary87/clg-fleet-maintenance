@@ -60,9 +60,10 @@ const CATEGORY_RULES: [string, string[]][] = [
   ["PM / Oil", ["pm ", "pm,", "oil", "service", "lube", "grease", "a-service", "b-service", "regen"]],
   ["Engine", ["engine", "turbo", "injector", "compressor", "governor", "air system", "coolant", "exhaust", "fuel contamination", "timing chain"]],
   ["Emissions / Aftertreatment", ["dpf", "derate", "nox", "def quality", "delete def", "def "]],
-  ["HVAC", ["a/c", "air condition", "hvac", "blower motor", "heater core"]],
+  ["AC / HVAC", ["a/c", "air condition", "hvac", "blower motor", "heater core"]],
   ["Detailing / Cleaning", ["detail", "wash", "cleaning"]],
   ["Tow", ["tow"]],
+  ["Additives / Fluids", ["additive"]],
 ];
 
 function classifyCategory(text: string): string {
