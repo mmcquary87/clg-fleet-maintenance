@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import { CATEGORIES } from "../lib/categories";
 import { uploadReceipt, fileToBase64 } from "../lib/invoiceFiles";
 import { PAYMENT_METHODS } from "../lib/paymentMethods";
+import { describeFunctionError } from "../lib/functionError";
 import FileDropzone from "./shared/FileDropzone";
 import ChargebackDriverPicker from "./shared/ChargebackDriverPicker";
 
@@ -89,7 +90,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
       );
       setScanApplied(true);
     } catch (err) {
-      setError(`AI scan failed: ${err.message}. You can still fill this out manually.`);
+      setError(`AI scan failed: ${await describeFunctionError(err)}. You can still fill this out manually.`);
     } finally {
       setScanning(false);
     }
