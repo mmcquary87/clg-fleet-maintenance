@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { X, Loader2, Check, ShieldOff, Play } from "lucide-react";
+import { X, Loader2, Check, ShieldOff, Play, Phone } from "lucide-react";
 import { Badge, StatusPill, Alert, Button, Input } from "../../ds";
 import { useOnboardingCaseDetail } from "../../hooks/useOnboardingCaseDetail";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../lib/supabaseClient";
 import TasksPanel from "../recruiting/TasksPanel";
+import LogInteractionForm from "../recruiting/LogInteractionForm";
+import ConversationsPanel from "../recruiting/ConversationsPanel";
 
 const PATHWAY_LABELS = { company_driver: "Company driver", lease_on: "Lease-on", brokerage_carrier: "Brokerage carrier" };
 const CASE_STATUS_TONES = { cleared: "green", withdrawn: "red", rejected: "red", on_hold: "neutral", open: "brand" };
@@ -110,15 +112,18 @@ function StepRow({ step, email, onChanged }) {
 }
 
 export default function OnboardingCaseModal({ caseId, onClose, onCaseChanged }) {
-  const { caseRow, template, steps, account, contact, loading, error, reload } = useOnboardingCaseDetail(caseId);
+  const { caseRow, template, steps, account, contact, conversations, loading, error, reload } = useOnboardingCaseDetail(caseId);
   const { session } = useAuth();
   const email = session?.user?.email || "unknown";
   const [actionError, setActionError] = useState(null);
   const [reasonInput, setReasonInput] = useState("");
   const [showReasonFor, setShowReasonFor] = useState(null); // "withdrawn" | "rejected" | null
   const [busy, setBusy] = useState(false);
+  const [showLogForm, setShowLogForm] = useState(false);
 
   const afterChange = () => { reload(); onCaseChanged?.(); };
+
+  const handleLogged = () => { setShowLogForm(false); afterChange(); };
 
   const setStatus = async (status, extra = {}) => {
     setBusy(true);
@@ -206,6 +211,20 @@ export default function OnboardingCaseModal({ caseId, onClose, onCaseChanged }) 
                   </div>
                 </div>
               ))}
+
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-navy)", marginBottom: 10 }}>
+                  Activity
+                </div>
+                {showLogForm ? (
+                  <LogInteractionForm caseId={caseRow.id} onCancel={() => setShowLogForm(false)} onLogged={handleLogged} />
+                ) : (
+                  <Button variant="outline" size="sm" iconLeft={<Phone size={12} />} onClick={() => setShowLogForm(true)} style={{ marginBottom: 12 }}>
+                    Log a call or interaction
+                  </Button>
+                )}
+                <ConversationsPanel conversations={conversations} />
+              </div>
 
               <div style={{ marginTop: 20 }}>
                 <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-navy)", marginBottom: 10 }}>

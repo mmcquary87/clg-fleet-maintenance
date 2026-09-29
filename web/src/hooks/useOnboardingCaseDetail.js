@@ -3,13 +3,16 @@ import { supabase } from "../lib/supabaseClient";
 
 // A single onboarding case's full detail: the case row, its template
 // (governs whether the clear-to-dispatch gate can ever pass), its steps in
-// stage/sequence order, and the account/contact it's for.
+// stage/sequence order, the account/contact it's for, and its own activity
+// log (lead_conversations rows keyed by case_id -- same table and shape as
+// a lead's, via LogInteractionForm/ConversationsPanel).
 export function useOnboardingCaseDetail(caseId) {
   const [caseRow, setCaseRow] = useState(null);
   const [template, setTemplate] = useState(null);
   const [steps, setSteps] = useState([]);
   const [account, setAccount] = useState(null);
   const [contact, setContact] = useState(null);
+  const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -26,20 +29,22 @@ export function useOnboardingCaseDetail(caseId) {
     }
     setCaseRow(c);
 
-    const [templateRes, stepsRes, accountRes, contactRes] = await Promise.all([
+    const [templateRes, stepsRes, accountRes, contactRes, convRes] = await Promise.all([
       supabase.from("onboarding_templates").select("id, pathway, version, status, approved_by, approved_on, notes").eq("id", c.template_id).single(),
       supabase.from("onboarding_case_steps").select("*").eq("case_id", caseId).order("stage", { ascending: true }).order("sequence", { ascending: true }),
       c.account_id ? supabase.from("accounts").select("id, legal_name, dba_name").eq("id", c.account_id).single() : Promise.resolve({ data: null }),
       c.contact_id ? supabase.from("contacts").select("id, first_name, last_name, phone, email").eq("id", c.contact_id).single() : Promise.resolve({ data: null }),
+      supabase.from("lead_conversations").select("id, occurred_at, channel, direction, author, summary, next_step, next_step_due").eq("case_id", caseId).order("occurred_at", { ascending: false }),
     ]);
     setTemplate(templateRes.data ?? null);
     setSteps(stepsRes.data ?? []);
     setAccount(accountRes.data ?? null);
     setContact(contactRes.data ?? null);
+    setConversations(convRes.data ?? []);
     setLoading(false);
   }, [caseId]);
 
   useEffect(() => { load(); }, [load]);
 
-  return { caseRow, template, steps, account, contact, loading, error, reload: load };
+  return { caseRow, template, steps, account, contact, conversations, loading, error, reload: load };
 }
