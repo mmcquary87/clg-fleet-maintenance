@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, Loader2, Plus, Trash2, Sparkles } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert, Eyebrow } from "../ds";
 import { supabase } from "../lib/supabaseClient";
-import { CATEGORIES } from "../lib/categories";
+import { CATEGORIES, sanitizeCategory } from "../lib/categories";
 import { uploadReceipt, fileToBase64 } from "../lib/invoiceFiles";
 import { PAYMENT_METHODS } from "../lib/paymentMethods";
 import { describeFunctionError } from "../lib/functionError";
@@ -85,7 +85,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
       }));
       setLineItems(
         data.lineItems?.length > 0
-          ? data.lineItems.map((li) => ({ ...emptyLineItem(), category: li.category, description: li.description, cost: li.cost }))
+          ? data.lineItems.map((li) => ({ ...emptyLineItem(), category: sanitizeCategory(li.category), description: li.description, cost: li.cost }))
           : [emptyLineItem()],
       );
       setScanApplied(true);
