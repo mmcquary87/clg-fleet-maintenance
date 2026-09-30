@@ -17,8 +17,8 @@
 // Requires a valid Supabase auth JWT on every request (default verify_jwt
 // behavior) — only logged-in CLG users can trigger a scan.
 //
-// Uses strict tool use (not the SDK's zodOutputFormat helper) — the
-// `@anthropic-ai/sdk/helpers/zod` subpath import fails to resolve in
+// Uses strict tool use (not the SDK's zodOutputFormat helper) --
+// @anthropic-ai/sdk/helpers/zod's subpath import fails to resolve in
 // Supabase's Deno edge runtime ("worker boot error: Unable to load
 // .../helpers/zod.mjs"); the main package import works fine.
 
