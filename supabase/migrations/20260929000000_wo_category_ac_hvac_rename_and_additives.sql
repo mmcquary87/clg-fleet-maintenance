@@ -17,6 +17,20 @@
 -- CATEGORIES array, and supabase/functions/alvys-import-maintenance/index.ts's
 -- CATEGORY_RULES classifier all updated in the same change as this migration,
 -- per CLAUDE.md's category-drift warning.
+--
+-- Re-run-safe: a first attempt errored ("HVAC" is not an existing enum
+-- label) -- meaning either the rename already succeeded on an earlier
+-- try, or the original 20260917060000 migration that first added "HVAC"
+-- was itself never applied. The block below covers both: rename if
+-- "HVAC" is still there, else add "AC / HVAC" directly if neither label
+-- exists yet, else (already renamed) do nothing.
 
-alter type wo_category rename value 'HVAC' to 'AC / HVAC';
+do $$ begin
+  if exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'wo_category' and e.enumlabel = 'HVAC') then
+    alter type wo_category rename value 'HVAC' to 'AC / HVAC';
+  elsif not exists (select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'wo_category' and e.enumlabel = 'AC / HVAC') then
+    alter type wo_category add value 'AC / HVAC';
+  end if;
+end $$;
+
 alter type wo_category add value if not exists 'Additives / Fluids';
