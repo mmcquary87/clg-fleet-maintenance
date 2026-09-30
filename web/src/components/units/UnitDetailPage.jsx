@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, Loader2, MapPin } from "lucide-react";
-import { Badge, Alert } from "../../ds";
+import { Badge, Alert, Input, Button } from "../../ds";
 import { useUnitDetail } from "../../hooks/useUnitDetail";
 import { cityStateFromAddress } from "../../lib/formatLocation";
 import UnitInfoCard from "../intake/UnitInfoCard";
@@ -25,6 +25,78 @@ const TABS = [
 
 function fmtDate(d) {
   return d ? new Date(d + "T00:00:00").toLocaleDateString() : "Not on file";
+}
+
+// A standing, editable issue status per unit -- distinct from
+// can_move_load (the boolean "truck down" flag set by the intake
+// wizard's "Unit down" severity) and from any single work order's own
+// complaint/description. Matches the Issue Tag / Issue Tag Note concept
+// on CLG's own Alvys trailer-tracking screen (units.issue_tag/
+// issue_tag_note, 20260930000000) -- CLG OS's own source of truth for it
+// today; whether/how it ever syncs to Alvys is still open.
+function IssueCard({ unit, onSave, saving }) {
+  const [editing, setEditing] = useState(false);
+  const [tag, setTag] = useState(unit.issue_tag || "");
+  const [note, setNote] = useState(unit.issue_tag_note || "");
+
+  const startEdit = () => {
+    setTag(unit.issue_tag || "");
+    setNote(unit.issue_tag_note || "");
+    setEditing(true);
+  };
+
+  const save = async () => {
+    await onSave({ issue_tag: tag.trim() || null, issue_tag_note: note.trim() || null });
+    setEditing(false);
+  };
+
+  const clear = async () => {
+    await onSave({ issue_tag: null, issue_tag_note: null });
+    setEditing(false);
+  };
+
+  if (!editing && !unit.issue_tag && !unit.issue_tag_note) {
+    return (
+      <Section title="Current issue">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>No issue tag set.</span>
+          <Button variant="outline" size="sm" onClick={startEdit}>Set issue tag</Button>
+        </div>
+      </Section>
+    );
+  }
+
+  return (
+    <Section title="Current issue">
+      {editing ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Issue tag, e.g. Resolution Pending Completion" disabled={saving} />
+          <textarea
+            value={note} onChange={(e) => setNote(e.target.value)} disabled={saving}
+            placeholder="Issue tag note" rows={3}
+            style={{
+              width: "100%", boxSizing: "border-box", fontFamily: "var(--clg-font-body)", fontSize: 13,
+              color: "var(--clg-text-body)", background: "var(--clg-surface-page)", border: "1px solid var(--clg-border-default)",
+              borderRadius: "var(--clg-radius-sm)", padding: "10px 12px", resize: "vertical",
+            }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button size="sm" disabled={saving} onClick={save}>Save</Button>
+            <Button variant="outline" size="sm" disabled={saving} onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <Badge tone="accent">{unit.issue_tag || "Untagged"}</Badge>
+          {unit.issue_tag_note && <div style={{ fontSize: 13, color: "var(--clg-text-body)", marginTop: 8 }}>{unit.issue_tag_note}</div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <Button variant="outline" size="sm" onClick={startEdit}>Edit</Button>
+            <Button variant="quiet" size="sm" disabled={saving} onClick={clear}>Clear issue</Button>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
 }
 
 // The full per-unit view for the Units page (as opposed to the lighter
@@ -121,6 +193,8 @@ export default function UnitDetailPage({ unitId, onBack, canViewAssetLifecycle }
           <div style={{ marginBottom: 20 }}>
             <UnitInfoCard unit={unit} />
           </div>
+          <IssueCard unit={unit} onSave={handleSave} saving={saving} />
+          {saveError && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 12 }}>{saveError}</Alert>}
           <Section title="Current load & HOS">
             <CurrentLoadSection trip={trip} hos={hos} />
           </Section>
