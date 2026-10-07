@@ -46,6 +46,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SAMSARA_BASE = "https://api.samsara.com";
 const DEFAULT_WINDOW_DAYS = 1;
+const FUEL_ENERGY_WINDOW_DAYS = 90; // matches driver_safety_scorecard's scoring window
 const DRIVER_BATCH_SIZE = 25;
 const VEHICLE_BATCH_SIZE = 50; // speeding-intervals/stream's documented assetIds cap
 
@@ -259,14 +260,23 @@ Deno.serve(async (req) => {
       speedingUpserted += batch.length;
     }
 
-    // --- Fuel/Energy (full-replace snapshot over the window, like unit_hos_status) ---
+    // --- Fuel/Energy (full-replace snapshot, like unit_hos_status — but on
+    // its OWN fixed window, not windowDays. This is a pre-aggregated report
+    // (one row per driver, cheap regardless of date range), unlike the raw
+    // per-event endpoints above, and the scoring view (driver_safety_scorecard)
+    // needs a consistent ~90-day miles-driven denominator to compare against
+    // its own 90-day penalty-points window — using the same short rolling
+    // windowDays here would make this table reflect only "yesterday's miles"
+    // once the 15-minute schedule takes over, spuriously zeroing out active
+    // drivers' scores. ---
+    const fuelEnergyStart = new Date(end.getTime() - FUEL_ENERGY_WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
     const fuelEnergyReports = await fetchAllPaginated("/fleet/reports/drivers/fuel-energy", {
-      startDate: startTime, endDate: endTime,
+      startDate: fuelEnergyStart, endDate: endTime,
     }, "driverReports");
     const fuelEnergyRows = fuelEnergyReports.map((r: any) => ({
       samsara_driver_id: r.driver?.id,
       driver_id: r.driver?.id ? (driverIdBySamsaraId.get(r.driver.id) ?? null) : null,
-      period_start: startTime,
+      period_start: fuelEnergyStart,
       period_end: endTime,
       distance_traveled_meters: r.distanceTraveledMeters ?? null,
       fuel_consumed_ml: r.fuelConsumedMl ?? null,
