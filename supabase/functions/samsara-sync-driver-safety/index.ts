@@ -30,6 +30,15 @@
 // samsara-hos-sync) — matched to drivers.id by exact case-insensitive
 // trimmed name, same spirit as units.samsara_vehicle_id being matched by
 // VIN. Unmatched Samsara drivers are stored with driver_id left null.
+// Also persists each matched driver's Samsara createdAtTime, needed by
+// the scoring layer's 14-day grace period.
+//
+// Speeding interval driver attribution: /speeding-intervals/stream only
+// ever returns a vehicle (asset) id, never a driver — unlike
+// safety-events and hos/violations. Approximated via each vehicle's
+// staticAssignedDriver (from /fleet/vehicles, same endpoint
+// samsara-fleet-mpg/samsara-miles already use) — accurate for CLG's
+// typical one-driver-per-truck setup, less so for team-driven trucks.
 //
 // Requires SAMSARA_API secret + service role.
 
@@ -124,7 +133,10 @@ Deno.serve(async (req) => {
       if (ourId) {
         driverIdBySamsaraId.set(d.id, ourId);
         nameLinkUpdates.push(
-          supabase.from("drivers").update({ samsara_driver_id: d.id }).eq("id", ourId),
+          supabase.from("drivers").update({
+            samsara_driver_id: d.id,
+            samsara_driver_created_at: d.createdAtTime ?? null,
+          }).eq("id", ourId),
         );
       }
     }
@@ -135,6 +147,15 @@ Deno.serve(async (req) => {
       .from("units").select("id, samsara_vehicle_id").not("samsara_vehicle_id", "is", null);
     if (unitsErr) throw unitsErr;
     const unitIdByVehicleId = new Map(units.map((u: any) => [u.samsara_vehicle_id, u.id]));
+
+    // Static assigned driver per vehicle — the only driver attribution
+    // /speeding-intervals/stream's vehicle-only data allows (see header).
+    const samsaraVehicles = await fetchAllPaginated("/fleet/vehicles", { limit: "200" });
+    const assignedDriverIdByVehicleId = new Map<string, string>(
+      samsaraVehicles
+        .filter((v: any) => v.staticAssignedDriver?.id)
+        .map((v: any) => [v.id, v.staticAssignedDriver.id]),
+    );
 
     // --- Safety Events (driverIds filter is silently ignored — pull all) ---
     const safetyEvents = await fetchAllPaginated("/fleet/safety-events", { startTime, endTime, limit: "200" });
@@ -209,10 +230,13 @@ Deno.serve(async (req) => {
           // (only moderate/heavy/severe count) and is by far the
           // dominant volume on any highway trip — skip storing it.
           if (!iv.startTime || iv.severityLevel === "light") continue;
+          const assignedSamsaraDriverId = assignedDriverIdByVehicleId.get(vehicleId) ?? null;
           speedingRows.push({
             id: `${vehicleId}:${iv.startTime}`,
             samsara_vehicle_id: vehicleId,
             unit_id: unitIdByVehicleId.get(vehicleId) ?? null,
+            samsara_driver_id: assignedSamsaraDriverId,
+            driver_id: assignedSamsaraDriverId ? (driverIdBySamsaraId.get(assignedSamsaraDriverId) ?? null) : null,
             trip_start_time: trip.tripStartTime ?? null,
             start_time: iv.startTime,
             end_time: iv.endTime ?? null,
@@ -271,6 +295,7 @@ Deno.serve(async (req) => {
       windowDays,
       samsaraDriversFound: samsaraDrivers.length,
       driversLinkedByName: driverIdBySamsaraId.size,
+      vehiclesWithAssignedDriver: assignedDriverIdByVehicleId.size,
       safetyEventsUpserted,
       violationsUpserted,
       speedingIntervalsUpserted: speedingUpserted,
