@@ -94,7 +94,42 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 function normalizeName(name: string | null | undefined) {
-  return (name ?? "").trim().toLowerCase();
+  return (name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// Real-data gap (2026-10-07): exact name matching alone left 13 real
+// drivers unlinked even though they're the same person on both sides —
+// Samsara's name differs from ours only by a suffix (Jr/Sr/II/III/IV,
+// sometimes comma-separated: "Erin Williams, Sr") or a middle name/initial
+// present on one side but not the other ("Gary Lee Reece" vs "Gary Reece",
+// "Jack White Jr" vs "Jack R White Jr"). These two fallback tiers cover
+// both. Each tier is built as a unique-key index — if two different
+// drivers would collapse to the same stripped key, neither is included in
+// that tier's map, so a loose match never risks attributing one driver's
+// safety/HOS record to a different person.
+const SUFFIX_RE = /,?\s+(jr|sr|ii|iii|iv)\.?$/i;
+
+function stripSuffix(name: string | null | undefined) {
+  return normalizeName(name).replace(SUFFIX_RE, "").trim();
+}
+
+function firstLastKey(name: string | null | undefined) {
+  const parts = stripSuffix(name).split(" ").filter(Boolean);
+  if (parts.length < 2) return null;
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
+function buildUniqueIndex<T>(items: T[], keyFn: (item: T) => string | null) {
+  const map = new Map<string, T>();
+  const ambiguous = new Set<string>();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!key) continue;
+    if (map.has(key)) { ambiguous.add(key); continue; }
+    map.set(key, item);
+  }
+  for (const key of ambiguous) map.delete(key);
+  return map;
 }
 
 Deno.serve(async (req) => {
@@ -126,11 +161,23 @@ Deno.serve(async (req) => {
     const { data: ourDrivers, error: driversErr } = await supabase.from("drivers").select("id, name");
     if (driversErr) throw driversErr;
     const ourDriverIdByName = new Map<string, string>(ourDrivers.map((d: any) => [normalizeName(d.name), d.id]));
+    const ourDriverBySuffixStripped = buildUniqueIndex(ourDrivers, (d: any) => stripSuffix(d.name));
+    const ourDriverByFirstLast = buildUniqueIndex(ourDrivers, (d: any) => firstLastKey(d.name));
+
+    function resolveOurId(samsaraName: string | null | undefined): string | undefined {
+      const exact = ourDriverIdByName.get(normalizeName(samsaraName));
+      if (exact) return exact;
+      const bySuffix = ourDriverBySuffixStripped.get(stripSuffix(samsaraName));
+      if (bySuffix) return (bySuffix as any).id;
+      const key = firstLastKey(samsaraName);
+      const byFirstLast = key ? ourDriverByFirstLast.get(key) : undefined;
+      return byFirstLast ? (byFirstLast as any).id : undefined;
+    }
 
     const driverIdBySamsaraId = new Map<string, string>();
     const nameLinkUpdates: Promise<unknown>[] = [];
     for (const d of samsaraDrivers) {
-      const ourId = ourDriverIdByName.get(normalizeName(d.name));
+      const ourId = resolveOurId(d.name);
       if (ourId) {
         driverIdBySamsaraId.set(d.id, ourId);
         nameLinkUpdates.push(
@@ -144,12 +191,12 @@ Deno.serve(async (req) => {
     await Promise.all(nameLinkUpdates);
 
     // Diagnostic only (not stored) — surfaces the exact Samsara-side name
-    // string for every Samsara driver that didn't find an exact
-    // case-insensitive/trimmed match against our drivers.name, so a human
-    // can compare spellings and either fix our drivers.name or loosen the
-    // match. Safe to remove once the roster is fully linked.
+    // string for every Samsara driver that still didn't resolve to one of
+    // our drivers (even after the suffix/middle-name fallback tiers), so a
+    // human can tell a real new/missing driver apart from a spelling this
+    // code doesn't yet account for.
     const unmatchedSamsaraDrivers = samsaraDrivers
-      .filter((d: any) => !ourDriverIdByName.has(normalizeName(d.name)))
+      .filter((d: any) => !resolveOurId(d.name))
       .map((d: any) => ({ id: d.id, name: d.name }));
 
     // --- Vehicle linkage (Samsara vehicle id <-> units.id, already matched by VIN) ---
