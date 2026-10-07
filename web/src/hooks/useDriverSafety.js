@@ -62,17 +62,24 @@ export function useDriverSafety() {
   const totalEvents = scored.reduce((sum, d) => sum + (d.speeding_event_count || 0) + (d.safety_event_count || 0), 0);
   const eventsPer1kMiles = totalMiles > 0 ? totalEvents / (totalMiles / 1000) : null;
 
-  // "Biggest loss category" -- whichever of the three component scores is
-  // furthest below its own 100-point ceiling, averaged across scored
-  // drivers. A rough proxy for "where the fleet is losing the most
-  // points" without the raw penalty-point sums the view doesn't expose.
+  // "Where the points go" -- each component score's shortfall from its own
+  // 100-point ceiling, summed across scored drivers. A rough proxy for
+  // "where the fleet is losing the most points" without the raw
+  // penalty-point sums the view doesn't expose directly.
   let biggestLossCategory = null;
+  let categoryBreakdown = [];
   if (scored.length > 0) {
     const deficits = LOSS_CATEGORIES.map((c) => ({
       ...c,
       deficit: scored.reduce((sum, d) => sum + (100 - (d[c.scoreKey] ?? 100)), 0),
     }));
     biggestLossCategory = deficits.reduce((a, b) => (b.deficit > a.deficit ? b : a)).label;
+    const totalDeficit = deficits.reduce((sum, c) => sum + c.deficit, 0);
+    categoryBreakdown = deficits.map((c) => ({
+      label: c.label,
+      deficit: c.deficit,
+      share: totalDeficit > 0 ? c.deficit / totalDeficit : 0,
+    }));
   }
 
   const totals = {
@@ -87,6 +94,7 @@ export function useDriverSafety() {
     totalEvents,
     totalMiles,
     biggestLossCategory,
+    categoryBreakdown,
   };
 
   return { scorecards, ranked, graceDrivers, totals, loading, error, reload: load };

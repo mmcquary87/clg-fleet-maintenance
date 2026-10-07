@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Eyebrow, StatBlock, Table } from "../../ds";
 import { useDriverSafety } from "../../hooks/useDriverSafety";
+import { useFleetScoreHistory } from "../../hooks/useFleetScoreHistory";
 
 // Same hues as StatusPill's TONES (not a new categorical palette) -- bars
 // need the saturated text color, not the pale pill background, to read at
@@ -229,13 +230,101 @@ function GraceAndScoring({ graceDrivers }) {
   );
 }
 
+function FleetTrendChart({ snapshots }) {
+  const withScore = snapshots.filter((s) => s.fleet_average_score !== null);
+  if (withScore.length === 0) {
+    return (
+      <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>
+        No history yet — a daily snapshot starts accumulating from today. Check back in a few days to see a real trend.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 160 }}>
+      {withScore.map((s, i) => {
+        const isEdge = i === 0 || i === withScore.length - 1;
+        return (
+          <div
+            key={s.id}
+            title={`${s.snapshot_date} — ${round1(s.fleet_average_score)}`}
+            style={{ flex: "1 0 10px", minWidth: 10, display: "flex", flexDirection: "column", alignItems: "center", height: "100%" }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--clg-text-heading)", marginBottom: 2, visibility: isEdge ? "visible" : "hidden" }}>
+              {round1(s.fleet_average_score)}
+            </div>
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "flex-end" }}>
+              <div style={{
+                width: "100%", height: `${s.fleet_average_score}%`, minHeight: 2, borderRadius: "3px 3px 0 0",
+                background: i === withScore.length - 1 ? "var(--clg-navy)" : "var(--clg-mercury)",
+              }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WhereThePointsGo({ categoryBreakdown }) {
+  if (categoryBreakdown.length === 0) {
+    return <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>No scored drivers yet.</div>;
+  }
+  const sorted = categoryBreakdown.slice().sort((a, b) => b.deficit - a.deficit);
+  return (
+    <div>
+      {sorted.map((c) => (
+        <div key={c.label} style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 4 }}>
+            <span>{c.label}</span>
+            <span style={{ fontWeight: 700, color: "var(--clg-text-heading)" }}>{Math.round(c.share * 100)}%</span>
+          </div>
+          <div style={{ width: "100%", height: 8, borderRadius: 4, background: "var(--clg-surface-subtle)" }}>
+            <div style={{ width: `${Math.max(c.share * 100, c.deficit > 0 ? 2 : 0)}%`, height: "100%", borderRadius: 4, background: "var(--clg-navy)" }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Trends({ snapshots, snapshotsLoading, changeSinceFirst, categoryBreakdown }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+          <Eyebrow>Fleet average, last {snapshots.length} day{snapshots.length === 1 ? "" : "s"}</Eyebrow>
+          {changeSinceFirst !== null && (
+            <span style={{ fontSize: 12.5, color: changeSinceFirst >= 0 ? "#1F7A4D" : "var(--clg-ruby)", fontWeight: 700 }}>
+              {changeSinceFirst >= 0 ? "Up" : "Down"} {Math.abs(round1(changeSinceFirst))} point{Math.abs(round1(changeSinceFirst)) === 1 ? "" : "s"}
+            </span>
+          )}
+        </div>
+        {snapshotsLoading ? (
+          <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>Loading…</div>
+        ) : (
+          <FleetTrendChart snapshots={snapshots} />
+        )}
+      </div>
+      <div>
+        <Eyebrow style={{ marginBottom: 12 }}>Where the points go</Eyebrow>
+        <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>
+          Share of every point lost fleet-wide this window, by category.
+        </div>
+        <WhereThePointsGo categoryBreakdown={categoryBreakdown} />
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: "rankings", label: "Rankings" },
+  { id: "trends", label: "Trends" },
   { id: "grace", label: "Grace & scoring" },
 ];
 
 export default function DriverSafetyView() {
   const { ranked, graceDrivers, totals, loading, error } = useDriverSafety();
+  const { snapshots, changeSinceFirst, loading: snapshotsLoading } = useFleetScoreHistory();
   const [tab, setTab] = useState("rankings");
 
   if (loading) {
@@ -246,8 +335,13 @@ export default function DriverSafetyView() {
     );
   }
 
+  const trendSummary = changeSinceFirst === null
+    ? "history starting"
+    : `${changeSinceFirst >= 0 ? "up" : "down"} ${Math.abs(round1(changeSinceFirst))}`;
+
   const tabSummary = {
     rankings: `${totals.redCount} below average`,
+    trends: trendSummary,
     grace: `${totals.graceCount} ${plural(totals.graceCount, "driver")} in grace`,
   };
 
@@ -311,6 +405,14 @@ export default function DriverSafetyView() {
             <RankingsBarChart ranked={ranked} fleetAverage={totals.fleetAverage} />
             <RankingsTable ranked={ranked} />
           </>
+        )}
+        {tab === "trends" && (
+          <Trends
+            snapshots={snapshots}
+            snapshotsLoading={snapshotsLoading}
+            changeSinceFirst={changeSinceFirst}
+            categoryBreakdown={totals.categoryBreakdown}
+          />
         )}
         {tab === "grace" && <GraceAndScoring graceDrivers={graceDrivers} />}
       </div>
