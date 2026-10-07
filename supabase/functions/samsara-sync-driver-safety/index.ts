@@ -9,11 +9,21 @@
 // RFC3339 timestamps required on fuel-energy, no per-row id on violations
 // or speeding intervals).
 //
-// Window: a fixed trailing 90 days, computed from now each run — matches
-// the lookback the scoring formula needs (fleet-average comparisons,
-// per-1000-miles rate normalizations) without needing manual date params
-// on a scheduled function, same as samsara-drive-hour-utilization's
-// "working days in range" concept but auto-computed rather than caller-supplied.
+// Window: a short trailing default (1 day), meant to run every 15 minutes
+// via pg_cron like every other samsara-sync-* function in this repo —
+// history accumulates in Postgres across runs, this never tries to
+// backfill months of data in one synchronous call. The first real test
+// run confirmed why: /speeding-intervals/stream returns every individual
+// interval (including "light" severity, which fires almost continuously
+// on any highway driving and carries ZERO weight in the scoring formula —
+// filtered out below before upsert) with no server-side aggregation, so a
+// 90-day fleet-wide pull blew straight through the Edge Function's
+// execution limit (repeated boot/shutdown in the function logs, no error
+// response at all).
+//
+// Pass {"windowDays": N} in the request body for a one-off manual backfill
+// (keep N small — 2-3 days at a time — and run it a few times to seed
+// history faster than waiting on the 15-minute schedule).
 //
 // Driver identity: Samsara's driver.id is a different id space than
 // Alvys's (plain numeric vs. "DR25...", same mismatch documented in
@@ -26,7 +36,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SAMSARA_BASE = "https://api.samsara.com";
-const WINDOW_DAYS = 90;
+const DEFAULT_WINDOW_DAYS = 1;
 const DRIVER_BATCH_SIZE = 25;
 const VEHICLE_BATCH_SIZE = 50; // speeding-intervals/stream's documented assetIds cap
 
@@ -82,8 +92,16 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    let windowDays = DEFAULT_WINDOW_DAYS;
+    try {
+      const body = await req.json();
+      if (typeof body?.windowDays === "number" && body.windowDays > 0) windowDays = body.windowDays;
+    } catch {
+      // no/empty body — use the default
+    }
+
     const end = new Date();
-    const start = new Date(end.getTime() - WINDOW_DAYS * 24 * 3600 * 1000);
+    const start = new Date(end.getTime() - windowDays * 24 * 3600 * 1000);
     const startTime = start.toISOString();
     const endTime = end.toISOString();
 
@@ -183,7 +201,10 @@ Deno.serve(async (req) => {
         const vehicleId = trip.asset?.id;
         if (!vehicleId) continue;
         for (const iv of trip.intervals ?? []) {
-          if (!iv.startTime) continue;
+          // "light" severity carries zero weight in the scoring formula
+          // (only moderate/heavy/severe count) and is by far the
+          // dominant volume on any highway trip — skip storing it.
+          if (!iv.startTime || iv.severityLevel === "light") continue;
           speedingRows.push({
             id: `${vehicleId}:${iv.startTime}`,
             samsara_vehicle_id: vehicleId,
@@ -243,7 +264,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({
-      windowDays: WINDOW_DAYS,
+      windowDays,
       samsaraDriversFound: samsaraDrivers.length,
       driversLinkedByName: driverIdBySamsaraId.size,
       safetyEventsUpserted,
