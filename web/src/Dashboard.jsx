@@ -13,6 +13,7 @@ import SettingsView from "./components/settings/SettingsView";
 import RosterView from "./components/roster/RosterView";
 import HomeTimeView from "./components/roster/HomeTimeView";
 import DriverSafetyView from "./components/driversafety/DriverSafetyView";
+import AccountabilityView from "./components/accountability/AccountabilityView";
 import TrackingView from "./components/tracking/TrackingView";
 import ReloadsView from "./components/reloads/ReloadsView";
 import MechanicView from "./components/mechanic/MechanicView";
@@ -49,6 +50,7 @@ const PAGE_META = {
   roster: { group: "Drivers", page: "Drivers" },
   hometime: { group: "Drivers", page: "Home time" },
   driverSafety: { group: "Drivers", page: "Safety Scorecard" },
+  accountability: { group: "Drivers", page: "Accountability" },
   mechanic: { group: "Shop", page: "Mechanic queue" },
   recruitingHome: { group: "Recruiting", page: "Home" },
   recruitingLeads: { group: "Recruiting", page: "Leads" },
@@ -189,6 +191,7 @@ export default function Dashboard({ session }) {
           {effectiveTab === "roster" && <RosterView session={session} />}
           {effectiveTab === "hometime" && <HomeTimeView session={session} />}
           {effectiveTab === "driverSafety" && <DriverSafetyView />}
+          {effectiveTab === "accountability" && <AccountabilityView session={session} />}
           {effectiveTab === "mechanic" && canUseMechanicQueue && <MechanicView />}
           {effectiveTab === "recruitingHome" && (isRecruiter || isAdmin) && (
             <RecruitingHomeView onGoToLeads={goToRecruitingLeads} onGoToOnboarding={goToOnboarding} />

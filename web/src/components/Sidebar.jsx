@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   LayoutGrid, MapPin, RefreshCw, BarChart3, ClipboardList, CircleDollarSign, Truck, Briefcase, User, Wrench,
   Settings, LogOut, ChevronsLeft, ChevronsRight, Shield, ShieldAlert, ClipboardCheck, UserPlus, FileCheck2, Home, Megaphone, ListChecks,
-  Building2, Contact,
+  Building2, Contact, Gavel,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -39,11 +39,14 @@ const NAV_GROUPS = [
   // tab === "hometime") in case it's needed again before that ships.
   // "Driver Safety" is the first piece of that planned dashboard, ported
   // from the Power BI Driver Safety Scorecard report (2026-10-07).
+  // "Accountability" ports CLG_Driver_Accountability_Center.xlsx, the
+  // live progressive-discipline tracker (2026-10-07).
   {
     id: "drivers", label: "Drivers",
     items: [
       { id: "roster", label: "Drivers", Icon: User },
       { id: "driverSafety", label: "Safety Scorecard", Icon: ShieldAlert },
+      { id: "accountability", label: "Accountability", Icon: Gavel },
     ],
   },
 ];
