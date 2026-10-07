@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Eyebrow, StatBlock, Table } from "../../ds";
 import { useDriverSafety } from "../../hooks/useDriverSafety";
 import { useFleetScoreHistory } from "../../hooks/useFleetScoreHistory";
+import IncidentMap from "./IncidentMap";
 
 // Same hues as StatusPill's TONES (not a new categorical palette) -- bars
 // need the saturated text color, not the pale pill background, to read at
@@ -318,6 +319,7 @@ function Trends({ snapshots, snapshotsLoading, changeSinceFirst, categoryBreakdo
 
 const TABS = [
   { id: "rankings", label: "Rankings" },
+  { id: "map", label: "Incident map" },
   { id: "trends", label: "Trends" },
   { id: "grace", label: "Grace & scoring" },
 ];
@@ -341,6 +343,7 @@ export default function DriverSafetyView() {
 
   const tabSummary = {
     rankings: `${totals.redCount} below average`,
+    map: "speeding & safety events",
     trends: trendSummary,
     grace: `${totals.graceCount} ${plural(totals.graceCount, "driver")} in grace`,
   };
@@ -406,6 +409,7 @@ export default function DriverSafetyView() {
             <RankingsTable ranked={ranked} />
           </>
         )}
+        {tab === "map" && <IncidentMap />}
         {tab === "trends" && (
           <Trends
             snapshots={snapshots}
