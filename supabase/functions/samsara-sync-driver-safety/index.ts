@@ -61,12 +61,16 @@ async function samsaraGet(path: string, params: Record<string, string>) {
   try { return JSON.parse(text); } catch { throw new Error(`${path} returned non-JSON: ${text.slice(0, 500)}`); }
 }
 
-async function fetchAllPaginated(path: string, params: Record<string, string>) {
+// extractKey lets a caller pull the array out from under a nested key —
+// /fleet/reports/drivers/fuel-energy is the one endpoint here whose shape
+// isn't a flat `data: [...]` array; it's `data: { driverReports: [...] }`.
+async function fetchAllPaginated(path: string, params: Record<string, string>, extractKey?: string) {
   const items: any[] = [];
   let after: string | undefined;
   while (true) {
     const json = await samsaraGet(path, { ...params, ...(after ? { after } : {}) });
-    items.push(...(json.data ?? []));
+    const page = extractKey ? json.data?.[extractKey] : json.data;
+    items.push(...(Array.isArray(page) ? page : []));
     if (!json.pagination?.hasNextPage) break;
     after = json.pagination.endCursor;
   }
@@ -234,7 +238,7 @@ Deno.serve(async (req) => {
     // --- Fuel/Energy (full-replace snapshot over the window, like unit_hos_status) ---
     const fuelEnergyReports = await fetchAllPaginated("/fleet/reports/drivers/fuel-energy", {
       startDate: startTime, endDate: endTime,
-    });
+    }, "driverReports");
     const fuelEnergyRows = fuelEnergyReports.map((r: any) => ({
       samsara_driver_id: r.driver?.id,
       driver_id: r.driver?.id ? (driverIdBySamsaraId.get(r.driver.id) ?? null) : null,
