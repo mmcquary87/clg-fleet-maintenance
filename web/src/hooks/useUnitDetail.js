@@ -6,7 +6,8 @@ const UNIT_SELECT =
   "year, make, model, fuel_type, last_fuel_percent, samsara_synced_at, load_trip_id, domicile, warranty_status, " +
   "last_pm_date, pm_interval_days, last_annual_inspection_date, last_midtrip_date, midtrip_interval_days, " +
   "ownership, owner_operator_assigned, plate_number, plate_expires_at, lease_reference, lease_status_note, in_service_date, " +
-  "current_market_value, current_market_value_date, market_value_mom_depreciation_pct";
+  "current_market_value, current_market_value_date, market_value_mom_depreciation_pct, " +
+  "can_move_load, issue_tag, issue_tag_note";
 
 const ORDER_SELECT =
   "id, category, description, complaint, cost, status, date_opened, date_closed, " +

@@ -81,7 +81,13 @@ function UnitPanel({ unit, activity, faults, isMobile, onOpenFull, onToggleActiv
         {condition === "down" && <Badge tone="critical">Down</Badge>}
         {condition === "check_engine" && <Badge tone="accent" title={faults?.activeDescription || faults?.activeCode}>Check engine</Badge>}
         {maint && <Badge tone={maint.tone}>{maint.label}</Badge>}
+        {unit.issue_tag && <Badge tone="accent">{unit.issue_tag}</Badge>}
       </div>
+      {unit.issue_tag_note && (
+        <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 6, fontStyle: "italic" }}>
+          {unit.issue_tag_note}
+        </div>
+      )}
 
       <div style={{ fontSize: 12.5, color: "var(--clg-text-body)", marginTop: 12, lineHeight: 1.55 }}>
         {openOrder
