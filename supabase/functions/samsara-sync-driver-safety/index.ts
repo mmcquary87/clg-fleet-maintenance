@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     const endTime = end.toISOString();
 
     // --- Driver identity linkage (Samsara id <-> our drivers.id, by name) ---
-    const samsaraDrivers = await fetchAllPaginated("/fleet/drivers", { limit: "512" });
+    const samsaraDrivers = await fetchAllPaginated("/fleet/drivers", { limit: "200" });
     const samsaraNameById = new Map<string, string>(samsaraDrivers.map((d: any) => [d.id, d.name]));
 
     const { data: ourDrivers, error: driversErr } = await supabase.from("drivers").select("id, name");
@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
     const unitIdByVehicleId = new Map(units.map((u: any) => [u.samsara_vehicle_id, u.id]));
 
     // --- Safety Events (driverIds filter is silently ignored — pull all) ---
-    const safetyEvents = await fetchAllPaginated("/fleet/safety-events", { startTime, endTime, limit: "512" });
+    const safetyEvents = await fetchAllPaginated("/fleet/safety-events", { startTime, endTime, limit: "200" });
     const safetyEventRows = safetyEvents.map((e: any) => ({
       id: e.id,
       samsara_driver_id: e.driver?.id ?? null,
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     const violationRows: any[] = [];
     for (const batch of chunk(samsaraDrivers.map((d: any) => d.id), DRIVER_BATCH_SIZE)) {
       const results = await fetchAllPaginated("/fleet/hos/violations", {
-        driverIds: batch.join(","), startTime, endTime, limit: "512",
+        driverIds: batch.join(","), startTime, endTime, limit: "200",
       });
       for (const entry of results) {
         for (const v of entry.violations ?? []) {
