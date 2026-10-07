@@ -29,6 +29,12 @@ export function useDriverIncidents() {
     load();
   }, [load]);
 
+  const deleteIncident = async (id) => {
+    const { error: err } = await supabase.from("driver_incidents").delete().eq("id", id);
+    if (err) throw err;
+    await load();
+  };
+
   const severityCounts = Object.fromEntries(
     SEVERITIES.map((s) => [s, incidents.filter((i) => i.severity === s).length]),
   );
@@ -51,5 +57,5 @@ export function useDriverIncidents() {
     topDrivers,
   };
 
-  return { incidents, totals, loading, error, reload: load };
+  return { incidents, totals, loading, error, reload: load, deleteIncident };
 }

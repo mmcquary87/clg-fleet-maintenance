@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { Button, Eyebrow, StatBlock, StatusPill, Table } from "../../ds";
 import { useDriverIncidents } from "../../hooks/useDriverIncidents";
 import LogIncidentForm from "./LogIncidentForm";
@@ -21,11 +21,27 @@ const COLUMNS = [
   { key: "fineCell", label: "Fine eligible" },
   { key: "appeal_status", label: "Appeal" },
   { key: "issued_by", label: "Issued by" },
+  { key: "actionsCell", label: "", align: "right" },
 ];
 
 export default function AccountabilityView({ session }) {
-  const { incidents, totals, loading, error, reload } = useDriverIncidents();
+  const { incidents, totals, loading, error, reload, deleteIncident } = useDriverIncidents();
   const [showForm, setShowForm] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+
+  const onDelete = async (incident) => {
+    if (!window.confirm(`Delete this ${incident.infraction_name} record for ${incident.driver_name}? This can't be undone.`)) return;
+    setDeletingId(incident.id);
+    setDeleteError(null);
+    try {
+      await deleteIncident(incident.id);
+    } catch (err) {
+      setDeleteError(err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -40,6 +56,16 @@ export default function AccountabilityView({ session }) {
     event_date: fmtDate(i.event_date),
     severityCell: <StatusPill tone={SEVERITY_TONE[i.severity] || "neutral"}>{i.severity}</StatusPill>,
     fineCell: <StatusPill tone={FINE_TONE[i.fine_eligibility] || "neutral"}>{i.fine_eligibility}</StatusPill>,
+    actionsCell: (
+      <button
+        onClick={() => onDelete(i)}
+        disabled={deletingId === i.id}
+        title="Delete incident"
+        style={{ background: "none", border: "none", cursor: deletingId === i.id ? "default" : "pointer", color: "var(--clg-ruby)", padding: 4 }}
+      >
+        {deletingId === i.id ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />}
+      </button>
+    ),
   }));
 
   return (
@@ -54,8 +80,8 @@ export default function AccountabilityView({ session }) {
         {!showForm && <Button onClick={() => setShowForm(true)}>Log incident</Button>}
       </div>
 
-      {error && (
-        <div style={{ padding: 16, background: "#FBEAEB", color: "var(--clg-ruby)", fontSize: 13, marginTop: 16 }}>{error}</div>
+      {(error || deleteError) && (
+        <div style={{ padding: 16, background: "#FBEAEB", color: "var(--clg-ruby)", fontSize: 13, marginTop: 16 }}>{error || deleteError}</div>
       )}
 
       {showForm && (
