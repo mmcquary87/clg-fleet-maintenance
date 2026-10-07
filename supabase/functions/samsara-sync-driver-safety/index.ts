@@ -143,6 +143,15 @@ Deno.serve(async (req) => {
     }
     await Promise.all(nameLinkUpdates);
 
+    // Diagnostic only (not stored) — surfaces the exact Samsara-side name
+    // string for every Samsara driver that didn't find an exact
+    // case-insensitive/trimmed match against our drivers.name, so a human
+    // can compare spellings and either fix our drivers.name or loosen the
+    // match. Safe to remove once the roster is fully linked.
+    const unmatchedSamsaraDrivers = samsaraDrivers
+      .filter((d: any) => !ourDriverIdByName.has(normalizeName(d.name)))
+      .map((d: any) => ({ id: d.id, name: d.name }));
+
     // --- Vehicle linkage (Samsara vehicle id <-> units.id, already matched by VIN) ---
     const { data: units, error: unitsErr } = await supabase
       .from("units").select("id, samsara_vehicle_id").not("samsara_vehicle_id", "is", null);
@@ -305,6 +314,7 @@ Deno.serve(async (req) => {
       windowDays,
       samsaraDriversFound: samsaraDrivers.length,
       driversLinkedByName: driverIdBySamsaraId.size,
+      unmatchedSamsaraDrivers,
       vehiclesWithAssignedDriver: assignedDriverIdByVehicleId.size,
       safetyEventsUpserted,
       violationsUpserted,
