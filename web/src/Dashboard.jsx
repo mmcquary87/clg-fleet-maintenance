@@ -12,6 +12,7 @@ import OperationsView from "./components/OperationsView";
 import SettingsView from "./components/settings/SettingsView";
 import RosterView from "./components/roster/RosterView";
 import HomeTimeView from "./components/roster/HomeTimeView";
+import DriverSafetyView from "./components/driversafety/DriverSafetyView";
 import TrackingView from "./components/tracking/TrackingView";
 import ReloadsView from "./components/reloads/ReloadsView";
 import MechanicView from "./components/mechanic/MechanicView";
@@ -47,6 +48,7 @@ const PAGE_META = {
   annualCompliance: { group: "Fleet", page: "Annual Inspections" },
   roster: { group: "Drivers", page: "Drivers" },
   hometime: { group: "Drivers", page: "Home time" },
+  driverSafety: { group: "Drivers", page: "Safety Scorecard" },
   mechanic: { group: "Shop", page: "Mechanic queue" },
   recruitingHome: { group: "Recruiting", page: "Home" },
   recruitingLeads: { group: "Recruiting", page: "Leads" },
@@ -186,6 +188,7 @@ export default function Dashboard({ session }) {
           {effectiveTab === "annualCompliance" && <AnnualInspectionComplianceView onGoToWorkOrders={goToWorkOrders} onGoToUnits={() => setTab("units")} />}
           {effectiveTab === "roster" && <RosterView session={session} />}
           {effectiveTab === "hometime" && <HomeTimeView session={session} />}
+          {effectiveTab === "driverSafety" && <DriverSafetyView />}
           {effectiveTab === "mechanic" && canUseMechanicQueue && <MechanicView />}
           {effectiveTab === "recruitingHome" && (isRecruiter || isAdmin) && (
             <RecruitingHomeView onGoToLeads={goToRecruitingLeads} onGoToOnboarding={goToOnboarding} />

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   LayoutGrid, MapPin, RefreshCw, BarChart3, ClipboardList, CircleDollarSign, Truck, Briefcase, User, Wrench,
-  Settings, LogOut, ChevronsLeft, ChevronsRight, Shield, ClipboardCheck, UserPlus, FileCheck2, Home, Megaphone, ListChecks,
+  Settings, LogOut, ChevronsLeft, ChevronsRight, Shield, ShieldAlert, ClipboardCheck, UserPlus, FileCheck2, Home, Megaphone, ListChecks,
   Building2, Contact,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
@@ -37,7 +37,15 @@ const NAV_GROUPS = [
   // driver dashboard is planned to eventually cover this ground; the page
   // and its data stay in the codebase (Dashboard.jsx still renders
   // tab === "hometime") in case it's needed again before that ships.
-  { id: "drivers", label: "Drivers", items: [{ id: "roster", label: "Drivers", Icon: User }] },
+  // "Driver Safety" is the first piece of that planned dashboard, ported
+  // from the Power BI Driver Safety Scorecard report (2026-10-07).
+  {
+    id: "drivers", label: "Drivers",
+    items: [
+      { id: "roster", label: "Drivers", Icon: User },
+      { id: "driverSafety", label: "Safety Scorecard", Icon: ShieldAlert },
+    ],
+  },
 ];
 
 const RECRUITING_GROUP = {
