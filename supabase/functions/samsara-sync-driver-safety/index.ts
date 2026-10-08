@@ -22,8 +22,20 @@
 // response at all).
 //
 // Pass {"windowDays": N} in the request body for a one-off manual backfill
-// (keep N small — 2-3 days at a time — and run it a few times to seed
-// history faster than waiting on the 15-minute schedule).
+// of a trailing window ending now (keep N small — 2-3 days at a time —
+// and run it a few times to seed history faster than waiting on the
+// 15-minute schedule).
+//
+// Pass {"startDate": "...", "endDate": "..."} (RFC3339) instead to backfill
+// an explicit HISTORICAL range not ending now -- e.g. seeding the full
+// 90-day scoring window immediately from Samsara's own already-recorded
+// telemetry, in ~7-day chunks, rather than waiting ~90 days of real time
+// for the trailing-window cron to fill it in. Skips the fuel/energy
+// section entirely in this mode: that table is a full-replace snapshot
+// keyed to "now" (see its own comment below) and running it against a
+// historical endDate would overwrite the current real snapshot with a
+// stale one. windowDays and startDate/endDate are mutually exclusive;
+// startDate/endDate wins if both are present.
 //
 // Driver identity: Samsara's driver.id is a different id space than
 // Alvys's (plain numeric vs. "DR25...", same mismatch documented in
@@ -141,16 +153,28 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    let windowDays = DEFAULT_WINDOW_DAYS;
+    let body: any = {};
     try {
-      const body = await req.json();
-      if (typeof body?.windowDays === "number" && body.windowDays > 0) windowDays = body.windowDays;
+      body = await req.json();
     } catch {
-      // no/empty body — use the default
+      // no/empty body — use the defaults below
     }
 
-    const end = new Date();
-    const start = new Date(end.getTime() - windowDays * 24 * 3600 * 1000);
+    let windowDays = DEFAULT_WINDOW_DAYS;
+    let explicitRange: { start: Date; end: Date } | null = null;
+    if (typeof body?.startDate === "string" && typeof body?.endDate === "string") {
+      const s = new Date(body.startDate);
+      const e = new Date(body.endDate);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) throw new Error("startDate/endDate must be valid RFC3339 timestamps");
+      if (s >= e) throw new Error("startDate must be before endDate");
+      explicitRange = { start: s, end: e };
+    } else if (typeof body?.windowDays === "number" && body.windowDays > 0) {
+      windowDays = body.windowDays;
+    }
+
+    const isBackfill = explicitRange !== null;
+    const end = explicitRange?.end ?? new Date();
+    const start = explicitRange?.start ?? new Date(end.getTime() - windowDays * 24 * 3600 * 1000);
     const startTime = start.toISOString();
     const endTime = end.toISOString();
 
@@ -324,41 +348,54 @@ Deno.serve(async (req) => {
     // its own 90-day penalty-points window — using the same short rolling
     // windowDays here would make this table reflect only "yesterday's miles"
     // once the 15-minute schedule takes over, spuriously zeroing out active
-    // drivers' scores. ---
-    const fuelEnergyStart = new Date(end.getTime() - FUEL_ENERGY_WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
-    const fuelEnergyReports = await fetchAllPaginated("/fleet/reports/drivers/fuel-energy", {
-      startDate: fuelEnergyStart, endDate: endTime,
-    }, "driverReports");
-    const fuelEnergyRows = fuelEnergyReports.map((r: any) => ({
-      samsara_driver_id: r.driver?.id,
-      driver_id: r.driver?.id ? (driverIdBySamsaraId.get(r.driver.id) ?? null) : null,
-      period_start: fuelEnergyStart,
-      period_end: endTime,
-      distance_traveled_meters: r.distanceTraveledMeters ?? null,
-      fuel_consumed_ml: r.fuelConsumedMl ?? null,
-      efficiency_mpge: r.efficiencyMpge ?? null,
-      engine_run_time_ms: r.engineRunTimeDurationMs ?? null,
-      engine_idle_time_ms: r.engineIdleTimeDurationMs ?? null,
-      est_carbon_emissions_kg: r.estCarbonEmissionsKg ?? null,
-      est_fuel_energy_cost_usd: r.estFuelEnergyCost?.amount ?? null,
-      synced_at: new Date().toISOString(),
-    })).filter((r: any) => r.samsara_driver_id);
+    // drivers' scores.
+    //
+    // Skipped entirely in backfill mode (explicit startDate/endDate): this
+    // is a full-replace snapshot always keyed to "now", not to windowDays —
+    // running it against a historical endDate would delete/overwrite the
+    // current real snapshot with a stale one. It already covers the full
+    // 90 days on every normal run regardless, so backfilling it is both
+    // unnecessary and actively harmful. ---
+    let fuelEnergyUpserted: number | null = null;
+    if (!isBackfill) {
+      const fuelEnergyStart = new Date(end.getTime() - FUEL_ENERGY_WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
+      const fuelEnergyReports = await fetchAllPaginated("/fleet/reports/drivers/fuel-energy", {
+        startDate: fuelEnergyStart, endDate: endTime,
+      }, "driverReports");
+      const fuelEnergyRows = fuelEnergyReports.map((r: any) => ({
+        samsara_driver_id: r.driver?.id,
+        driver_id: r.driver?.id ? (driverIdBySamsaraId.get(r.driver.id) ?? null) : null,
+        period_start: fuelEnergyStart,
+        period_end: endTime,
+        distance_traveled_meters: r.distanceTraveledMeters ?? null,
+        fuel_consumed_ml: r.fuelConsumedMl ?? null,
+        efficiency_mpge: r.efficiencyMpge ?? null,
+        engine_run_time_ms: r.engineRunTimeDurationMs ?? null,
+        engine_idle_time_ms: r.engineIdleTimeDurationMs ?? null,
+        est_carbon_emissions_kg: r.estCarbonEmissionsKg ?? null,
+        est_fuel_energy_cost_usd: r.estFuelEnergyCost?.amount ?? null,
+        synced_at: new Date().toISOString(),
+      })).filter((r: any) => r.samsara_driver_id);
 
-    const seenDriverIds = fuelEnergyRows.map((r: any) => r.samsara_driver_id);
-    if (seenDriverIds.length > 0) {
-      const { error: delErr } = await supabase.from("driver_fuel_energy").delete().not("samsara_driver_id", "in", `(${seenDriverIds.join(",")})`);
-      if (delErr) throw delErr;
-    }
+      const seenDriverIds = fuelEnergyRows.map((r: any) => r.samsara_driver_id);
+      if (seenDriverIds.length > 0) {
+        const { error: delErr } = await supabase.from("driver_fuel_energy").delete().not("samsara_driver_id", "in", `(${seenDriverIds.join(",")})`);
+        if (delErr) throw delErr;
+      }
 
-    let fuelEnergyUpserted = 0;
-    for (const batch of chunk(fuelEnergyRows, 500)) {
-      const { error } = await supabase.from("driver_fuel_energy").upsert(batch, { onConflict: "samsara_driver_id" });
-      if (error) throw error;
-      fuelEnergyUpserted += batch.length;
+      fuelEnergyUpserted = 0;
+      for (const batch of chunk(fuelEnergyRows, 500)) {
+        const { error } = await supabase.from("driver_fuel_energy").upsert(batch, { onConflict: "samsara_driver_id" });
+        if (error) throw error;
+        fuelEnergyUpserted += batch.length;
+      }
     }
 
     return new Response(JSON.stringify({
-      windowDays,
+      mode: isBackfill ? "backfill" : "live",
+      windowStart: startTime,
+      windowEnd: endTime,
+      windowDays: isBackfill ? null : windowDays,
       samsaraDriversFound: samsaraDrivers.length,
       driversLinkedByName: driverIdBySamsaraId.size,
       unmatchedSamsaraDrivers,
