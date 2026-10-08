@@ -265,20 +265,43 @@ Deno.serve(async (req) => {
     const unitsRefreshed = unitUpdateTasks.length;
 
     // ---- 4. DVIR defects, last 30 days ----
+    // A defect attaches to EITHER a vehicle OR a trailer (confirmed via a
+    // real sample, 2026-10-08) -- checking only d.vehicle?.id silently
+    // dropped every trailer-attached defect (25 of 27 in that same real
+    // run). driverIdBySamsaraId resolves resolvedBy (whoever closed the
+    // defect out, not necessarily who reported it -- the endpoint offers
+    // nothing closer) against drivers.samsara_driver_id, already kept
+    // current by samsara-sync-driver-safety's own name-matching.
     const defects = await fetchAllPaginated("/fleet/defects/history", {
       startTime: rfc3339(30 * 24 * 3600 * 1000),
       endTime: rfc3339(0),
     });
 
+    const { data: driversForDefects, error: driversForDefectsErr } = await supabase
+      .from("drivers").select("id, samsara_driver_id").not("samsara_driver_id", "is", null);
+    if (driversForDefectsErr) throw driversForDefectsErr;
+    const driverIdBySamsaraId = new Map(driversForDefects.map((d: any) => [d.samsara_driver_id, d.id]));
+
     const defectRows = defects
-      .filter((d: any) => vehicleIdToUnitId.has(d.vehicle?.id))
-      .map((d: any) => ({
-        unit_id: vehicleIdToUnitId.get(d.vehicle.id),
-        defect_type: d.defectType,
-        samsara_defect_id: d.id,
-        is_resolved: d.isResolved,
-        created_at: d.createdAtTime,
-      }));
+      .map((d: any) => {
+        const assetUnitId = vehicleIdToUnitId.get(d.vehicle?.id) ?? trailerIdToUnitId.get(d.trailer?.id);
+        if (!assetUnitId) return null;
+        const resolvedBy = d.resolvedBy ?? null;
+        return {
+          unit_id: assetUnitId,
+          defect_type: d.defectType,
+          samsara_defect_id: d.id,
+          is_resolved: d.isResolved,
+          created_at: d.createdAtTime,
+          comment: d.comment ?? null,
+          resolved_at: d.resolvedAtTime ?? null,
+          resolved_by_samsara_id: resolvedBy?.id ?? null,
+          resolved_by_name: resolvedBy?.name ?? null,
+          resolved_by_type: resolvedBy?.type ?? null,
+          driver_id: resolvedBy?.type === "driver" ? (driverIdBySamsaraId.get(resolvedBy.id) ?? null) : null,
+        };
+      })
+      .filter((r: any) => r !== null);
     let defectsUpserted = 0;
     if (defectRows.length > 0) {
       const { error } = await supabase.from("dvir_defects").upsert(defectRows, { onConflict: "samsara_defect_id" });
@@ -296,12 +319,7 @@ Deno.serve(async (req) => {
       unitsRefreshed,
       defectsFound: defects.length,
       defectsUpserted,
-      defectsSkippedUnmatchedVehicle: defects.length - defectRows.length,
-      // Diagnostic only (not stored) -- checking whether /fleet/defects/history
-      // carries driver/trailer/comment/mechanicNotes fields that today's
-      // defectRows mapping discards, needed to build a driver-level DVIR
-      // page (2026-10-08). Remove once that's confirmed one way or the other.
-      sampleRawDefect: defects[0] ?? null,
+      defectsSkippedUnmatchedAsset: defects.length - defectRows.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     // err can be a plain Postgrest error object ({message, details, hint,

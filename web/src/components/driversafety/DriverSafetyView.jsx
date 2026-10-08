@@ -4,6 +4,7 @@ import { Eyebrow, StatBlock, Table } from "../../ds";
 import { useDriverSafety } from "../../hooks/useDriverSafety";
 import { useFleetScoreHistory } from "../../hooks/useFleetScoreHistory";
 import IncidentMap from "./IncidentMap";
+import Dvir from "./Dvir";
 
 // Same hues as StatusPill's TONES (not a new categorical palette) -- bars
 // need the saturated text color, not the pale pill background, to read at
@@ -321,6 +322,7 @@ const TABS = [
   { id: "rankings", label: "Rankings" },
   { id: "map", label: "Incident map" },
   { id: "trends", label: "Trends" },
+  { id: "dvir", label: "DVIR" },
   { id: "grace", label: "Grace & scoring" },
 ];
 
@@ -345,6 +347,7 @@ export default function DriverSafetyView() {
     rankings: `${totals.redCount} below average`,
     map: "speeding & safety events",
     trends: trendSummary,
+    dvir: "vehicle & trailer defects",
     grace: `${totals.graceCount} ${plural(totals.graceCount, "driver")} in grace`,
   };
 
@@ -418,6 +421,7 @@ export default function DriverSafetyView() {
             categoryBreakdown={totals.categoryBreakdown}
           />
         )}
+        {tab === "dvir" && <Dvir />}
         {tab === "grace" && <GraceAndScoring graceDrivers={graceDrivers} />}
       </div>
 
