@@ -6,11 +6,13 @@ import { Eyebrow } from "../../ds";
 import { useIncidentMapEvents } from "../../hooks/useIncidentMapEvents";
 
 // Matches StatusPill's TONES hues (not a new categorical palette), as
-// literal hex rather than var(--clg-*) -- Leaflet's SVG renderer sets
-// these as presentation attributes, which don't reliably resolve CSS
-// custom properties the way an inline style would.
+// literal hex rather than var(--clg-*) -- Leaflet's canvas renderer paints
+// these directly, which doesn't reliably resolve CSS custom properties the
+// way an inline style would.
 const TIER_COLOR = { high: "#BE202E", moderate: "#9A6B1E", minor: "#7A8B99" };
 const TIER_LABEL = { high: "High severity", moderate: "Moderate", minor: "Minor" };
+const TIER_WEIGHT = { high: 1, moderate: 0.6, minor: 0.3 };
+const HEAT_GRADIENT = { 0.2: TIER_COLOR.minor, 0.5: TIER_COLOR.moderate, 1.0: TIER_COLOR.high };
 
 const TYPE_FILTERS = [
   { id: "all", label: "All events" },
@@ -40,7 +42,7 @@ export default function IncidentMap() {
   const [filter, setFilter] = useState("all");
   const containerRef = useRef(null);
   const mapRef = useRef(null);
-  const layerGroupRef = useRef(null);
+  const heatLayerRef = useRef(null);
 
   const filtered = events.filter((e) => {
     if (filter === "all") return true;
@@ -60,42 +62,47 @@ export default function IncidentMap() {
       attribution: "Tiles &copy; Esri",
       maxZoom: 16,
     }).addTo(map);
-    layerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
     return () => {
       map.remove();
       mapRef.current = null;
-      layerGroupRef.current = null;
+      heatLayerRef.current = null;
     };
   }, []);
 
-  // Redraw markers whenever the filtered set changes -- clears the layer
-  // group rather than recreating it, same reasoning as above.
+  // Redraw the heat layer whenever the filtered set changes. leaflet.heat
+  // is an old UMD-style plugin that assigns onto a global `L` rather than
+  // importing it -- loaded here as a dynamic import, after pointing
+  // window.L at the same Leaflet instance this file imports, so
+  // L.heatLayer exists by the time it's called. Done inside the effect
+  // (not at module scope) so it stays scoped to this component's own
+  // lifecycle, same spirit as the map-instance cleanup above.
   useEffect(() => {
-    const map = mapRef.current;
-    const layerGroup = layerGroupRef.current;
-    if (!map || !layerGroup) return;
-    layerGroup.clearLayers();
+    let cancelled = false;
+    (async () => {
+      const map = mapRef.current;
+      if (!map) return;
+      if (!L.heatLayer) {
+        if (typeof window !== "undefined") window.L = L;
+        await import("leaflet.heat");
+      }
+      if (cancelled) return;
 
-    filtered.forEach((e) => {
-      L.circleMarker([e.lat, e.lng], {
-        radius: e.tier === "high" ? 7 : e.tier === "moderate" ? 5.5 : 4,
-        color: TIER_COLOR[e.tier],
-        fillColor: TIER_COLOR[e.tier],
-        fillOpacity: 0.75,
-        weight: 1,
-      })
-        .bindTooltip(
-          `<strong>${e.label}</strong><br/>${e.driverName}<br/>${new Date(e.date).toLocaleString()}`,
-          { direction: "top" },
-        )
-        .addTo(layerGroup);
-    });
+      const points = filtered.map((e) => [e.lat, e.lng, TIER_WEIGHT[e.tier] ?? 0.3]);
+      if (heatLayerRef.current) {
+        heatLayerRef.current.setLatLngs(points);
+      } else {
+        heatLayerRef.current = L.heatLayer(points, {
+          radius: 30, blur: 22, maxZoom: 12, max: 1, gradient: HEAT_GRADIENT,
+        }).addTo(map);
+      }
 
-    if (filtered.length > 0) {
-      map.fitBounds(L.latLngBounds(filtered.map((e) => [e.lat, e.lng])), { padding: [24, 24], maxZoom: 12 });
-    }
+      if (points.length > 0) {
+        map.fitBounds(L.latLngBounds(points.map((p) => [p[0], p[1]])), { padding: [24, 24], maxZoom: 12 });
+      }
+    })();
+    return () => { cancelled = true; };
   }, [filtered]);
 
   const tierCounts = { high: 0, moderate: 0, minor: 0 };
@@ -127,7 +134,8 @@ export default function IncidentMap() {
             </div>
           ))}
           <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 12, lineHeight: 1.5 }}>
-            HOS violations have no location data in Samsara and aren't shown here.
+            Glow intensity is weighted by severity, not just count — one high-severity event reads as hot as several
+            minor ones close together. HOS violations have no location data in Samsara and aren't shown here.
           </div>
         </div>
       </div>
