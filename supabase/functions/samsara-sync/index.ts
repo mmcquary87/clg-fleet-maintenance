@@ -297,6 +297,11 @@ Deno.serve(async (req) => {
       defectsFound: defects.length,
       defectsUpserted,
       defectsSkippedUnmatchedVehicle: defects.length - defectRows.length,
+      // Diagnostic only (not stored) -- checking whether /fleet/defects/history
+      // carries driver/trailer/comment/mechanicNotes fields that today's
+      // defectRows mapping discards, needed to build a driver-level DVIR
+      // page (2026-10-08). Remove once that's confirmed one way or the other.
+      sampleRawDefect: defects[0] ?? null,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     // err can be a plain Postgrest error object ({message, details, hint,
