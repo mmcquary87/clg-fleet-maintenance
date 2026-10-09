@@ -11,6 +11,7 @@ import EmptyState from "../EmptyState";
 import TractorInspectionForm from "./TractorInspectionForm";
 import MidTripInspectionForm from "./MidTripInspectionForm";
 import MidTripReinspectionSheet from "./MidTripReinspectionSheet";
+import AnnualInspectionForm from "./AnnualInspectionForm";
 
 const fieldLabelStyle = { fontSize: 13, fontWeight: 700, color: "var(--clg-navy)", marginBottom: 6 };
 const backButtonStyle = {
@@ -46,6 +47,7 @@ export default function MechanicView() {
   const [reinspectingInsp, setReinspectingInsp] = useState(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const [inspecting, setInspecting] = useState(false);
+  const [annualInspecting, setAnnualInspecting] = useState(false);
   const [midTripInspecting, setMidTripInspecting] = useState(false);
   const [resumingDraftId, setResumingDraftId] = useState(null);
   const [filedNotice, setFiledNotice] = useState(null);
@@ -80,6 +82,23 @@ export default function MechanicView() {
             raisedCount > 0
               ? `Inspection filed — ${raisedCount} work order${raisedCount === 1 ? "" : "s"} raised.`
               : "Inspection filed — nothing needed attention."
+          );
+          reload();
+        }}
+      />
+    );
+  }
+
+  if (annualInspecting) {
+    return (
+      <AnnualInspectionForm
+        onCancel={() => setAnnualInspecting(false)}
+        onFiled={(id, raisedCount) => {
+          setAnnualInspecting(false);
+          setFiledNotice(
+            raisedCount > 0
+              ? `Annual inspection filed — ${raisedCount} work order${raisedCount === 1 ? "" : "s"} raised.`
+              : "Annual inspection filed — nothing needed attention."
           );
           reload();
         }}
@@ -130,6 +149,9 @@ export default function MechanicView() {
         <div style={{ display: "flex", gap: 8 }}>
           <Button size="md" variant="outline" iconLeft={<ClipboardCheck size={15} />} onClick={() => setInspecting(true)}>
             Tractor inspection
+          </Button>
+          <Button size="md" variant="outline" iconLeft={<ClipboardCheck size={15} />} onClick={() => setAnnualInspecting(true)}>
+            Annual inspection
           </Button>
           <Button size="md" variant="outline" iconLeft={<ClipboardCheck size={15} />} onClick={() => setMidTripInspecting(true)}>
             Mid-trip inspection
