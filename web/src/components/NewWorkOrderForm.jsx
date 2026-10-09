@@ -6,6 +6,7 @@ import { CATEGORIES, sanitizeCategory } from "../lib/categories";
 import { uploadReceipt, fileToBase64 } from "../lib/invoiceFiles";
 import { PAYMENT_METHODS } from "../lib/paymentMethods";
 import { describeFunctionError } from "../lib/functionError";
+import { updateUnitMaintenanceFields } from "../hooks/useUnits";
 import FileDropzone from "./shared/FileDropzone";
 import ChargebackDriverPicker from "./shared/ChargebackDriverPicker";
 
@@ -171,7 +172,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
           }
         }
         if (Object.keys(unitUpdates).length > 0) {
-          const { error: unitErr } = await supabase.from("units").update(unitUpdates).eq("id", unitId);
+          const { error: unitErr } = await updateUnitMaintenanceFields(unitId, unitUpdates);
           if (unitErr) throw unitErr;
         }
       }

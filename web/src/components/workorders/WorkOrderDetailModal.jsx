@@ -3,6 +3,7 @@ import { X, Loader2, Mail, Sparkles, Plus, Trash2, Pencil, Ban, RotateCcw } from
 import { Badge, Button, Input, Select, Alert } from "../../ds";
 import { useWorkOrder } from "../../hooks/useWorkOrder";
 import { useVendors } from "../../hooks/useVendors";
+import { updateUnitMaintenanceFields } from "../../hooks/useUnits";
 import { useAuth } from "../../hooks/useAuth";
 import { useProfile } from "../../hooks/useProfile";
 import { supabase } from "../../lib/supabaseClient";
@@ -476,7 +477,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         }
       }
       if (Object.keys(unitUpdates).length > 0 && order.unit?.id) {
-        const { error: unitErr } = await supabase.from("units").update(unitUpdates).eq("id", order.unit.id);
+        const { error: unitErr } = await updateUnitMaintenanceFields(order.unit.id, unitUpdates);
         if (unitErr) throw unitErr;
       }
 

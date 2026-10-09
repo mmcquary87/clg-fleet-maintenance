@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Mail, Loader2, Save } from "lucide-react";
 import { Badge, Input, Select, Button } from "../../ds";
 import { useVendors } from "../../hooks/useVendors";
-import { MILESTONES, nextDueDate, dueStatus } from "../../lib/maintenanceSchedule";
+import { MILESTONES, nextDueDate, dueStatus, withMidtripIntervalDefault } from "../../lib/maintenanceSchedule";
 import { buildMailto } from "../../lib/mailto";
 
 // Pieces shared between UnitDrawer (the quick-glance panel used from
@@ -134,7 +134,7 @@ export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
   const save = () => {
     const fields = { [milestone.lastField]: lastDate || null };
     if (milestone.intervalField) fields[milestone.intervalField] = intervalDays === "" ? null : Number(intervalDays);
-    onSave(fields);
+    onSave(milestone.key === "midtrip" ? withMidtripIntervalDefault(unit[milestone.intervalField], fields) : fields);
   };
 
   return (

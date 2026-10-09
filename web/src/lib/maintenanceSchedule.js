@@ -4,6 +4,11 @@
 export const ANNUAL_INSPECTION_INTERVAL_DAYS = 364;
 export const DUE_SOON_WINDOW_DAYS = 14;
 
+// Midtrip interval is per-unit (varies by truck make/model), not fixed like
+// Annual's -- but a unit that's never had one set shouldn't need a manual
+// "type 90 and save" just to get a Next Due date out of its first mid-trip.
+export const MIDTRIP_DEFAULT_INTERVAL_DAYS = 90;
+
 export const MILESTONES = [
   { key: "pm", label: "PM / Oil", lastField: "last_pm_date", intervalField: "pm_interval_days", fixedInterval: null },
   { key: "annual", label: "Annual Inspection", lastField: "last_annual_inspection_date", intervalField: null, fixedInterval: ANNUAL_INSPECTION_INTERVAL_DAYS },
@@ -30,6 +35,18 @@ export function dueStatus(nextDueStr) {
   if (daysUntil < 0) return "overdue";
   if (daysUntil <= DUE_SOON_WINDOW_DAYS) return "due_soon";
   return "ok";
+}
+
+// Pure: given the unit's CURRENT midtrip_interval_days (already fetched by
+// the caller) and the unit fields about to be written, defaults the interval
+// to 90 only when a mid-trip date is being set AND the unit has never had an
+// interval (nothing explicit in `fields` either) -- never overwrites a value
+// the user already set or is explicitly saving.
+export function withMidtripIntervalDefault(currentIntervalDays, fields) {
+  if (fields.last_midtrip_date == null) return fields;
+  if (currentIntervalDays != null) return fields;
+  if (fields.midtrip_interval_days != null) return fields;
+  return { ...fields, midtrip_interval_days: MIDTRIP_DEFAULT_INTERVAL_DAYS };
 }
 
 // Worst status across all milestones for a unit — drives the roster's at-a-glance badge.

@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { useAuth } from "../../hooks/useAuth";
 import { useProfile } from "../../hooks/useProfile";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { updateUnitMaintenanceFields } from "../../hooks/useUnits";
 import {
   TRACTOR_WALKAROUND_ITEMS, TRACTOR_UNDER_HOOD_TRUCK_ITEMS, TRACTOR_FIFTH_WHEEL_ITEMS,
   TRACTOR_ALL_CHECK_ITEMS, TRACTOR_TIRE_POSITIONS, TRACTOR_BRAKE_POSITIONS, PM_SERVICE_LEVELS,
@@ -274,10 +275,7 @@ export default function MidTripInspectionForm({ onCancel, onFiled, draftId }) {
       // don't silently drift apart into two different "when was this last done"
       // answers.
       if (status === "filed") {
-        const { error: unitErr } = await supabase
-          .from("units")
-          .update({ last_midtrip_date: form.inspected_at })
-          .eq("id", unitId);
+        const { error: unitErr } = await updateUnitMaintenanceFields(unitId, { last_midtrip_date: form.inspected_at });
         if (unitErr) throw unitErr;
 
         // Always raises the flat mid-trip fee as its own Closed work order

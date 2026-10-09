@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { withMidtripIntervalDefault } from "../lib/maintenanceSchedule";
+
+// Shared by every write path that can set last_midtrip_date (the mid-trip
+// inspection form, closing a new/existing work order) so filing a mid-trip
+// always gets a usable Next Due date without a separate manual save on the
+// unit's Service tab. Only fetches the unit's current interval when a
+// mid-trip date is actually part of this update.
+export async function updateUnitMaintenanceFields(unitId, fields) {
+  let finalFields = fields;
+  if (fields.last_midtrip_date != null) {
+    const { data } = await supabase.from("units").select("midtrip_interval_days").eq("id", unitId).single();
+    finalFields = withMidtripIntervalDefault(data?.midtrip_interval_days, fields);
+  }
+  return supabase.from("units").update(finalFields).eq("id", unitId);
+}
 
 export function useUnits() {
   const [units, setUnits] = useState([]);
