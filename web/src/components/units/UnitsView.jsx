@@ -273,10 +273,10 @@ export default function UnitsView({ canViewAssetLifecycle }) {
           <Eyebrow tone="brand">Units</Eyebrow>
           <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>{truckCount + trailerCount} active units</h2>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <div style={{ position: "relative", width: 220 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", width: isMobile ? "100%" : "auto", flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: isMobile ? "1 1 100%" : "none", width: isMobile ? "auto" : 220 }}>
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Unit, VIN, plate…" style={{ paddingLeft: 30 }} />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Unit, VIN, plate…" style={{ paddingLeft: 30, fontSize: isMobile ? 16 : undefined }} />
           </div>
           <Button size="sm" iconLeft={<Plus size={16} />} onClick={() => setShowForm(true)}>New unit</Button>
         </div>
@@ -368,12 +368,18 @@ export default function UnitsView({ canViewAssetLifecycle }) {
                 selected={(selectedUnit?.id ?? visible[0]?.id) === u.id}
                 isTrailer={typeTab === "Trailer"}
                 isMobile={isMobile}
-                onSelect={() => setSelectedId(u.id)}
+                // On a phone there's no room (or benefit) to show the
+                // quick-glance panel between the list and the full profile --
+                // a tap goes straight to UnitDetailPage, skipping the
+                // "scroll past the whole list to see the panel below, then
+                // tap View full profile" two-step desktop's master-detail
+                // layout implies.
+                onSelect={() => (isMobile ? setOpenUnitId(u.id) : setSelectedId(u.id))}
               />
             ))}
           </div>
 
-          {selectedUnit && (
+          {!isMobile && selectedUnit && (
             <UnitPanel
               unit={selectedUnit} activity={byUnitId[selectedUnit.id]} faults={faultsByUnitId[selectedUnit.id]}
               isMobile={isMobile}

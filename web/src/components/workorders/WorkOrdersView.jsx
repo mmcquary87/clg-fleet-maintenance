@@ -3,6 +3,7 @@ import { Loader2, Search, Download, FileUp } from "lucide-react";
 import { Card, Badge, Eyebrow, Alert, Input, Button, Select } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
 import { useWorkOrderStats } from "../../hooks/useWorkOrderStats";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { downloadCsv } from "../../lib/exportCsv";
 import { CATEGORIES } from "../../lib/categories";
 import { blockedOnText } from "../../lib/workOrderLane";
@@ -51,6 +52,66 @@ function ageDays(o) {
   return daysBetween(o.date_opened, new Date().toISOString().slice(0, 10));
 }
 
+// Phone-width replacement for the 8-column table -- that table only ever
+// reflowed by horizontal-scrolling (no useIsMobile branch at all before
+// this), which is unusable at phone width. One card per order, same data/
+// color rules as the table row (isOpen contrast, blocked-on text, chargeback
+// badges), tap opens the same WorkOrderDetailModal.
+function WorkOrderCard({ order, onOpen }) {
+  const isOpen = !order.voided && order.status !== "Closed";
+  const age = ageDays(order);
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        display: "block", width: "100%", textAlign: "left", cursor: "pointer", border: "none",
+        borderBottom: "1px solid var(--clg-border-subtle)", background: "none", padding: "14px 16px",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontWeight: isOpen ? 700 : 400, fontSize: 12.5, color: isOpen ? "var(--clg-ruby)" : "var(--clg-text-muted)" }}>
+              {order.wo_number || "—"}
+            </span>
+            <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, color: "var(--clg-navy)" }}>
+              Unit {order.unit?.number || "—"}
+            </span>
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: isOpen ? 600 : 400, color: isOpen ? "var(--clg-text-body)" : "var(--clg-text-muted)", marginTop: 4 }}>
+            {order.complaint || order.description || "—"}
+          </div>
+          <div style={{ fontSize: 11.5, color: isOpen ? "var(--clg-navy)" : "var(--clg-text-muted)", marginTop: 4 }}>
+            {blockedOnText(order)}{order.vendor?.name ? ` · ${order.vendor.name}` : ""}
+          </div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{
+            fontFamily: "var(--clg-font-mono, monospace)", fontSize: 13, fontWeight: 700,
+            color: isOpen && !order.cost ? "var(--clg-mercury)" : isOpen ? "var(--clg-navy)" : "var(--clg-text-muted)",
+            fontStyle: isOpen && !order.cost ? "italic" : "normal",
+          }}>
+            {isOpen && !order.cost ? "No est." : money(order.cost)}
+          </div>
+          {age != null && (
+            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11.5, color: isOpen ? "var(--clg-scarlet)" : "var(--clg-text-muted)", marginTop: 4 }}>
+              {age}d
+            </div>
+          )}
+        </div>
+      </div>
+      {order.is_chargeback && (
+        <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+          <Badge tone="critical">Chargeback</Badge>
+          <Badge tone={order.chargeback_deducted_at ? "brand" : "outline"}>
+            {order.chargeback_deducted_at ? "Deducted" : "Not deducted"}
+          </Badge>
+        </div>
+      )}
+    </button>
+  );
+}
+
 export default function WorkOrdersView({ initialCategory, isAdmin }) {
   const [range, setRange] = useState(null);
   const { orders, loading, loadingMore, hasMore, loadMore, error, reload } = useAllWorkOrders(range);
@@ -61,6 +122,7 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
   const [intacctExportOpen, setIntacctExportOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const unitOptions = useMemo(() => {
     return ["All", ...Array.from(new Set(orders.map((o) => o.unit?.number).filter(Boolean))).sort()];
@@ -113,37 +175,46 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
   const openNoCostCount = orders.filter((o) => !o.voided && o.status !== "Closed" && !o.cost).length;
 
   return (
-    <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+    <div style={{ padding: isMobile ? "16px 12px" : "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "flex-end", marginBottom: 16, flexWrap: "wrap", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
         <div>
           <Eyebrow tone="brand">Work Orders</Eyebrow>
           <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>
             {tabCounts.All} order{tabCounts.All === 1 ? "" : "s"}
           </h2>
-          <p style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
-            {openCount} open, {tabCounts.Closed} closed. Open items are sorted by who's blocking them, then by age.
-            {hasMore && ` Showing the ${orders.length.toLocaleString()} most recent below — load more to reach older ones.`}
-          </p>
+          {!isMobile && (
+            <p style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
+              {openCount} open, {tabCounts.Closed} closed. Open items are sorted by who's blocking them, then by age.
+              {hasMore && ` Showing the ${orders.length.toLocaleString()} most recent below — load more to reach older ones.`}
+            </p>
+          )}
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <div style={{ position: "relative", width: 260 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", width: isMobile ? "100%" : "auto", flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: isMobile ? "1 1 100%" : "none", width: isMobile ? "auto" : 260 }}>
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search unit, vendor, category…" style={{ paddingLeft: 30 }} />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search unit, vendor, category…" style={{ paddingLeft: 30, fontSize: isMobile ? 16 : undefined }} />
           </div>
-          <div style={{ width: 130 }}>
+          <div style={{ width: isMobile ? 130 : 130 }}>
             <Select value={unit} onChange={(e) => setUnit(e.target.value)} options={unitOptions} />
           </div>
-          <Button
-            variant="outline" size="sm" iconLeft={<Download size={14} />}
-            onClick={() => downloadCsv(`work-orders-${new Date().toISOString().slice(0, 10)}.csv`, filtered, EXPORT_COLUMNS)}
-            disabled={filtered.length === 0}
-          >
-            Export CSV
-          </Button>
-          {isAdmin && (
-            <Button variant="outline" size="sm" iconLeft={<FileUp size={14} />} onClick={() => setIntacctExportOpen(true)}>
-              Export to Intacct
-            </Button>
+          {/* CSV/Intacct exports are office/accounting workflows -- dropped on
+              mobile rather than squeezed in, same reasoning as hiding
+              Insurance from the mechanic role: not a field task. */}
+          {!isMobile && (
+            <>
+              <Button
+                variant="outline" size="sm" iconLeft={<Download size={14} />}
+                onClick={() => downloadCsv(`work-orders-${new Date().toISOString().slice(0, 10)}.csv`, filtered, EXPORT_COLUMNS)}
+                disabled={filtered.length === 0}
+              >
+                Export CSV
+              </Button>
+              {isAdmin && (
+                <Button variant="outline" size="sm" iconLeft={<FileUp size={14} />} onClick={() => setIntacctExportOpen(true)}>
+                  Export to Intacct
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -202,6 +273,14 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
         ) : filtered.length === 0 ? (
           <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>
             No work orders match.
+          </div>
+        ) : isMobile ? (
+          <div>
+            {filtered.map((o) => <WorkOrderCard key={o.id} order={o} onOpen={() => setOpenId(o.id)} />)}
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", fontSize: 12.5, fontWeight: 600, color: "var(--clg-navy)" }}>
+              <span>Total</span>
+              <span style={{ fontFamily: "var(--clg-font-mono, monospace)" }}>{money(totalCost)}</span>
+            </div>
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
