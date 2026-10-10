@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Plus, Loader2, History, ListChecks, ShieldAlert } from "lucide-react";
+import { Plus, Loader2, History, ListChecks, ShieldAlert, Search } from "lucide-react";
 import { Card, Badge, Button, Eyebrow, Alert, Input } from "../../ds";
 import { useRoster } from "../../hooks/useRoster";
 import { useProfile } from "../../hooks/useProfile";
 import { useDriverCompliance } from "../../hooks/useDriverCompliance";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { rosterStatus, statusTone, daysRemaining } from "../../lib/rosterStatus";
 import { complianceStatus, worstStatus } from "../../lib/driverCompliance";
 import RosterFormModal from "./RosterFormModal";
@@ -26,7 +27,7 @@ function dateBadge({ status, daysRemaining }) {
   );
 }
 
-function ComplianceView() {
+function ComplianceView({ isMobile }) {
   const { drivers, loading, error } = useDriverCompliance();
 
   const rows = useMemo(() => {
@@ -71,31 +72,54 @@ function ComplianceView() {
           ? <strong style={{ color: "var(--clg-scarlet)" }}>{flaggedCount} driver{flaggedCount === 1 ? "" : "s"} expired or expiring within 60 days.</strong>
           : "No CDL or medical card expirations flagged within 60 days."}
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
-          <thead>
-            <tr>
-              {["Driver", "Employee ID", "CDL expires", "Medical card expires"].map((h) => (
-                <th key={h} style={{
-                  textAlign: "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
-                  fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
-                  color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
-                }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.id} style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent" }}>
-                <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>{r.name}</td>
-                <td style={{ padding: "10px 14px", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)" }}>{r.employee_id || "—"}</td>
-                <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{dateBadge(r.license)}</td>
-                <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{dateBadge(r.medical)}</td>
+      {isMobile ? (
+        <div>
+          {rows.map((r, i) => (
+            <div key={r.id} style={{ padding: "12px 16px", background: i % 2 ? "var(--clg-surface-subtle)" : "transparent", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, color: "var(--clg-navy)" }}>{r.name}</span>
+                <span style={{ fontSize: 11, color: "var(--clg-text-muted)" }}>{r.employee_id || "—"}</span>
+              </div>
+              <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-text-muted)", marginBottom: 3 }}>CDL</div>
+                  {dateBadge(r.license)}
+                </div>
+                <div>
+                  <div style={{ fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-text-muted)", marginBottom: 3 }}>Medical card</div>
+                  {dateBadge(r.medical)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)" }}>
+            <thead>
+              <tr>
+                {["Driver", "Employee ID", "CDL expires", "Medical card expires"].map((h) => (
+                  <th key={h} style={{
+                    textAlign: "left", padding: "10px 14px", fontFamily: "var(--clg-font-heading)",
+                    fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+                    color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
+                  }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.id} style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent" }}>
+                  <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>{r.name}</td>
+                  <td style={{ padding: "10px 14px", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)" }}>{r.employee_id || "—"}</td>
+                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{dateBadge(r.license)}</td>
+                  <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>{dateBadge(r.medical)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -168,6 +192,15 @@ export default function RosterView({ session }) {
   const [view, setView] = useState("roster");
   const [editingRow, setEditingRow] = useState(undefined); // undefined = closed, null = new, object = editing
   const [actionError, setActionError] = useState(null);
+  const [query, setQuery] = useState("");
+  const isMobile = useIsMobile();
+
+  // Mobile-only, same reasoning as Vendors -- the desktop roster table has
+  // never had a search box, but it's not realistic to scroll a phone-width
+  // card list looking for one driver once the roster has any size to it.
+  const visibleRows = isMobile && query.trim()
+    ? rows.filter((r) => (r.driver_name || "").toLowerCase().includes(query.trim().toLowerCase()))
+    : rows;
 
   const handleSave = async (existingRow, patch, meta) => {
     try {
@@ -241,19 +274,58 @@ export default function RosterView({ session }) {
         )}
       </div>
 
+      {isMobile && view === "roster" && (
+        <div style={{ position: "relative", marginBottom: 14 }}>
+          <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search driver…" style={{ paddingLeft: 30, fontSize: 16 }} />
+        </div>
+      )}
+
       {(error || actionError) && <Alert tone="critical" style={{ marginBottom: 16 }}>{error || actionError}</Alert>}
 
       <Card padding={0}>
         {view === "compliance" ? (
-          <ComplianceView />
+          <ComplianceView isMobile={isMobile} />
         ) : loading ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "40px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
             <Loader2 size={16} className="spin" /> Loading roster…
           </div>
         ) : view === "roster" ? (
-          rows.length === 0 ? (
+          visibleRows.length === 0 ? (
             <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>
-              No roster records yet. An "Available" driver with no restriction simply has no row here.
+              {rows.length === 0 ? `No roster records yet. An "Available" driver with no restriction simply has no row here.` : "No drivers match."}
+            </div>
+          ) : isMobile ? (
+            <div>
+              {visibleRows.map((r, i) => {
+                const status = rosterStatus(r);
+                const remaining = daysRemaining(r.start_date, r.end_date);
+                return (
+                  <div
+                    key={r.id}
+                    onClick={() => canEditRoster && setEditingRow(r)}
+                    style={{
+                      padding: "12px 16px", background: i % 2 ? "var(--clg-surface-subtle)" : "transparent",
+                      borderBottom: "1px solid var(--clg-border-subtle)", cursor: canEditRoster ? "pointer" : "default",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, color: "var(--clg-navy)" }}>{r.driver_name}</span>
+                      <Badge tone={statusTone(status)}>{status}</Badge>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
+                      {r.unavailable_reason || "—"}
+                      {(r.start_date || r.end_date) && ` · ${r.start_date || "—"} → ${r.end_date || "—"}`}
+                      {remaining != null && ` · ${remaining}d remaining`}
+                    </div>
+                    {r.approval && (
+                      <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 2 }}>
+                        Approval: {r.approval}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>

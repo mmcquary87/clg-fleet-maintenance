@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Plus, Loader2, Pencil } from "lucide-react";
-import { Button, Badge, Eyebrow, Alert } from "../../ds";
+import { Plus, Loader2, Pencil, Search } from "lucide-react";
+import { Button, Badge, Eyebrow, Alert, Input } from "../../ds";
 import { useVendors } from "../../hooks/useVendors";
 import { useVendorActivity } from "../../hooks/useVendorActivity";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import VendorForm from "./VendorForm";
 
 function fmtMoney(n) {
@@ -25,7 +26,7 @@ function owesEstimate(holding) {
   return holding.some((h) => !h.hasCost);
 }
 
-function VendorCard({ vendor, activity, onEdit }) {
+function VendorCard({ vendor, activity, onEdit, isMobile }) {
   const jobsYtd = activity?.jobsYtd ?? 0;
   const spendYtd = activity?.spendYtd ?? 0;
   const avgTicket = jobsYtd > 0 ? spendYtd / jobsYtd : 0;
@@ -62,7 +63,7 @@ function VendorCard({ vendor, activity, onEdit }) {
             : "No jobs logged yet."}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--clg-border-subtle)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 14, marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--clg-border-subtle)" }}>
         <div>
           <div style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-muted)" }}>Jobs YTD</div>
           <div style={{ fontSize: 13, color: "var(--clg-navy)", fontWeight: 600, marginTop: 3 }}>{jobsYtd}</div>
@@ -95,6 +96,8 @@ export default function VendorsView() {
   const { byVendorId, loading: activityLoading } = useVendorActivity();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [query, setQuery] = useState("");
+  const isMobile = useIsMobile();
 
   const holdingCount = vendors.filter((v) => (byVendorId[v.id]?.holding.length ?? 0) > 0).length;
   const owingCount = vendors.filter((v) => owesEstimate(byVendorId[v.id]?.holding ?? [])).length;
@@ -113,6 +116,18 @@ export default function VendorsView() {
     });
   }, [vendors, byVendorId]);
 
+  // Mobile-only: the desktop scoreboard has never had a search box (the
+  // whole list is meant to be scanned at once), but on a phone scrolling
+  // past every vendor to find one by name isn't realistic once there are
+  // more than a handful.
+  const mobileVisible = useMemo(() => {
+    if (!isMobile || !query.trim()) return sortedVendors;
+    const q = query.trim().toLowerCase();
+    return sortedVendors.filter((v) =>
+      [v.name, v.specialty_category, v.contact_name].filter(Boolean).some((s) => s.toLowerCase().includes(q))
+    );
+  }, [sortedVendors, isMobile, query]);
+
   return (
     <div style={{ padding: "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
@@ -129,6 +144,13 @@ export default function VendorsView() {
         </div>
         <Button size="sm" iconLeft={<Plus size={16} />} onClick={() => { setShowForm(true); setEditing(null); }}>New vendor</Button>
       </div>
+
+      {isMobile && (
+        <div style={{ position: "relative", marginBottom: 16 }}>
+          <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search vendor, specialty, contact…" style={{ paddingLeft: 30, fontSize: 16 }} />
+        </div>
+      )}
 
       {showForm && !editing && (
         <VendorForm
@@ -157,11 +179,15 @@ export default function VendorsView() {
         <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13, background: "#fff", borderRadius: "var(--clg-radius-md)", boxShadow: "var(--clg-shadow-resting)" }}>
           No vendors yet. Add the shops you use so work orders can be attributed to them.
         </div>
+      ) : mobileVisible.length === 0 ? (
+        <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13, background: "#fff", borderRadius: "var(--clg-radius-md)", boxShadow: "var(--clg-shadow-resting)" }}>
+          No vendors match.
+        </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
-          {sortedVendors.map((v) => (
+          {mobileVisible.map((v) => (
             <VendorCard
-              key={v.id} vendor={v} activity={byVendorId[v.id]}
+              key={v.id} vendor={v} activity={byVendorId[v.id]} isMobile={isMobile}
               onEdit={() => { setEditing(v); setShowForm(false); }}
             />
           ))}
