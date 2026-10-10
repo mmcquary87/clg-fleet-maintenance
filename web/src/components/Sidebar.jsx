@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   LayoutGrid, MapPin, RefreshCw, BarChart3, ClipboardList, CircleDollarSign, Truck, Briefcase, User, Wrench,
   Settings, LogOut, ChevronsLeft, ChevronsRight, Shield, ShieldAlert, ClipboardCheck, UserPlus, FileCheck2, Home, Megaphone, ListChecks,
-  Building2, Contact, Gavel,
+  Building2, Contact, Gavel, CalendarClock,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -33,23 +33,31 @@ const NAV_GROUPS = [
       { id: "annualCompliance", label: "Annual Inspections", Icon: ClipboardCheck },
     ],
   },
-  // "Home time" is intentionally not in nav (2026-09-04, CLG) -- a Power BI
-  // driver dashboard is planned to eventually cover this ground; the page
-  // and its data stay in the codebase (Dashboard.jsx still renders
-  // tab === "hometime") in case it's needed again before that ships.
-  // "Driver Safety" is the first piece of that planned dashboard, ported
-  // from the Power BI Driver Safety Scorecard report (2026-10-07).
-  // "Accountability" ports CLG_Driver_Accountability_Center.xlsx, the
-  // live progressive-discipline tracker (2026-10-07).
+  // "Home time" was hidden pending a planned Power BI driver dashboard
+  // (2026-09-04); re-enabled (2026-10-10) now that it has a dispatcher-
+  // facing Requests tab (approve/deny driver-submitted home-time
+  // requests) that needs a way in. "Driver Safety" is the first piece of
+  // that planned dashboard, ported from the Power BI Driver Safety
+  // Scorecard report (2026-10-07). "Accountability" ports
+  // CLG_Driver_Accountability_Center.xlsx, the live progressive-discipline
+  // tracker (2026-10-07).
   {
     id: "drivers", label: "Drivers",
     items: [
       { id: "roster", label: "Drivers", Icon: User },
+      { id: "hometime", label: "Home time", Icon: CalendarClock },
       { id: "driverSafety", label: "Safety Scorecard", Icon: ShieldAlert },
       { id: "accountability", label: "Accountability", Icon: Gavel },
     ],
   },
 ];
+
+// A driver account's entire nav -- just its own self-service page, same
+// "pure role gets one isolated group" treatment as RECRUITING_GROUP.
+const DRIVER_GROUP = {
+  id: "driverHome", label: "Home time",
+  items: [{ id: "myHomeTime", label: "Request home time", Icon: CalendarClock }],
+};
 
 const RECRUITING_GROUP = {
   id: "recruiting", label: "Recruiting",
@@ -79,7 +87,7 @@ function iconButtonStyle() {
   };
 }
 
-export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin, isMechanic, isRecruiter, email }) {
+export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin, isMechanic, isRecruiter, isDriver, email }) {
   const [collapsedPreference, setCollapsedPreference] = useState(() => {
     try { return localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1"; } catch { return false; }
   });
@@ -114,8 +122,13 @@ export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin,
 
   // A pure recruiter account gets ONLY the recruiting nav -- never falls
   // through to fleet-maintenance groups, which aren't their job (see
-  // RECRUITING.md). An admin sees recruiting alongside everything else.
-  const groups = isRecruiter && !isAdmin ? [RECRUITING_GROUP] : isAdmin ? [...withMechanic, RECRUITING_GROUP] : withMechanic;
+  // RECRUITING.md). A pure driver account gets the same isolation, its own
+  // single-page group. An admin sees recruiting alongside everything else.
+  const groups = isDriver && !isAdmin
+    ? [DRIVER_GROUP]
+    : isRecruiter && !isAdmin
+      ? [RECRUITING_GROUP]
+      : isAdmin ? [...withMechanic, RECRUITING_GROUP] : withMechanic;
 
   return (
     <div style={{

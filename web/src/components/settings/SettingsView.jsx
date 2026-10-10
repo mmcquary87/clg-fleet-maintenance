@@ -3,6 +3,7 @@ import { UserPlus, Loader2, CheckCircle2 } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert, Eyebrow, Toggle, Badge } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import { useUsersAdmin } from "../../hooks/useUsersAdmin";
+import { useDriverNames } from "../../hooks/useDriverNames";
 import { CATEGORIES } from "../../lib/categories";
 
 // Human-readable labels + a one-line description of what each role can
@@ -15,6 +16,7 @@ const ROLES = [
   { value: "mechanic", label: "Mechanic", description: "Shop-floor view (Mechanic queue) for logging repairs. Financial/valuation pages (Insurance, Asset Lifecycle, driver compliance) are hidden." },
   { value: "admin", label: "Admin", description: "Everything a Dispatcher can see, plus Settings, user management, and void rights on work orders." },
   { value: "recruiter", label: "Recruiter", description: "Owner-Operator Recruiting only — sees a placeholder for now until the recruiter dashboard is built. No fleet maintenance access." },
+  { value: "driver", label: "Driver", description: "Self-service only — can request home-time/time off and see their own requests. Must be linked to a real driver record below." },
 ];
 const ROLE_LABEL = Object.fromEntries(ROLES.map((r) => [r.value, r.label]));
 
@@ -537,9 +539,16 @@ export default function SettingsView() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState("dispatcher");
+  const [driverId, setDriverId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [invited, setInvited] = useState(null);
+  const { options: driverOptions } = useDriverNames();
+  // Only real, Alvys-synced drivers (a non-null id) are selectable here --
+  // unlike DriverPicker elsewhere, there's no "+ Add a new driver" escape
+  // hatch, since a driver login has to link to a real drivers.id row
+  // (invite-user rejects role "driver" without one).
+  const realDrivers = driverOptions.filter((d) => d.id != null);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -547,7 +556,7 @@ export default function SettingsView() {
     setError(null);
     setInvited(null);
     const { data, error: fnError } = await supabase.functions.invoke("invite-user", {
-      body: { email: email.trim(), fullName: fullName.trim() || null, role },
+      body: { email: email.trim(), fullName: fullName.trim() || null, role, driverId: role === "driver" ? driverId || null : null },
     });
     setSubmitting(false);
     if (fnError) {
@@ -559,6 +568,7 @@ export default function SettingsView() {
       setEmail("");
       setFullName("");
       setRole("dispatcher");
+      setDriverId("");
     }
   };
 
@@ -592,15 +602,32 @@ export default function SettingsView() {
             </Field>
           </div>
 
-          <Field label="Role" style={{ marginBottom: 20 }}>
+          <Field label="Role" style={{ marginBottom: role === "driver" ? 16 : 20 }}>
             <Select value={role} onChange={(e) => setRole(e.target.value)} options={ROLES.map(({ value, label }) => ({ value, label }))} />
             <p style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
               {ROLES.find((r) => r.value === role)?.description}
             </p>
           </Field>
 
+          {role === "driver" && (
+            <Field label="Linked driver" required style={{ marginBottom: 20 }}>
+              <Select
+                required
+                value={driverId}
+                onChange={(e) => setDriverId(e.target.value)}
+                placeholder="Choose a driver"
+                options={realDrivers.map((d) => ({ value: d.id, label: d.name }))}
+              />
+              {realDrivers.length === 0 && (
+                <p style={{ fontSize: 11.5, color: "var(--clg-scarlet)", marginTop: 6 }}>
+                  No synced drivers found yet — the Alvys driver sync needs to run before a driver account can be linked.
+                </p>
+              )}
+            </Field>
+          )}
+
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button type="submit" size="sm" disabled={submitting} iconLeft={submitting ? <Loader2 size={14} className="spin" /> : <UserPlus size={14} />}>
+            <Button type="submit" size="sm" disabled={submitting || (role === "driver" && !driverId)} iconLeft={submitting ? <Loader2 size={14} className="spin" /> : <UserPlus size={14} />}>
               {submitting ? "Sending…" : "Send invite"}
             </Button>
           </div>

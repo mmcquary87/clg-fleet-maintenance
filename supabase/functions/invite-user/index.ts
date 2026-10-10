@@ -17,7 +17,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const VALID_ROLES = ["dispatcher", "mechanic", "admin", "recruiter"];
+const VALID_ROLES = ["dispatcher", "mechanic", "admin", "recruiter", "driver"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -46,20 +46,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, fullName, role } = await req.json();
+    const { email, fullName, role, driverId } = await req.json();
     if (!email || typeof email !== "string") {
       return new Response(JSON.stringify({ error: "email is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     const finalRole = VALID_ROLES.includes(role) ? role : "dispatcher";
+    // A driver login with no linked driver_id can't be scoped to anything
+    // under RLS (home_time_requests, any future driver-facing data) --
+    // require it up front rather than allowing an orphaned driver account.
+    if (finalRole === "driver" && !driverId) {
+      return new Response(JSON.stringify({ error: "driverId is required when inviting a driver" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
     const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      data: { full_name: fullName || null, role: finalRole },
+      data: { full_name: fullName || null, role: finalRole, driver_id: finalRole === "driver" ? driverId : null },
     });
     if (error) throw error;
 

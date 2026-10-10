@@ -14,7 +14,7 @@ export function useProfile(userId) {
     }
     let cancelled = false;
     setLoading(true);
-    supabase.from("profiles").select("id, full_name, role, can_edit_roster, can_void_work_orders, can_use_mechanic_queue").eq("id", userId).single()
+    supabase.from("profiles").select("id, full_name, role, driver_id, can_edit_roster, can_void_work_orders, can_use_mechanic_queue").eq("id", userId).single()
       .then(({ data }) => {
         if (cancelled) return;
         setProfile(data ?? null);

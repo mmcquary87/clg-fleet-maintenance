@@ -1,10 +1,17 @@
 import { useMemo, useState } from "react";
-import { Plus, Loader2, History, CalendarClock, ListChecks } from "lucide-react";
+import { Plus, Loader2, History, CalendarClock, ListChecks, Inbox, Check, X } from "lucide-react";
 import { Card, Badge, Button, Eyebrow, Alert } from "../../ds";
 import { useHomeTime } from "../../hooks/useHomeTime";
+import { useHomeTimeRequests } from "../../hooks/useHomeTimeRequests";
 import { useProfile } from "../../hooks/useProfile";
 import { describeCadence, nextOccurrences } from "../../lib/homeTimeSchedule";
 import HomeTimeFormModal from "./HomeTimeFormModal";
+
+function requestStatusTone(status) {
+  if (status === "approved") return "brand";
+  if (status === "denied") return "critical";
+  return "neutral";
+}
 
 const LOOKAHEAD_DAYS = 60;
 const LOOKAHEAD_PER_DRIVER = 8;
@@ -15,10 +22,14 @@ function todayStr() {
 
 export default function HomeTimeView({ session }) {
   const { rows, changeLog, loading, error, saveRow, deleteRow } = useHomeTime();
-  const { canEditRoster } = useProfile(session.user.id);
+  const { requests, loading: requestsLoading, error: requestsError, decide } = useHomeTimeRequests();
+  const { profile, canEditRoster } = useProfile(session.user.id);
   const [view, setView] = useState("schedules");
   const [editingRow, setEditingRow] = useState(undefined);
   const [actionError, setActionError] = useState(null);
+  const [decidingId, setDecidingId] = useState(null);
+
+  const pendingCount = requests.filter((r) => r.status === "pending").length;
 
   const upcoming = useMemo(() => {
     const today = todayStr();
@@ -46,6 +57,18 @@ export default function HomeTimeView({ session }) {
     } catch (err) {
       setActionError(err.message);
       throw err;
+    }
+  };
+
+  const handleDecide = async (request, status) => {
+    setDecidingId(request.id);
+    setActionError(null);
+    try {
+      await decide(request.id, status, { decidedBy: profile?.full_name || session.user.email });
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setDecidingId(null);
     }
   };
 
@@ -95,9 +118,19 @@ export default function HomeTimeView({ session }) {
         >
           <History size={13} /> Change log
         </button>
+        <button
+          onClick={() => setView("requests")}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "7px 13px", fontSize: 12, cursor: "pointer",
+            border: "1px solid " + (view === "requests" ? "var(--clg-royal)" : "var(--clg-reflection)"),
+            background: view === "requests" ? "var(--clg-royal)" : "#fff", color: view === "requests" ? "#fff" : "var(--clg-pewter)",
+          }}
+        >
+          <Inbox size={13} /> Requests{pendingCount > 0 ? ` (${pendingCount})` : ""}
+        </button>
       </div>
 
-      {(error || actionError) && <Alert tone="critical" style={{ marginBottom: 16 }}>{error || actionError}</Alert>}
+      {(error || actionError || requestsError) && <Alert tone="critical" style={{ marginBottom: 16 }}>{error || actionError || requestsError}</Alert>}
 
       <Card padding={0}>
         {loading ? (
@@ -173,6 +206,65 @@ export default function HomeTimeView({ session }) {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )
+        ) : view === "requests" ? (
+          requestsLoading ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "40px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
+              <Loader2 size={16} className="spin" /> Loading requests…
+            </div>
+          ) : requests.length === 0 ? (
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--clg-text-muted)", fontSize: 13 }}>
+              No home-time requests yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {requests.map((r, i) => (
+                <div
+                  key={r.id}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+                    padding: "12px 18px", background: i % 2 ? "var(--clg-surface-subtle)" : "transparent",
+                    borderBottom: i < requests.length - 1 ? "1px solid var(--clg-border-subtle)" : "none",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 14, color: "var(--clg-navy)" }}>
+                      {r.driver?.name || "Unknown driver"}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 2 }}>
+                      {r.start_date}{r.start_date !== r.end_date ? ` → ${r.end_date}` : ""}
+                      {r.reason ? ` — ${r.reason}` : ""}
+                    </div>
+                    {r.status !== "pending" && (
+                      <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
+                        {r.status === "approved" ? "Approved" : "Denied"} by {r.decided_by || "—"}
+                        {r.decision_note ? ` — ${r.decision_note}` : ""}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {r.status === "pending" && canEditRoster ? (
+                      <>
+                        <Button
+                          size="sm" iconLeft={decidingId === r.id ? <Loader2 size={13} className="spin" /> : <Check size={13} />}
+                          onClick={() => handleDecide(r, "approved")} disabled={decidingId === r.id}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm" variant="outline" iconLeft={<X size={13} />}
+                          onClick={() => handleDecide(r, "denied")} disabled={decidingId === r.id}
+                        >
+                          Deny
+                        </Button>
+                      </>
+                    ) : (
+                      <Badge tone={requestStatusTone(r.status)}>{r.status}</Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )
         ) : changeLog.length === 0 ? (

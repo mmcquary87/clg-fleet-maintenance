@@ -17,6 +17,7 @@ import AccountabilityView from "./components/accountability/AccountabilityView";
 import TrackingView from "./components/tracking/TrackingView";
 import ReloadsView from "./components/reloads/ReloadsView";
 import MechanicView from "./components/mechanic/MechanicView";
+import DriverHomeTimeView from "./components/driver/DriverHomeTimeView";
 import InsuranceView from "./components/insurance/InsuranceView";
 import AnnualInspectionComplianceView from "./components/compliance/AnnualInspectionComplianceView";
 import RecruitingHomeView from "./components/recruiting/RecruitingHomeView";
@@ -49,6 +50,7 @@ const PAGE_META = {
   annualCompliance: { group: "Fleet", page: "Annual Inspections" },
   roster: { group: "Drivers", page: "Drivers" },
   hometime: { group: "Drivers", page: "Home time" },
+  myHomeTime: { group: "Home time", page: "Request home time" },
   driverSafety: { group: "Drivers", page: "Safety Scorecard" },
   accountability: { group: "Drivers", page: "Accountability" },
   mechanic: { group: "Shop", page: "Mechanic queue" },
@@ -69,6 +71,10 @@ const PAGE_META = {
 // Sidebar only ever shows them these, so any other stored/requested tab
 // gets pinned back to the first one (see effectiveTab below).
 const RECRUITER_TABS = ["recruitingHome", "recruitingLeads", "onboarding", "campaigns", "campaignRecord", "accounts", "accountRecord", "contacts", "contactRecord", "recruitingTasks"];
+
+// A driver account (role === 'driver') only ever lands on its own
+// self-service page -- same pinning approach as RECRUITER_TABS.
+const DRIVER_TABS = ["myHomeTime"];
 
 // Remembers the last tab across a browser refresh -- Dashboard has no
 // router (per CLAUDE.md, plain useState tab switching), so a reload used
@@ -93,14 +99,20 @@ export default function Dashboard({ session }) {
   const { profile, isAdmin, canUseMechanicQueue } = useProfile(session.user.id);
   const isMechanic = profile?.role === "mechanic";
   const isRecruiter = profile?.role === "recruiter";
+  const isDriver = profile?.role === "driver";
   // A pure recruiter account (not also admin) only ever sees the
   // Recruiting nav group (Sidebar enforces that), so pin its content here
   // too regardless of what's in localStorage/state -- otherwise a stale
   // "board" tab from a previous session, or the sidebar logo's hard-coded
   // onNavigate("board"), would render fleet-maintenance content a
   // recruiter shouldn't have access to. Within the recruiting tabs
-  // themselves, navigation works normally.
-  const effectiveTab = isRecruiter && !isAdmin && !RECRUITER_TABS.includes(tab) ? "recruitingHome" : tab;
+  // themselves, navigation works normally. A driver account gets the same
+  // treatment, pinned to its own single page instead.
+  const effectiveTab = isRecruiter && !isAdmin && !RECRUITER_TABS.includes(tab)
+    ? "recruitingHome"
+    : isDriver && !DRIVER_TABS.includes(tab)
+      ? "myHomeTime"
+      : tab;
   const [recruitingLeadsFilter, setRecruitingLeadsFilter] = useState(null);
   const [onboardingFilter, setOnboardingFilter] = useState(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
@@ -141,7 +153,7 @@ export default function Dashboard({ session }) {
 
   return (
     <div className="app" style={{ display: "flex", minHeight: "100vh", background: "var(--clg-surface-subtle)" }}>
-      <Sidebar tab={effectiveTab} onNavigate={setTab} canUseMechanicQueue={canUseMechanicQueue} isAdmin={isAdmin} isMechanic={isMechanic} isRecruiter={isRecruiter} email={session.user.email} />
+      <Sidebar tab={effectiveTab} onNavigate={setTab} canUseMechanicQueue={canUseMechanicQueue} isAdmin={isAdmin} isMechanic={isMechanic} isRecruiter={isRecruiter} isDriver={isDriver} email={session.user.email} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{
@@ -154,7 +166,7 @@ export default function Dashboard({ session }) {
           </span>
           <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 600, fontSize: 14, color: "var(--clg-navy)" }}>{page}</span>
 
-          {effectiveTab !== "intake" && !isRecruiter && (
+          {effectiveTab !== "intake" && !isRecruiter && !isDriver && (
             <button
               onClick={() => setTab("intake")}
               style={{
@@ -193,6 +205,7 @@ export default function Dashboard({ session }) {
           {effectiveTab === "driverSafety" && <DriverSafetyView />}
           {effectiveTab === "accountability" && <AccountabilityView session={session} />}
           {effectiveTab === "mechanic" && canUseMechanicQueue && <MechanicView />}
+          {effectiveTab === "myHomeTime" && isDriver && <DriverHomeTimeView driverId={profile?.driver_id} />}
           {effectiveTab === "recruitingHome" && (isRecruiter || isAdmin) && (
             <RecruitingHomeView onGoToLeads={goToRecruitingLeads} onGoToOnboarding={goToOnboarding} />
           )}
