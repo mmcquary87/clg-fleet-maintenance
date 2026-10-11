@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   LayoutGrid, MapPin, RefreshCw, BarChart3, ClipboardList, CircleDollarSign, Truck, Briefcase, User, Wrench,
   Settings, LogOut, ChevronsLeft, ChevronsRight, Shield, ShieldAlert, ClipboardCheck, UserPlus, FileCheck2, Home, Megaphone, ListChecks,
-  Building2, Contact, Gavel, CalendarClock,
+  Building2, Contact, Gavel, CalendarClock, Mail,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -22,7 +22,13 @@ const NAV_GROUPS = [
       { id: "operations", label: "Operations", Icon: BarChart3 },
     ],
   },
-  { id: "work", label: "Work", items: [{ id: "workorders", label: "Work orders", Icon: ClipboardList }] },
+  {
+    id: "work", label: "Work",
+    items: [
+      { id: "workorders", label: "Work orders", Icon: ClipboardList },
+      { id: "receiptInbox", label: "Receipt inbox", Icon: Mail },
+    ],
+  },
   {
     id: "fleet", label: "Fleet",
     items: [
@@ -112,8 +118,13 @@ export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin,
   // role's day-to-day view" line CLG drew for Asset Lifecycle and driver
   // compliance -- filtered out of the group here rather than just hiding
   // the page content, so the nav link itself doesn't lead to a blank page.
+  // The Receipt Inbox (billing/AP review) gets the same treatment.
   const baseGroups = isMechanic
-    ? NAV_GROUPS.map((g) => (g.id === "fleet" ? { ...g, items: g.items.filter((i) => i.id !== "insurance") } : g))
+    ? NAV_GROUPS.map((g) => {
+        if (g.id === "fleet") return { ...g, items: g.items.filter((i) => i.id !== "insurance") };
+        if (g.id === "work") return { ...g, items: g.items.filter((i) => i.id !== "receiptInbox") };
+        return g;
+      })
     : NAV_GROUPS;
 
   const withMechanic = canUseMechanicQueue

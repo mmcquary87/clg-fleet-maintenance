@@ -42,13 +42,25 @@ async function findOrCreateVendor(name, category) {
   return created.id;
 }
 
-export default function NewWorkOrderForm({ onSaved, onCancel }) {
+// `initial` and `existingReceipt` let the Receipt Inbox open this form
+// pre-filled from an email-intake row's already-scanned extraction instead
+// of starting blank -- same review-before-save step as the manual "Scan
+// with AI" button, just skipping straight to the reviewed fields since the
+// scan already ran server-side when the email came in. `existingReceipt`
+// ({ storagePath, fileName }) points at a file already sitting in the
+// `invoices` bucket, so onSubmit reuses it instead of re-uploading.
+export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingReceipt }) {
   const [f, setF] = useState({
-    unitNumber: "", vendorName: "",
-    status: "Closed", dateOpened: new Date().toISOString().slice(0, 10),
-    dateClosed: new Date().toISOString().slice(0, 10), invoiceRef: "", poNumber: "",
+    unitNumber: initial?.unitNumber || "", vendorName: initial?.vendorName || "",
+    status: "Closed", dateOpened: initial?.date || new Date().toISOString().slice(0, 10),
+    dateClosed: initial?.date || new Date().toISOString().slice(0, 10),
+    invoiceRef: initial?.invoiceRef || "", poNumber: "",
   });
-  const [lineItems, setLineItems] = useState([emptyLineItem()]);
+  const [lineItems, setLineItems] = useState(
+    initial?.lineItems?.length > 0
+      ? initial.lineItems.map((li) => ({ ...emptyLineItem(), category: sanitizeCategory(li.category), description: li.description, cost: li.cost }))
+      : [emptyLineItem()]
+  );
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -116,7 +128,11 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
     try {
       const unitId = await findOrCreateUnit(f.unitNumber);
       const vendorId = await findOrCreateVendor(f.vendorName, lineItems[0].category);
-      const receiptPath = file ? await uploadReceipt(file) : null;
+      // A fresh upload always wins over the pre-attached email receipt (the
+      // user explicitly replaced it via the dropzone); otherwise reuse the
+      // file already sitting in storage rather than re-uploading it.
+      const receiptPath = file ? await uploadReceipt(file) : existingReceipt?.storagePath || null;
+      const receiptFileName = file ? file.name : existingReceipt?.fileName || null;
 
       const rows = lineItems.map((li) => ({
         unit_id: unitId,
@@ -149,10 +165,10 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
       // just the legacy receipt_path column above) so the uploaded
       // invoice shows up in each one's multi-document list right away --
       // see 20260918130000_work_order_documents.sql.
-      if (file && inserted?.length > 0) {
+      if (receiptPath && inserted?.length > 0) {
         const { data: { user } } = await supabase.auth.getUser();
         const docRows = inserted.map((row) => ({
-          work_order_id: row.id, storage_path: receiptPath, file_name: file.name, uploaded_by: user?.id ?? null,
+          work_order_id: row.id, storage_path: receiptPath, file_name: receiptFileName, uploaded_by: user?.id ?? null,
         }));
         const { error: docErr } = await supabase.from("work_order_documents").insert(docRows);
         if (docErr) throw docErr;
@@ -177,7 +193,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
         }
       }
 
-      onSaved();
+      onSaved(inserted?.[0]?.id);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -226,6 +242,11 @@ export default function NewWorkOrderForm({ onSaved, onCancel }) {
             <Input type="date" value={f.dateClosed} onChange={set("dateClosed")} />
           </Field>
           <Field label="Receipt / invoice file" help="Optional, shared across all services below" style={{ gridColumn: "1 / -1" }}>
+            {existingReceipt && !file && (
+              <div style={{ fontSize: 11.5, color: "var(--clg-royal)", marginBottom: 8, fontWeight: 600 }}>
+                Using the receipt from the inbound email ({existingReceipt.fileName}) — fields below were already scanned from it. Drop a different file to replace it.
+              </div>
+            )}
             <FileDropzone
               file={file}
               onFileChange={(newFile) => { setFile(newFile); setScanApplied(false); }}

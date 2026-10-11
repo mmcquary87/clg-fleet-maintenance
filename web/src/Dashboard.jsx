@@ -7,6 +7,7 @@ import SpendView from "./components/SpendView";
 import VendorsView from "./components/vendors/VendorsView";
 import UnitsView from "./components/units/UnitsView";
 import WorkOrdersView from "./components/workorders/WorkOrdersView";
+import ReceiptInboxView from "./components/workorders/ReceiptInboxView";
 import IntakeWizard from "./components/intake/IntakeWizard";
 import OperationsView from "./components/OperationsView";
 import SettingsView from "./components/settings/SettingsView";
@@ -42,6 +43,7 @@ const PAGE_META = {
   reloads: { group: "Overview", page: "Reloads" },
   operations: { group: "Overview", page: "Operations" },
   workorders: { group: "Work", page: "Work orders" },
+  receiptInbox: { group: "Work", page: "Receipt inbox" },
   intake: { group: "Work", page: "New work order" },
   spend: { group: "Fleet", page: "Spend" },
   units: { group: "Fleet", page: "Units" },
@@ -187,6 +189,7 @@ export default function Dashboard({ session }) {
           {effectiveTab === "tracking" && <TrackingView />}
           {effectiveTab === "reloads" && <ReloadsView />}
           {effectiveTab === "workorders" && <WorkOrdersView initialCategory={woInitialCategory} isAdmin={isAdmin} />}
+          {effectiveTab === "receiptInbox" && !isMechanic && <ReceiptInboxView />}
           {effectiveTab === "intake" && <IntakeWizard onDone={() => setTab("board")} />}
           {effectiveTab === "spend" && (
             <SpendView
