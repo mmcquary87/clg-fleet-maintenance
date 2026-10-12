@@ -27,7 +27,7 @@ export function useAllWorkOrders(range) {
     let query = supabase
       .from("work_orders")
       .select(
-        "id, wo_number, category, severity, description, complaint, cost, status, approval_status, " +
+        "id, wo_number, category, severity, description, complaint, cost, status, approval_status, work_order_group_id, " +
         "date_opened, date_closed, invoice_ref, po_number, is_chargeback, chargeback_driver_name, chargeback_deducted_at, " +
         "voided, voided_at, voided_reason, vendor_id, waiting_on_parts, assigned_bay, " +
         "payment_status, payment_method, payment_reference, paid_at, exported_to_intacct_at, " +

@@ -117,6 +117,19 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailsForm, setDetailsForm] = useState(emptyDetailsForm());
 
+  // A second (or third) invoice landing on the same job later -- e.g. a
+  // parts invoice after the labor invoice already closed this work order.
+  // Shares work_order_group_id with `order` so the Work Orders list keeps
+  // showing them bundled as one work order rather than starting a new one.
+  const [addingInvoice, setAddingInvoice] = useState(false);
+  const [addInvoiceForm, setAddInvoiceForm] = useState({ invoiceRef: "", poNumber: "", dateOpened: "" });
+  const [addInvoiceLineItems, setAddInvoiceLineItems] = useState([]);
+  const [addInvoiceFile, setAddInvoiceFile] = useState(null);
+  const [addInvoiceScanning, setAddInvoiceScanning] = useState(false);
+  const [addInvoiceScanApplied, setAddInvoiceScanApplied] = useState(false);
+  const [addInvoiceBusy, setAddInvoiceBusy] = useState(false);
+  const [addInvoiceError, setAddInvoiceError] = useState(null);
+
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState(null);
 
@@ -187,6 +200,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setStatusError(null);
     setClosing(false);
     setEditingDetails(false);
+    setAddingInvoice(false);
     setVoidReason("");
     setVoidError(null);
     setVoiding(true);
@@ -234,6 +248,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setClosing(false);
     setEditingDetails(false);
     setVoiding(false);
+    setAddingInvoice(false);
     setPaymentForm({ method: PAYMENT_METHODS[0], reference: "", paidAt: todayIso() });
     setPaymentError(null);
     setEditingPayment(true);
@@ -301,6 +316,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const openCloseForm = () => {
     setStatusError(null);
     setEditingDetails(false);
+    setAddingInvoice(false);
     setCloseForm({
       invoiceRef: order.invoice_ref ?? "",
       poNumber: order.po_number ?? "",
@@ -321,6 +337,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const openDetailsForm = () => {
     setStatusError(null);
     setClosing(false);
+    setAddingInvoice(false);
     setDetailsForm({
       category: order.category ?? "",
       severity: order.severity ?? "",
@@ -445,6 +462,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
           po_number: closeForm.poNumber || null,
           source: "manual",
           receipt_path: receiptPath,
+          work_order_group_id: order.work_order_group_id,
         }));
         const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id");
         if (insertErr) throw insertErr;
@@ -488,6 +506,106 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       setStatusError(err.message);
     } finally {
       setStatusBusy(false);
+    }
+  };
+
+  const openAddInvoiceForm = () => {
+    setStatusError(null);
+    setClosing(false);
+    setEditingDetails(false);
+    setVoiding(false);
+    setEditingPayment(false);
+    setAddInvoiceForm({ invoiceRef: "", poNumber: "", dateOpened: todayIso() });
+    setAddInvoiceLineItems([emptyCloseLineItem({ category: order.category })]);
+    setAddInvoiceFile(null);
+    setAddInvoiceScanApplied(false);
+    setAddInvoiceError(null);
+    setAddingInvoice(true);
+  };
+
+  const onAddInvoiceScan = async () => {
+    if (!addInvoiceFile) return;
+    setAddInvoiceScanning(true);
+    setAddInvoiceError(null);
+    try {
+      const fileBase64 = await fileToBase64(addInvoiceFile);
+      const { data, error: fnError } = await supabase.functions.invoke("scan-invoice", {
+        body: { fileBase64, mediaType: addInvoiceFile.type },
+      });
+      if (fnError) throw fnError;
+      if (data?.error) throw new Error(data.error);
+
+      setAddInvoiceForm((prev) => ({
+        ...prev,
+        invoiceRef: data.invoiceRef || prev.invoiceRef,
+        dateOpened: data.date || prev.dateOpened,
+      }));
+      setAddInvoiceLineItems(
+        data.lineItems?.length > 0
+          ? data.lineItems.map((li) => emptyCloseLineItem({ category: sanitizeCategory(li.category), description: li.description, cost: li.cost }))
+          : [emptyCloseLineItem({ category: order.category })],
+      );
+      setAddInvoiceScanApplied(true);
+    } catch (err) {
+      setAddInvoiceError(`AI scan failed: ${await describeFunctionError(err)}. You can still fill this out manually.`);
+    } finally {
+      setAddInvoiceScanning(false);
+    }
+  };
+
+  const setAddInvoiceLineItem = (id, k) => (e) => {
+    setAddInvoiceLineItems((items) => items.map((li) => (li.id === id ? { ...li, [k]: e.target.value } : li)));
+  };
+  const addAddInvoiceLineItem = () => setAddInvoiceLineItems((items) => [...items, emptyCloseLineItem()]);
+  const removeAddInvoiceLineItem = (id) => setAddInvoiceLineItems((items) => items.filter((li) => li.id !== id));
+
+  const addInvoiceTotal = addInvoiceLineItems.reduce((s, li) => s + (Number(li.cost) || 0), 0);
+
+  const confirmAddInvoice = async () => {
+    if (!order.unit?.id) {
+      setAddInvoiceError("This work order has no unit on file.");
+      return;
+    }
+    setAddInvoiceBusy(true);
+    setAddInvoiceError(null);
+    try {
+      const dateOpened = addInvoiceForm.dateOpened || todayIso();
+      const receiptPath = addInvoiceFile ? await uploadReceipt(addInvoiceFile) : null;
+
+      const rows = addInvoiceLineItems.map((li) => ({
+        unit_id: order.unit.id,
+        vendor_id: order.vendor?.id ?? null,
+        category: li.category,
+        description: li.description || null,
+        cost: Number(li.cost) || 0,
+        status: order.status,
+        date_opened: dateOpened,
+        date_closed: order.status === "Closed" ? dateOpened : null,
+        invoice_ref: addInvoiceForm.invoiceRef || null,
+        po_number: addInvoiceForm.poNumber || null,
+        source: "manual",
+        receipt_path: receiptPath,
+        work_order_group_id: order.work_order_group_id,
+      }));
+      const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id");
+      if (insertErr) throw insertErr;
+
+      if (receiptPath && inserted?.length > 0) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const docRows = inserted.map((row) => ({
+          work_order_id: row.id, storage_path: receiptPath, file_name: addInvoiceFile.name, uploaded_by: user?.id ?? null,
+        }));
+        const { error: docErr } = await supabase.from("work_order_documents").insert(docRows);
+        if (docErr) throw docErr;
+      }
+
+      setAddingInvoice(false);
+      await reload();
+      onChanged?.();
+    } catch (err) {
+      setAddInvoiceError(err.message);
+    } finally {
+      setAddInvoiceBusy(false);
     }
   };
 
@@ -551,7 +669,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                     </Badge>
                   )}
                 </div>
-                {!closing && !editingDetails && !voiding && !editingPayment && !order.voided && (
+                {!closing && !editingDetails && !voiding && !editingPayment && !addingInvoice && !order.voided && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                     {order.approval_status === "needs_approval" && (
                       <Button size="sm" onClick={approve} disabled={statusBusy} iconLeft={statusBusy ? <Loader2 size={12} className="spin" /> : null}>
@@ -560,6 +678,9 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                     )}
                     <Button size="sm" variant="outline" iconLeft={<Pencil size={12} />} onClick={openDetailsForm} disabled={statusBusy}>
                       Edit details
+                    </Button>
+                    <Button size="sm" variant="outline" iconLeft={<Plus size={12} />} onClick={openAddInvoiceForm} disabled={statusBusy}>
+                      Add another invoice
                     </Button>
                     {order.status === "Open" && (
                       <>
@@ -801,6 +922,100 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                       Confirm &amp; close
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setClosing(false)} disabled={statusBusy}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {addingInvoice && (
+                <div style={{ border: "1px solid var(--clg-royal)", borderRadius: "var(--clg-radius-md)", padding: 16, background: "var(--clg-surface-subtle)" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-royal)", marginBottom: 4 }}>
+                    Add another invoice
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--clg-text-muted)", marginBottom: 12 }}>
+                    For a second invoice on this same job (e.g. a parts invoice after the labor invoice) -- stays grouped with this work order instead of starting a new one.
+                  </div>
+
+                  <FormField label="Invoice / receipt file">
+                    <FileDropzone
+                      file={addInvoiceFile}
+                      onFileChange={(f) => { setAddInvoiceFile(f); setAddInvoiceScanApplied(false); }}
+                      label="Drag & drop the invoice here, or click to browse"
+                    />
+                    {addInvoiceFile && (
+                      <Button
+                        type="button" variant="secondary" size="sm" onClick={onAddInvoiceScan} disabled={addInvoiceScanning}
+                        iconLeft={addInvoiceScanning ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+                        style={{ marginTop: 10, alignSelf: "flex-start" }}
+                      >
+                        {addInvoiceScanning ? "Scanning…" : "Scan with AI"}
+                      </Button>
+                    )}
+                    {addInvoiceScanApplied && (
+                      <div style={{ fontSize: 11.5, color: "var(--clg-royal)", marginTop: 6, fontWeight: 600 }}>
+                        AI filled in the services below from this invoice — review the categories and correct anything before saving.
+                      </div>
+                    )}
+                  </FormField>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 16 }}>
+                    <FormField label="Invoice / ref #">
+                      <Input value={addInvoiceForm.invoiceRef} onChange={(e) => setAddInvoiceForm((f) => ({ ...f, invoiceRef: e.target.value }))} />
+                    </FormField>
+                    <FormField label="PO number">
+                      <Input value={addInvoiceForm.poNumber} onChange={(e) => setAddInvoiceForm((f) => ({ ...f, poNumber: e.target.value }))} placeholder="e.g. PO-10245" />
+                    </FormField>
+                    <FormField label="Date">
+                      <Input type="date" value={addInvoiceForm.dateOpened} onChange={(e) => setAddInvoiceForm((f) => ({ ...f, dateOpened: e.target.value }))} />
+                    </FormField>
+                  </div>
+
+                  <div style={{ marginTop: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                      <span style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                        Line items{addInvoiceLineItems.length > 1 ? ` (${addInvoiceLineItems.length})` : ""}
+                      </span>
+                      <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontSize: 13, color: "var(--clg-navy)", fontWeight: 700 }}>
+                        {money(addInvoiceTotal)} total
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {addInvoiceLineItems.map((li) => (
+                        <div key={li.id} style={{ border: "1px solid var(--clg-border-subtle)", borderRadius: "var(--clg-radius-sm)", padding: 10, background: "var(--clg-surface-page, #fff)" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "150px 1fr 110px auto", gap: 8, alignItems: "center" }}>
+                            <Select value={li.category} onChange={setAddInvoiceLineItem(li.id, "category")} options={CATEGORIES} />
+                            <Input value={li.description} onChange={setAddInvoiceLineItem(li.id, "description")} placeholder="What was done" />
+                            <Input
+                              type="number" min="0" step="0.01"
+                              value={li.cost} onChange={setAddInvoiceLineItem(li.id, "cost")} placeholder="0.00"
+                              style={{ fontFamily: "var(--clg-font-mono, monospace)" }}
+                            />
+                            <button
+                              type="button" onClick={() => removeAddInvoiceLineItem(li.id)} disabled={addInvoiceLineItems.length === 1}
+                              title="Remove this line item"
+                              style={{
+                                background: "none", border: "none", cursor: addInvoiceLineItems.length === 1 ? "not-allowed" : "pointer",
+                                color: "var(--clg-text-muted)", opacity: addInvoiceLineItems.length === 1 ? 0.35 : 1, padding: 6, display: "inline-flex",
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <Button type="button" variant="quiet" size="sm" iconLeft={<Plus size={14} />} onClick={addAddInvoiceLineItem} style={{ marginTop: 8 }}>
+                      Add another line item
+                    </Button>
+                  </div>
+
+                  {addInvoiceError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 10 }}>{addInvoiceError}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <Button size="sm" onClick={confirmAddInvoice} disabled={addInvoiceBusy} iconLeft={addInvoiceBusy ? <Loader2 size={13} className="spin" /> : null}>
+                      Save invoice
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setAddingInvoice(false)} disabled={addInvoiceBusy}>
                       Cancel
                     </Button>
                   </div>

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Loader2, Search, Download, FileUp } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { Loader2, Search, Download, FileUp, ChevronDown, ChevronRight } from "lucide-react";
 import { Card, Badge, Eyebrow, Alert, Input, Button, Select } from "../../ds";
 import { useAllWorkOrders } from "../../hooks/useAllWorkOrders";
 import { useWorkOrderStats } from "../../hooks/useWorkOrderStats";
@@ -50,6 +50,23 @@ function ageDays(o) {
   if (!o.date_opened) return null;
   if (o.status === "Closed") return o.date_closed ? daysBetween(o.date_opened, o.date_closed) : null;
   return daysBetween(o.date_opened, new Date().toISOString().slice(0, 10));
+}
+
+// One invoice can still produce several work_orders rows (one per line
+// item/category -- Spend, CSV/Intacct export, and chargebacks all depend on
+// that), but sharing a work_order_group_id (set at creation, see
+// NewWorkOrderForm.jsx and WorkOrderDetailModal.jsx's close/add-invoice
+// flows) lets the list bundle them back into one entry. Preserves `rows`'
+// own order (already sorted by urgency/age) by grouping at each row's first
+// occurrence rather than re-sorting.
+function groupByWorkOrder(rows) {
+  const map = new Map();
+  for (const o of rows) {
+    const key = o.work_order_group_id || o.id;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(o);
+  }
+  return Array.from(map.values());
 }
 
 // Phone-width replacement for the 8-column table -- that table only ever
@@ -112,6 +129,62 @@ function WorkOrderCard({ order, onOpen }) {
   );
 }
 
+// Several line items from one invoice (same work_order_group_id) collapse
+// into one card -- tap to expand into the individual WorkOrderCards
+// underneath, each still opening its own WorkOrderDetailModal untouched.
+function GroupedWorkOrderCard({ orders, expanded, onToggle, onOpen }) {
+  const anyOpen = orders.some((o) => !o.voided && o.status !== "Closed");
+  const totalCost = orders.reduce((s, o) => s + (o.voided ? 0 : Number(o.cost) || 0), 0);
+  const age = Math.max(0, ...orders.map((o) => ageDays(o) ?? 0));
+  const lead = orders[0];
+  return (
+    <div style={{ borderBottom: "1px solid var(--clg-border-subtle)" }}>
+      <button
+        onClick={onToggle}
+        style={{
+          display: "block", width: "100%", textAlign: "left", cursor: "pointer", border: "none",
+          background: "none", padding: "14px 16px",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontFamily: "var(--clg-font-mono, monospace)", fontWeight: anyOpen ? 700 : 400, fontSize: 12.5, color: anyOpen ? "var(--clg-ruby)" : "var(--clg-text-muted)" }}>
+                {lead.wo_number || "—"} +{orders.length - 1}
+              </span>
+              <span style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, color: "var(--clg-navy)" }}>
+                Unit {lead.unit?.number || "—"}
+              </span>
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: anyOpen ? 600 : 400, color: anyOpen ? "var(--clg-text-body)" : "var(--clg-text-muted)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+              {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              {orders.map((o) => o.category).join(" + ")}
+            </div>
+            <div style={{ fontSize: 11.5, color: anyOpen ? "var(--clg-navy)" : "var(--clg-text-muted)", marginTop: 4 }}>
+              {orders.length} line items{lead.vendor?.name ? ` · ${lead.vendor.name}` : ""}
+            </div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontFamily: "var(--clg-font-mono, monospace)", fontSize: 13, fontWeight: 700, color: anyOpen ? "var(--clg-navy)" : "var(--clg-text-muted)" }}>
+              {money(totalCost)}
+            </div>
+            {age != null && (
+              <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 11.5, color: anyOpen ? "var(--clg-scarlet)" : "var(--clg-text-muted)", marginTop: 4 }}>
+                {age}d
+              </div>
+            )}
+          </div>
+        </div>
+      </button>
+      {expanded && (
+        <div style={{ background: "var(--clg-surface-subtle)" }}>
+          {orders.map((o) => <WorkOrderCard key={o.id} order={o} onOpen={() => onOpen(o.id)} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function WorkOrdersView({ initialCategory, isAdmin }) {
   const [range, setRange] = useState(null);
   const { orders, loading, loadingMore, hasMore, loadMore, error, reload } = useAllWorkOrders(range);
@@ -122,7 +195,17 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
   const [intacctExportOpen, setIntacctExportOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
   const isMobile = useIsMobile();
+
+  const toggleGroup = (groupId) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
 
   const unitOptions = useMemo(() => {
     return ["All", ...Array.from(new Set(orders.map((o) => o.unit?.number).filter(Boolean))).sort()];
@@ -170,9 +253,132 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
       });
   }, [orders, tab, category, unit, query]);
 
+  // Grouped only for display (list/card rendering) -- totals, CSV export,
+  // and Intacct export below all keep reading `filtered` directly, one row
+  // per category, unaffected by how the list bundles them visually.
+  const groups = useMemo(() => groupByWorkOrder(filtered), [filtered]);
+
   const totalCost = filtered.reduce((s, o) => s + (o.voided ? 0 : Number(o.cost) || 0), 0);
   const openCount = tabCounts.Open + tabCounts["In Progress"];
   const openNoCostCount = orders.filter((o) => !o.voided && o.status !== "Closed" && !o.cost).length;
+
+  // Closed/voided rows drop to Pewter/Cool so open work is the only thing
+  // with contrast (CLG OS design package: "Closed rows drop to Pewter/
+  // Cool... open work is the only thing with contrast"). `nested` rows are
+  // the exploded line items under an expanded group summary row.
+  const renderRow = (o, { striped, nested } = {}) => {
+    const isOpen = !o.voided && o.status !== "Closed";
+    const rowFg = isOpen ? "var(--clg-text-body)" : "var(--clg-text-muted)";
+    const age = ageDays(o);
+    return (
+      <tr
+        key={o.id}
+        onClick={() => setOpenId(o.id)}
+        style={{ background: nested ? "var(--clg-surface-subtle)" : striped ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer" }}
+      >
+        <td style={{ padding: "10px 14px", paddingLeft: nested ? 28 : 14, fontFamily: "var(--clg-font-mono, monospace)", fontWeight: isOpen ? 700 : 400, color: isOpen ? "var(--clg-ruby)" : "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)", whiteSpace: "nowrap" }}>
+          {o.wo_number || "—"}
+        </td>
+        <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+          {o.unit?.number || "—"}
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", maxWidth: 280, fontWeight: isOpen ? 600 : 400, color: rowFg }}>
+          {o.complaint || o.description || "—"}
+          {o.is_chargeback && <Badge tone="critical" style={{ marginLeft: 6 }}>Chargeback</Badge>}
+          {o.is_chargeback && (
+            <Badge tone={o.chargeback_deducted_at ? "brand" : "outline"} style={{ marginLeft: 6 }}>
+              {o.chargeback_deducted_at ? "Deducted" : "Not deducted"}
+            </Badge>
+          )}
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: isOpen ? "var(--clg-navy)" : "var(--clg-text-muted)" }}>
+          {blockedOnText(o)}
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: rowFg }}>
+          {o.vendor?.name || "—"}
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", color: isOpen && !o.cost ? "var(--clg-mercury)" : rowFg, fontStyle: isOpen && !o.cost ? "italic" : "normal" }}>
+          {isOpen && !o.cost ? "No estimate" : money(o.cost)}
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+          {!o.cost ? (
+            <span style={{ color: "var(--clg-mercury)", fontStyle: "italic" }}>—</span>
+          ) : (
+            <>
+              <Badge tone={o.payment_status === "paid" ? "brand" : "outline"}>
+                {o.payment_status === "paid" ? "Paid" : "Unpaid"}
+              </Badge>
+              {o.exported_to_intacct_at && (
+                <Badge tone="neutral" style={{ marginLeft: 6 }} title={`Exported to Sage Intacct ${o.exported_to_intacct_at.slice(0, 10)}`}>
+                  Exported
+                </Badge>
+              )}
+            </>
+          )}
+        </td>
+        <td style={{
+          padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right",
+          fontFamily: "var(--clg-font-heading)", fontWeight: 700,
+          color: isOpen ? "var(--clg-scarlet)" : "var(--clg-text-muted)",
+        }}>
+          {age != null ? `${age}d` : "—"}
+        </td>
+      </tr>
+    );
+  };
+
+  const renderGroupSummary = (rows, striped) => {
+    const groupId = rows[0].work_order_group_id;
+    const expanded = expandedGroups.has(groupId);
+    const lead = rows[0];
+    const anyOpen = rows.some((o) => !o.voided && o.status !== "Closed");
+    const rowFg = anyOpen ? "var(--clg-text-body)" : "var(--clg-text-muted)";
+    const totalGroupCost = rows.reduce((s, o) => s + (o.voided ? 0 : Number(o.cost) || 0), 0);
+    const age = Math.max(0, ...rows.map((o) => ageDays(o) ?? 0));
+    const allPaid = rows.every((o) => o.payment_status === "paid");
+    const anyPaid = rows.some((o) => o.payment_status === "paid");
+    return (
+      <tr
+        key={groupId}
+        onClick={() => toggleGroup(groupId)}
+        style={{ background: striped ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer" }}
+      >
+        <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: anyOpen ? 700 : 400, color: anyOpen ? "var(--clg-ruby)" : "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)", whiteSpace: "nowrap" }}>
+          {lead.wo_number || "—"} +{rows.length - 1}
+        </td>
+        <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+          {lead.unit?.number || "—"}
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", maxWidth: 280, fontWeight: anyOpen ? 600 : 400, color: rowFg }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            {rows.map((o) => o.category).join(" + ")}
+          </span>
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: "var(--clg-text-muted)" }}>
+          {rows.length} line items
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: rowFg }}>
+          {lead.vendor?.name || "—"}
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", color: rowFg }}>
+          {money(totalGroupCost)}
+        </td>
+        <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+          <Badge tone={allPaid ? "brand" : anyPaid ? "outline" : "outline"}>
+            {allPaid ? "Paid" : anyPaid ? "Partially paid" : "Unpaid"}
+          </Badge>
+        </td>
+        <td style={{
+          padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right",
+          fontFamily: "var(--clg-font-heading)", fontWeight: 700,
+          color: anyOpen ? "var(--clg-scarlet)" : "var(--clg-text-muted)",
+        }}>
+          {age != null ? `${age}d` : "—"}
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div style={{ padding: isMobile ? "16px 12px" : "28px", fontFamily: "var(--clg-font-body)", color: "var(--clg-text-body)", maxWidth: 1100, margin: "0 auto" }}>
@@ -276,7 +482,19 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
           </div>
         ) : isMobile ? (
           <div>
-            {filtered.map((o) => <WorkOrderCard key={o.id} order={o} onOpen={() => setOpenId(o.id)} />)}
+            {groups.map((rows) =>
+              rows.length === 1
+                ? <WorkOrderCard key={rows[0].id} order={rows[0]} onOpen={() => setOpenId(rows[0].id)} />
+                : (
+                  <GroupedWorkOrderCard
+                    key={rows[0].work_order_group_id}
+                    orders={rows}
+                    expanded={expandedGroups.has(rows[0].work_order_group_id)}
+                    onToggle={() => toggleGroup(rows[0].work_order_group_id)}
+                    onOpen={setOpenId}
+                  />
+                )
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", fontSize: 12.5, fontWeight: 600, color: "var(--clg-navy)" }}>
               <span>Total</span>
               <span style={{ fontFamily: "var(--clg-font-mono, monospace)" }}>{money(totalCost)}</span>
@@ -297,70 +515,16 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((o, i) => {
-                  // Closed/voided rows drop to Pewter/Cool so open work is
-                  // the only thing with contrast (CLG OS design package:
-                  // "Closed rows drop to Pewter/Cool... open work is the
-                  // only thing with contrast").
-                  const isOpen = !o.voided && o.status !== "Closed";
-                  const rowFg = isOpen ? "var(--clg-text-body)" : "var(--clg-text-muted)";
-                  const age = ageDays(o);
-                  return (
-                    <tr
-                      key={o.id}
-                      onClick={() => setOpenId(o.id)}
-                      style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent", cursor: "pointer" }}
-                    >
-                      <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: isOpen ? 700 : 400, color: isOpen ? "var(--clg-ruby)" : "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)", whiteSpace: "nowrap" }}>
-                        {o.wo_number || "—"}
-                      </td>
-                      <td style={{ padding: "10px 14px", fontFamily: "var(--clg-font-mono, monospace)", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                        {o.unit?.number || "—"}
-                      </td>
-                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", maxWidth: 280, fontWeight: isOpen ? 600 : 400, color: rowFg }}>
-                        {o.complaint || o.description || "—"}
-                        {o.is_chargeback && <Badge tone="critical" style={{ marginLeft: 6 }}>Chargeback</Badge>}
-                        {o.is_chargeback && (
-                          <Badge tone={o.chargeback_deducted_at ? "brand" : "outline"} style={{ marginLeft: 6 }}>
-                            {o.chargeback_deducted_at ? "Deducted" : "Not deducted"}
-                          </Badge>
-                        )}
-                      </td>
-                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: isOpen ? "var(--clg-navy)" : "var(--clg-text-muted)" }}>
-                        {blockedOnText(o)}
-                      </td>
-                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", color: rowFg }}>
-                        {o.vendor?.name || "—"}
-                      </td>
-                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right", fontFamily: "var(--clg-font-mono, monospace)", color: isOpen && !o.cost ? "var(--clg-mercury)" : rowFg, fontStyle: isOpen && !o.cost ? "italic" : "normal" }}>
-                        {isOpen && !o.cost ? "No estimate" : money(o.cost)}
-                      </td>
-                      <td style={{ padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                        {!o.cost ? (
-                          <span style={{ color: "var(--clg-mercury)", fontStyle: "italic" }}>—</span>
-                        ) : (
-                          <>
-                            <Badge tone={o.payment_status === "paid" ? "brand" : "outline"}>
-                              {o.payment_status === "paid" ? "Paid" : "Unpaid"}
-                            </Badge>
-                            {o.exported_to_intacct_at && (
-                              <Badge tone="neutral" style={{ marginLeft: 6 }} title={`Exported to Sage Intacct ${o.exported_to_intacct_at.slice(0, 10)}`}>
-                                Exported
-                              </Badge>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td style={{
-                        padding: "10px 14px", borderBottom: "1px solid var(--clg-border-subtle)", textAlign: "right",
-                        fontFamily: "var(--clg-font-heading)", fontWeight: 700,
-                        color: isOpen ? "var(--clg-scarlet)" : "var(--clg-text-muted)",
-                      }}>
-                        {age != null ? `${age}d` : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {groups.map((rows, i) =>
+                  rows.length === 1 ? (
+                    renderRow(rows[0], { striped: i % 2 === 1 })
+                  ) : (
+                    <Fragment key={rows[0].work_order_group_id}>
+                      {renderGroupSummary(rows, i % 2 === 1)}
+                      {expandedGroups.has(rows[0].work_order_group_id) && rows.map((o) => renderRow(o, { nested: true }))}
+                    </Fragment>
+                  )
+                )}
               </tbody>
               <tfoot>
                 <tr>

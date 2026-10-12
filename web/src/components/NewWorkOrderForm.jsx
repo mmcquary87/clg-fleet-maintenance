@@ -134,6 +134,12 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
       const receiptPath = file ? await uploadReceipt(file) : existingReceipt?.storagePath || null;
       const receiptFileName = file ? file.name : existingReceipt?.fileName || null;
 
+      // One invoice can have several line items (categories) -- each still
+      // becomes its own work_orders row (Spend/Board/CSV/Intacct export/
+      // chargebacks all key off one category+cost per row), but sharing one
+      // group id lets the Work Orders list show them bundled as a single
+      // work order instead of as unrelated ones.
+      const groupId = crypto.randomUUID();
       const rows = lineItems.map((li) => ({
         unit_id: unitId,
         vendor_id: vendorId,
@@ -147,6 +153,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
         description: li.description || null,
         source: "manual",
         receipt_path: receiptPath,
+        work_order_group_id: groupId,
         is_chargeback: li.isChargeback,
         chargeback_driver_name: li.isChargeback ? (li.chargebackDriver.trim() || null) : null,
         chargeback_driver_id: li.isChargeback ? li.chargebackDriverId : null,
