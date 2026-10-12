@@ -28,7 +28,7 @@ export function useUnits() {
       .from("units")
       .select(
         "id, number, type, vin, is_active, current_location, created_at, odometer, can_move_load, idle_since, " +
-        "last_pm_date, pm_interval_days, last_annual_inspection_date, last_midtrip_date, midtrip_interval_days, " +
+        "last_pm_date, pm_interval_days, last_pm_odometer, pm_interval_miles, last_annual_inspection_date, last_midtrip_date, midtrip_interval_days, " +
         "ownership, owner_operator_assigned, plate_number, current_market_value, domicile, warranty_status, " +
         "issue_tag, issue_tag_note"
       )

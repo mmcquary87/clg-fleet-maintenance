@@ -487,6 +487,11 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       for (const li of closeLineItems) {
         if (li.category === "PM / Oil") {
           unitUpdates.last_pm_date = dateClosed;
+          // PM reads by mileage now -- stamp from the unit's current
+          // (Samsara-synced) odometer at close time, same moment
+          // last_pm_date gets stamped. Left unset if the unit has no
+          // odometer reading on file yet (e.g. a trailer).
+          if (order.unit?.odometer != null) unitUpdates.last_pm_odometer = order.unit.odometer;
         } else if (li.category === "DOT Inspection" && li.inspectionType) {
           const field = li.inspectionType === "Annual" ? "last_annual_inspection_date" : "last_midtrip_date";
           unitUpdates[field] = dateClosed;

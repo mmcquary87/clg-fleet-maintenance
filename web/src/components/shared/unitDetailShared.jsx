@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Mail, Loader2, Save } from "lucide-react";
 import { Badge, Input, Select, Button } from "../../ds";
 import { useVendors } from "../../hooks/useVendors";
-import { MILESTONES, nextDueDate, dueStatus, withMidtripIntervalDefault } from "../../lib/maintenanceSchedule";
+import { MILESTONES, nextDueDate, dueStatus, withMidtripIntervalDefault, pmNextDueOdometer, pmOdometerStatus } from "../../lib/maintenanceSchedule";
 import { buildMailto } from "../../lib/mailto";
 
 // Pieces shared between UnitDrawer (the quick-glance panel used from
@@ -111,14 +111,31 @@ export function alvysPmNote(maintenanceDue, unit) {
 }
 
 export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
+  const isPm = milestone.key === "pm";
   const interval = milestone.fixedInterval ?? unit[milestone.intervalField];
   const [lastDate, setLastDate] = useState(unit[milestone.lastField] || "");
   const [intervalDays, setIntervalDays] = useState(milestone.intervalField ? (unit[milestone.intervalField] ?? "") : "");
+  const [lastOdometer, setLastOdometer] = useState(isPm ? (unit.last_pm_odometer ?? "") : "");
+  const [intervalMiles, setIntervalMiles] = useState(isPm ? (unit.pm_interval_miles ?? "") : "");
 
   useEffect(() => {
     setLastDate(unit[milestone.lastField] || "");
     setIntervalDays(milestone.intervalField ? (unit[milestone.intervalField] ?? "") : "");
-  }, [unit, milestone]);
+    if (isPm) {
+      setLastOdometer(unit.last_pm_odometer ?? "");
+      setIntervalMiles(unit.pm_interval_miles ?? "");
+    }
+  }, [unit, milestone, isPm]);
+
+  // PM reads by mileage, not a fixed day count (intervals vary by make) --
+  // when there's enough odometer data on file (last-PM-odometer, interval,
+  // and the unit's own current odometer), that wins over the date-based
+  // computation entirely. A unit with no odometer data yet (a trailer, or
+  // before its first odometer-tracked PM here) falls back to the date math
+  // below, same as before this existed.
+  const odoNextDue = isPm ? pmNextDueOdometer(unit.last_pm_odometer, unit.pm_interval_miles) : null;
+  const odoStatus = isPm ? pmOdometerStatus(odoNextDue, unit.odometer) : "unknown";
+  const usingOdometer = isPm && odoStatus !== "unknown";
 
   // dueOverride (a real answer from Alvys, when we have one) wins over the
   // computed last-done + interval date -- that computation only produces
@@ -126,14 +143,21 @@ export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
   // which most units never get, while Alvys's own answer is reliably synced.
   const computedNext = nextDueDate(unit[milestone.lastField], interval);
   const next = dueOverride ?? computedNext;
-  const status = dueStatus(next);
+  const status = usingOdometer ? odoStatus : dueStatus(next);
+  const milesRemaining = usingOdometer && unit.odometer != null ? odoNextDue - unit.odometer : null;
 
   const dirty = lastDate !== (unit[milestone.lastField] || "")
-    || (milestone.intervalField && String(intervalDays) !== String(unit[milestone.intervalField] ?? ""));
+    || (milestone.intervalField && String(intervalDays) !== String(unit[milestone.intervalField] ?? ""))
+    || (isPm && String(lastOdometer) !== String(unit.last_pm_odometer ?? ""))
+    || (isPm && String(intervalMiles) !== String(unit.pm_interval_miles ?? ""));
 
   const save = () => {
     const fields = { [milestone.lastField]: lastDate || null };
     if (milestone.intervalField) fields[milestone.intervalField] = intervalDays === "" ? null : Number(intervalDays);
+    if (isPm) {
+      fields.last_pm_odometer = lastOdometer === "" ? null : Number(lastOdometer);
+      fields.pm_interval_miles = intervalMiles === "" ? null : Number(intervalMiles);
+    }
     onSave(milestone.key === "midtrip" ? withMidtripIntervalDefault(unit[milestone.intervalField], fields) : fields);
   };
 
@@ -143,7 +167,7 @@ export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
         {milestone.label}
       </div>
       <div>
-        <div style={{ fontSize: 10, color: "var(--clg-text-muted)", marginBottom: 3 }}>Last done</div>
+        <div style={{ fontSize: 10, color: "var(--clg-text-muted)", marginBottom: 3 }}>{isPm ? "Last done (date, optional)" : "Last done"}</div>
         <Input type="date" value={lastDate} onChange={(e) => setLastDate(e.target.value)} />
       </div>
       {milestone.intervalField ? (
@@ -157,11 +181,30 @@ export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
           <div style={{ fontSize: 13, color: "var(--clg-text-body)", padding: "11px 0" }}>{milestone.fixedInterval} days</div>
         </div>
       )}
+      {isPm && (
+        <>
+          <div>
+            <div style={{ fontSize: 10, color: "var(--clg-text-muted)", marginBottom: 3 }}>Last PM odometer (mi)</div>
+            <Input type="number" min="0" value={lastOdometer} onChange={(e) => setLastOdometer(e.target.value)} placeholder="e.g. 182000" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: "var(--clg-text-muted)", marginBottom: 3 }}>Interval (miles)</div>
+            <Input type="number" min="1" value={intervalMiles} onChange={(e) => setIntervalMiles(e.target.value)} placeholder="e.g. 25000" />
+          </div>
+        </>
+      )}
       <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 10, color: "var(--clg-text-muted)" }}>Next due</span>
-          <span style={{ fontSize: 13, fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-body)" }}>{next || "—"}</span>
+          <span style={{ fontSize: 13, fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-body)" }}>
+            {usingOdometer ? `${odoNextDue.toLocaleString()} mi` : (next || "—")}
+          </span>
           <Badge tone={statusTone(status)}>{statusLabel(status)}</Badge>
+          {milesRemaining != null && (
+            <span style={{ fontSize: 11, color: "var(--clg-text-muted)" }}>
+              ({Math.abs(milesRemaining).toLocaleString()} mi {milesRemaining < 0 ? "over" : "left"})
+            </span>
+          )}
         </div>
         <button
           type="button" onClick={save} disabled={!dirty || saving}

@@ -184,8 +184,10 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
       if (f.status === "Closed") {
         const doneDate = f.dateClosed || f.dateOpened;
         const unitUpdates = {};
+        let touchesPm = false;
         for (const li of lineItems) {
           if (li.category === "PM / Oil") {
+            touchesPm = true;
             if (!unitUpdates.last_pm_date || doneDate > unitUpdates.last_pm_date) unitUpdates.last_pm_date = doneDate;
           } else if (li.category === "DOT Inspection" && li.inspectionType) {
             const field = li.inspectionType === "Annual" ? "last_annual_inspection_date" : "last_midtrip_date";
@@ -193,6 +195,14 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
           } else if (li.category === "Mid-Trip Inspection") {
             if (!unitUpdates.last_midtrip_date || doneDate > unitUpdates.last_midtrip_date) unitUpdates.last_midtrip_date = doneDate;
           }
+        }
+        // PM reads by mileage now -- stamp last_pm_odometer from the unit's
+        // current (Samsara-synced) odometer at close time, same moment
+        // last_pm_date gets stamped. Left unset if the unit has no odometer
+        // reading on file yet (e.g. a trailer).
+        if (touchesPm) {
+          const { data: unitRow } = await supabase.from("units").select("odometer").eq("id", unitId).single();
+          if (unitRow?.odometer != null) unitUpdates.last_pm_odometer = unitRow.odometer;
         }
         if (Object.keys(unitUpdates).length > 0) {
           const { error: unitErr } = await updateUnitMaintenanceFields(unitId, unitUpdates);

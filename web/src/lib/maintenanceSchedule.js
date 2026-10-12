@@ -9,6 +9,12 @@ export const DUE_SOON_WINDOW_DAYS = 14;
 // "type 90 and save" just to get a Next Due date out of its first mid-trip.
 export const MIDTRIP_DEFAULT_INTERVAL_DAYS = 90;
 
+// PM/Oil is tracked by mileage in practice (intervals vary by make), not a
+// fixed day count -- see 20261012020000_pm_odometer_tracking.sql. Matches
+// the "due soon" cutoff alvysPmNote() already used for its own read-only
+// Alvys-sourced odometer note.
+export const PM_DUE_SOON_WINDOW_MILES = 2500;
+
 export const MILESTONES = [
   { key: "pm", label: "PM / Oil", lastField: "last_pm_date", intervalField: "pm_interval_days", fixedInterval: null },
   { key: "annual", label: "Annual Inspection", lastField: "last_annual_inspection_date", intervalField: null, fixedInterval: ANNUAL_INSPECTION_INTERVAL_DAYS },
@@ -49,9 +55,30 @@ export function withMidtripIntervalDefault(currentIntervalDays, fields) {
   return { ...fields, midtrip_interval_days: MIDTRIP_DEFAULT_INTERVAL_DAYS };
 }
 
+export function pmNextDueOdometer(lastOdometer, intervalMiles) {
+  if (lastOdometer == null || !intervalMiles) return null;
+  return Number(lastOdometer) + Number(intervalMiles);
+}
+
+// "unknown" — no odometer reading to compare against (no last-PM-odometer/
+// interval on file, or the unit itself has no current odometer, e.g. a
+// trailer) -- the caller falls back to date-based dueStatus() in that case.
+export function pmOdometerStatus(nextDueOdometer, currentOdometer) {
+  if (nextDueOdometer == null || currentOdometer == null) return "unknown";
+  const remaining = nextDueOdometer - currentOdometer;
+  if (remaining < 0) return "overdue";
+  if (remaining <= PM_DUE_SOON_WINDOW_MILES) return "due_soon";
+  return "ok";
+}
+
 // Worst status across all milestones for a unit — drives the roster's at-a-glance badge.
 export function worstStatus(unit) {
   const statuses = MILESTONES.map((m) => {
+    if (m.key === "pm") {
+      const nextOdo = pmNextDueOdometer(unit.last_pm_odometer, unit.pm_interval_miles);
+      const odoStatus = pmOdometerStatus(nextOdo, unit.odometer);
+      if (odoStatus !== "unknown") return odoStatus;
+    }
     const interval = m.fixedInterval ?? unit[m.intervalField];
     return dueStatus(nextDueDate(unit[m.lastField], interval));
   });

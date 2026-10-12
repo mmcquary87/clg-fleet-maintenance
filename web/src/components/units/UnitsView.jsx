@@ -5,7 +5,7 @@ import { useUnits } from "../../hooks/useUnits";
 import { useUnitActivity } from "../../hooks/useUnitActivity";
 import { useUnitFaults } from "../../hooks/useUnitFaults";
 import { useIsMobile } from "../../hooks/useIsMobile";
-import { worstStatus } from "../../lib/maintenanceSchedule";
+import { worstStatus, pmNextDueOdometer } from "../../lib/maintenanceSchedule";
 import UnitForm from "./UnitForm";
 import UnitDetailPage from "./UnitDetailPage";
 
@@ -42,6 +42,19 @@ function ConditionDot({ condition }) {
       style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, display: "inline-block", ...style }}
     />
   );
+}
+
+// PM reads by mileage now (intervals vary by make) -- falls back to the
+// last-PM-date on file for a unit with no odometer-tracked PM yet, same
+// "unknown means fall back to date" rule maintenanceSchedule.js uses.
+function pmDueLabel(unit) {
+  const nextDue = pmNextDueOdometer(unit.last_pm_odometer, unit.pm_interval_miles);
+  if (nextDue == null) return unit.last_pm_date || "—";
+  if (unit.odometer == null) return `Due at ${nextDue.toLocaleString()} mi`;
+  const remaining = nextDue - unit.odometer;
+  return remaining < 0
+    ? `${Math.abs(remaining).toLocaleString()} mi over`
+    : `${remaining.toLocaleString()} mi left`;
 }
 
 function maintenanceBadge(status) {
@@ -108,8 +121,8 @@ function UnitPanel({ unit, activity, faults, isMobile, onOpenFull, onToggleActiv
         )}
         {!isTrailer && (
           <div>
-            <div style={{ fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-text-muted)" }}>Last PM</div>
-            <div style={{ color: "var(--clg-navy)", fontWeight: 600, marginTop: 2 }}>{unit.last_pm_date || "—"}</div>
+            <div style={{ fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-text-muted)" }}>Next PM</div>
+            <div style={{ color: "var(--clg-navy)", fontWeight: 600, marginTop: 2 }}>{pmDueLabel(unit)}</div>
           </div>
         )}
         <div>
@@ -198,7 +211,7 @@ function UnitRow({ unit, activity, faults, selected, isTrailer, isMobile, onSele
         </div>
       </div>
       {!isTrailer && <div style={{ color: "var(--clg-text-body)" }}>{unit.odometer ? `${unit.odometer.toLocaleString()} mi` : "—"}</div>}
-      {!isTrailer && <div style={{ color: "var(--clg-text-body)" }}>{unit.last_pm_date || "—"}</div>}
+      {!isTrailer && <div style={{ color: "var(--clg-text-body)" }}>{pmDueLabel(unit)}</div>}
       <div style={{ color: "var(--clg-text-body)" }}>{activity ? fmtMoney(activity.spendYtd) : "$0"}</div>
       <div>{flagBadge}</div>
     </div>
@@ -357,7 +370,7 @@ export default function UnitsView({ canViewAssetLifecycle }) {
               }}>
                 <span />
                 <span>Unit</span>
-                {typeTab === "Trailer" ? <span>VIN</span> : <><span>Odometer</span><span>Last PM</span></>}
+                {typeTab === "Trailer" ? <span>VIN</span> : <><span>Odometer</span><span>Next PM</span></>}
                 <span>Spend YTD</span>
                 <span>Flag</span>
               </div>
