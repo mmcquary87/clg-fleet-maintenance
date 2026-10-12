@@ -76,26 +76,44 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 // Mailgun gives every inline image referenced in the email body (a
 // signature logo, a headshot) its own attachment-N slot alongside real
-// attachments -- "content-id-map" is Mailgun's own list of which file names
-// are those inline images (JSON dict of content-id -> file name), so this
-// skips them rather than grabbing whichever came back as attachment-1 (a
-// logo, not the receipt) and handing Claude an image with nothing to extract.
+// attachments. "content-id-map" is Mailgun's own list of which file names
+// are those inline images (JSON dict of content-id -> file name) -- but not
+// every mail client's signature icons show up there (Outlook/Exchange's
+// own phone/envelope/map-pin glyphs didn't, in practice). Those follow
+// Outlook's own "image001.png", "image002.jpg", ... naming and are always
+// small, so that pattern + a size floor is used as a second filter. Among
+// whatever's left, a real PDF wins outright; otherwise the largest file is
+// the best guess for "the actual receipt" vs. a leftover tiny icon.
 function pickRealAttachment(form: FormData, attachmentCount: number): File | null {
   let inlineFileNames = new Set<string>();
   try {
     const cidMapRaw = form.get("content-id-map")?.toString();
     if (cidMapRaw) inlineFileNames = new Set(Object.values(JSON.parse(cidMapRaw)).map(String));
   } catch {
-    // Malformed/missing map -- fall through and treat nothing as inline.
+    // Malformed/missing map -- fall through, rely on the heuristics below.
   }
+
+  const looksLikeSignatureIcon = (att: File) =>
+    inlineFileNames.has(att.name) || (/^image\d+\.(png|jpe?g|gif)$/i.test(att.name) && att.size < 20_000);
+
+  const all: File[] = [];
   for (let i = 1; i <= attachmentCount; i++) {
     const att = form.get(`attachment-${i}`);
-    if (att instanceof File && !inlineFileNames.has(att.name)) return att;
+    if (att instanceof File) all.push(att);
   }
-  // Every attachment looked inline (an unexpected content-id-map shape) --
-  // still better to scan something than silently drop a real receipt.
-  const first = form.get("attachment-1");
-  return first instanceof File ? first : null;
+  if (all.length === 0) return null;
+
+  // Don't let the heuristic filter out every attachment -- if everything
+  // "looks like" a signature icon (an email with no real attachment, just
+  // inline art), fall back to considering all of them rather than returning
+  // nothing for an email that may still have had a real receipt in it.
+  const candidates = all.filter((a) => !looksLikeSignatureIcon(a));
+  const pool = candidates.length > 0 ? candidates : all;
+
+  const pdf = pool.find((a) => a.type === "application/pdf");
+  if (pdf) return pdf;
+
+  return pool.reduce((largest, a) => (a.size > largest.size ? a : largest), pool[0]);
 }
 
 async function processAttachment(admin: ReturnType<typeof createClient>, receiptId: string, attachment: File) {
