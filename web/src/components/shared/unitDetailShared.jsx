@@ -113,16 +113,21 @@ export function alvysPmNote(maintenanceDue, unit) {
 export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
   const isPm = milestone.key === "pm";
   const interval = milestone.fixedInterval ?? unit[milestone.intervalField];
+  // A unit with no last-PM-odometer on file yet defaults to its current
+  // (Samsara-synced) odometer -- assumes "serviced as of today" so the
+  // field isn't just blank, while staying editable for the real last-done
+  // mileage (off a shop invoice/sticker) before saving.
+  const pmOdometerDefault = isPm ? (unit.last_pm_odometer ?? unit.odometer ?? "") : "";
   const [lastDate, setLastDate] = useState(unit[milestone.lastField] || "");
   const [intervalDays, setIntervalDays] = useState(milestone.intervalField ? (unit[milestone.intervalField] ?? "") : "");
-  const [lastOdometer, setLastOdometer] = useState(isPm ? (unit.last_pm_odometer ?? "") : "");
+  const [lastOdometer, setLastOdometer] = useState(pmOdometerDefault);
   const [intervalMiles, setIntervalMiles] = useState(isPm ? (unit.pm_interval_miles ?? "") : "");
 
   useEffect(() => {
     setLastDate(unit[milestone.lastField] || "");
     setIntervalDays(milestone.intervalField ? (unit[milestone.intervalField] ?? "") : "");
     if (isPm) {
-      setLastOdometer(unit.last_pm_odometer ?? "");
+      setLastOdometer(unit.last_pm_odometer ?? unit.odometer ?? "");
       setIntervalMiles(unit.pm_interval_miles ?? "");
     }
   }, [unit, milestone, isPm]);
@@ -148,7 +153,7 @@ export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
 
   const dirty = lastDate !== (unit[milestone.lastField] || "")
     || (milestone.intervalField && String(intervalDays) !== String(unit[milestone.intervalField] ?? ""))
-    || (isPm && String(lastOdometer) !== String(unit.last_pm_odometer ?? ""))
+    || (isPm && String(lastOdometer) !== String(pmOdometerDefault))
     || (isPm && String(intervalMiles) !== String(unit.pm_interval_miles ?? ""));
 
   const save = () => {
@@ -193,18 +198,18 @@ export function MilestoneRow({ milestone, unit, onSave, saving, dueOverride }) {
           </div>
         </>
       )}
+      {milesRemaining != null && (
+        <div style={{ gridColumn: "1 / -1", fontFamily: "var(--clg-font-heading)", fontWeight: 800, fontSize: 21, color: milesRemaining < 0 ? "var(--clg-scarlet)" : "var(--clg-navy)" }}>
+          {Math.abs(milesRemaining).toLocaleString()} mi {milesRemaining < 0 ? "overdue" : "until due"}
+        </div>
+      )}
       <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10, color: "var(--clg-text-muted)" }}>Next due</span>
+          <span style={{ fontSize: 10, color: "var(--clg-text-muted)" }}>{usingOdometer ? "Due at" : "Next due"}</span>
           <span style={{ fontSize: 13, fontFamily: "var(--clg-font-mono, monospace)", color: "var(--clg-text-body)" }}>
             {usingOdometer ? `${odoNextDue.toLocaleString()} mi` : (next || "—")}
           </span>
           <Badge tone={statusTone(status)}>{statusLabel(status)}</Badge>
-          {milesRemaining != null && (
-            <span style={{ fontSize: 11, color: "var(--clg-text-muted)" }}>
-              ({Math.abs(milesRemaining).toLocaleString()} mi {milesRemaining < 0 ? "over" : "left"})
-            </span>
-          )}
         </div>
         <button
           type="button" onClick={save} disabled={!dirty || saving}

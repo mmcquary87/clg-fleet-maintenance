@@ -53,8 +53,8 @@ function pmDueLabel(unit) {
   if (unit.odometer == null) return `Due at ${nextDue.toLocaleString()} mi`;
   const remaining = nextDue - unit.odometer;
   return remaining < 0
-    ? `${Math.abs(remaining).toLocaleString()} mi over`
-    : `${remaining.toLocaleString()} mi left`;
+    ? `${Math.abs(remaining).toLocaleString()} mi overdue`
+    : `${remaining.toLocaleString()} mi until due`;
 }
 
 function maintenanceBadge(status) {
