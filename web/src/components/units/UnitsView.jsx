@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Loader2, Search } from "lucide-react";
+import { Plus, Loader2, Search, Gauge } from "lucide-react";
 import { Button, Badge, Eyebrow, Alert, Input } from "../../ds";
 import { useUnits } from "../../hooks/useUnits";
 import { useUnitActivity } from "../../hooks/useUnitActivity";
@@ -8,6 +8,7 @@ import { useIsMobile } from "../../hooks/useIsMobile";
 import { worstStatus, pmNextDueOdometer } from "../../lib/maintenanceSchedule";
 import UnitForm from "./UnitForm";
 import UnitDetailPage from "./UnitDetailPage";
+import BulkPmIntervalEditor from "./BulkPmIntervalEditor";
 
 const OWNERSHIP_BADGE = { penske_lease: "Penske", hale_lease: "Hale" };
 
@@ -223,7 +224,9 @@ export default function UnitsView({ canViewAssetLifecycle }) {
   const { byUnitId, loading: activityLoading } = useUnitActivity();
   const { byUnitId: faultsByUnitId } = useUnitFaults();
   const [showForm, setShowForm] = useState(false);
+  const [showPmBulkEditor, setShowPmBulkEditor] = useState(false);
   const [statusFilter, setStatusFilter] = useState("active");
+  const [maintFilter, setMaintFilter] = useState("all");
   const [typeTab, setTypeTab] = useState("Truck");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -241,6 +244,7 @@ export default function UnitsView({ canViewAssetLifecycle }) {
     // unfindable here at all).
     const rows = units
       .filter((u) => q || statusFilter === "all" || (statusFilter === "active" ? u.is_active : !u.is_active))
+      .filter((u) => q || maintFilter === "all" || worstStatus(u) === maintFilter)
       .filter((u) => q || (typeTab === "Truck" ? u.type !== "Trailer" : u.type === "Trailer"))
       .filter((u) => {
         if (!q) return true;
@@ -258,7 +262,7 @@ export default function UnitsView({ canViewAssetLifecycle }) {
       if (rankDiff !== 0) return rankDiff;
       return (byUnitId[b.id]?.spendYtd ?? 0) - (byUnitId[a.id]?.spendYtd ?? 0);
     });
-  }, [units, statusFilter, typeTab, query, faultsByUnitId, byUnitId]);
+  }, [units, statusFilter, maintFilter, typeTab, query, faultsByUnitId, byUnitId]);
 
   const truckCount = units.filter((u) => u.type !== "Trailer" && u.is_active).length;
   const trailerCount = units.filter((u) => u.type === "Trailer" && u.is_active).length;
@@ -266,6 +270,8 @@ export default function UnitsView({ canViewAssetLifecycle }) {
   const checkEngineCount = units.filter((u) => u.is_active && faultsByUnitId[u.id]?.activeSeverity).length;
   const inServiceCount = units.filter((u) => u.is_active).length - downCount;
   const leasedCount = units.filter((u) => u.is_active && u.ownership !== "owned").length;
+  const maintOverdueCount = units.filter((u) => u.is_active && worstStatus(u) === "overdue").length;
+  const maintDueSoonCount = units.filter((u) => u.is_active && worstStatus(u) === "due_soon").length;
 
   const selectedUnit = visible.find((u) => u.id === selectedId) || visible[0] || null;
 
@@ -291,17 +297,21 @@ export default function UnitsView({ canViewAssetLifecycle }) {
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--clg-cool)" }} />
             <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Unit, VIN, plate…" style={{ paddingLeft: 30, fontSize: isMobile ? 16 : undefined }} />
           </div>
+          <Button variant="outline" size="sm" iconLeft={<Gauge size={16} />} onClick={() => setShowPmBulkEditor(true)}>Edit PM intervals</Button>
           <Button size="sm" iconLeft={<Plus size={16} />} onClick={() => setShowForm(true)}>New unit</Button>
         </div>
       </div>
 
       {showForm && <UnitForm onCancel={() => setShowForm(false)} onSaved={() => { setShowForm(false); reload(); }} />}
+      {showPmBulkEditor && <BulkPmIntervalEditor onClose={() => { setShowPmBulkEditor(false); reload(); }} />}
       {error && <Alert tone="critical" title="Couldn't load units" style={{ marginBottom: 16 }}>{error}</Alert>}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         {[
           { label: "Down", value: downCount, warn: true },
           { label: "Check engine", value: checkEngineCount, warn: true },
+          { label: "Maintenance overdue", value: maintOverdueCount, warn: true },
+          { label: "Maintenance due soon", value: maintDueSoonCount, warn: true },
           { label: "In service", value: inServiceCount, warn: false },
           { label: "Leased (Penske/Hale)", value: leasedCount, warn: false },
         ].map((t) => (
@@ -332,21 +342,43 @@ export default function UnitsView({ canViewAssetLifecycle }) {
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {["active", "inactive", "all"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setStatusFilter(f)}
-              style={{
-                padding: "6px 12px", fontSize: 11.5, textTransform: "capitalize", cursor: "pointer", borderRadius: "var(--clg-radius-sm)",
-                border: "1px solid " + (statusFilter === f ? "var(--clg-royal)" : "var(--clg-border-default)"),
-                background: statusFilter === f ? "var(--clg-royal)" : "#fff",
-                color: statusFilter === f ? "#fff" : "var(--clg-pewter)",
-              }}
-            >
-              {f}
-            </button>
-          ))}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[
+              { key: "all", label: "All maintenance", color: "var(--clg-royal)" },
+              { key: "overdue", label: "Overdue", color: "var(--clg-ruby)" },
+              { key: "due_soon", label: "Due soon", color: "var(--clg-scarlet)" },
+            ].map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setMaintFilter(f.key)}
+                style={{
+                  padding: "6px 12px", fontSize: 11.5, cursor: "pointer", borderRadius: "var(--clg-radius-sm)",
+                  border: "1px solid " + (maintFilter === f.key ? f.color : "var(--clg-border-default)"),
+                  background: maintFilter === f.key ? f.color : "#fff",
+                  color: maintFilter === f.key ? "#fff" : "var(--clg-pewter)",
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {["active", "inactive", "all"].map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                style={{
+                  padding: "6px 12px", fontSize: 11.5, textTransform: "capitalize", cursor: "pointer", borderRadius: "var(--clg-radius-sm)",
+                  border: "1px solid " + (statusFilter === f ? "var(--clg-royal)" : "var(--clg-border-default)"),
+                  background: statusFilter === f ? "var(--clg-royal)" : "#fff",
+                  color: statusFilter === f ? "#fff" : "var(--clg-pewter)",
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
