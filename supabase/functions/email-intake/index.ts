@@ -29,8 +29,18 @@
 // database error -- those are recorded on the row itself (extraction_error)
 // instead, visible to a dispatcher in the Receipt Inbox rather than causing
 // a retry storm.
+//
+// Responds to Mailgun immediately after inserting a placeholder row, then
+// does the slow part (storage upload + scan-invoice's Claude call) in a
+// background task via EdgeRuntime.waitUntil(), updating that same row when
+// it finishes. Mailgun's forward() action times out a webhook response
+// after a few seconds -- comfortably shorter than a Claude extraction call
+// -- and treats a timeout as a delivery failure worth retrying, which would
+// otherwise produce duplicate inbound_receipts rows for one real email.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
 const MAILGUN_SIGNING_KEY = Deno.env.get("MAILGUN_SIGNING_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -64,6 +74,68 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+// Mailgun gives every inline image referenced in the email body (a
+// signature logo, a headshot) its own attachment-N slot alongside real
+// attachments -- "content-id-map" is Mailgun's own list of which file names
+// are those inline images (JSON dict of content-id -> file name), so this
+// skips them rather than grabbing whichever came back as attachment-1 (a
+// logo, not the receipt) and handing Claude an image with nothing to extract.
+function pickRealAttachment(form: FormData, attachmentCount: number): File | null {
+  let inlineFileNames = new Set<string>();
+  try {
+    const cidMapRaw = form.get("content-id-map")?.toString();
+    if (cidMapRaw) inlineFileNames = new Set(Object.values(JSON.parse(cidMapRaw)).map(String));
+  } catch {
+    // Malformed/missing map -- fall through and treat nothing as inline.
+  }
+  for (let i = 1; i <= attachmentCount; i++) {
+    const att = form.get(`attachment-${i}`);
+    if (att instanceof File && !inlineFileNames.has(att.name)) return att;
+  }
+  // Every attachment looked inline (an unexpected content-id-map shape) --
+  // still better to scan something than silently drop a real receipt.
+  const first = form.get("attachment-1");
+  return first instanceof File ? first : null;
+}
+
+async function processAttachment(admin: ReturnType<typeof createClient>, receiptId: string, attachment: File) {
+  let storagePath: string | null = null;
+  let extracted: unknown = null;
+  let extractionError: string | null = null;
+
+  const fileName = attachment.name;
+  const mediaType = attachment.type || "application/octet-stream";
+  const bytes = new Uint8Array(await attachment.arrayBuffer());
+
+  const path = `email-intake/${crypto.randomUUID()}-${fileName}`;
+  const { error: uploadErr } = await admin.storage.from("invoices").upload(path, bytes, { contentType: mediaType });
+  if (uploadErr) {
+    extractionError = `Couldn't store attachment: ${uploadErr.message}`;
+  } else {
+    storagePath = path;
+    try {
+      const scanRes = await fetch(`${SUPABASE_URL}/functions/v1/scan-invoice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ fileBase64: bytesToBase64(bytes), mediaType }),
+      });
+      const scanJson = await scanRes.json();
+      if (!scanRes.ok || scanJson.error) {
+        extractionError = scanJson.error || `scan-invoice returned ${scanRes.status}`;
+      } else {
+        extracted = scanJson;
+      }
+    } catch (scanErr) {
+      extractionError = scanErr instanceof Error ? scanErr.message : "scan-invoice call failed";
+    }
+  }
+
+  const { error: updateErr } = await admin.from("inbound_receipts")
+    .update({ storage_path: storagePath, file_name: fileName, extracted, extraction_error: extractionError })
+    .eq("id", receiptId);
+  if (updateErr) console.error("email-intake: failed to update inbound_receipts row after extraction:", updateErr);
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -86,58 +158,35 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const attachmentCount = Number(form.get("attachment-count") || 0);
-    // Only the first attachment -- a roadside/vendor receipt is one
-    // document. If someone attaches several, the email itself (sender/
-    // subject) is still recorded so nothing vanishes, just with only the
-    // first one scanned.
-    const firstAttachment = attachmentCount > 0 ? form.get("attachment-1") : null;
+    // Only the first real (non-inline) attachment -- a roadside/vendor
+    // receipt is one document. If someone attaches several, the email
+    // itself (sender/subject) is still recorded so nothing vanishes, just
+    // with only the first one scanned.
+    const attachment = attachmentCount > 0 ? pickRealAttachment(form, attachmentCount) : null;
 
-    let storagePath: string | null = null;
-    let fileName: string | null = null;
-    let extracted: unknown = null;
-    let extractionError: string | null = null;
+    // Insert a placeholder row and respond to Mailgun immediately -- the
+    // slow part (storage upload + scan-invoice's Claude call) happens in
+    // the background below, after Mailgun has already gotten its 200.
+    const { data: inserted, error: insertErr } = await admin.from("inbound_receipts")
+      .insert({
+        from_email: fromEmail,
+        subject,
+        extraction_error: attachment ? null : "No attachment found in this email.",
+      })
+      .select("id")
+      .single();
 
-    if (firstAttachment instanceof File) {
-      fileName = firstAttachment.name;
-      const mediaType = firstAttachment.type || "application/octet-stream";
-      const bytes = new Uint8Array(await firstAttachment.arrayBuffer());
-
-      const path = `email-intake/${crypto.randomUUID()}-${fileName}`;
-      const { error: uploadErr } = await admin.storage.from("invoices").upload(path, bytes, { contentType: mediaType });
-      if (uploadErr) {
-        extractionError = `Couldn't store attachment: ${uploadErr.message}`;
-      } else {
-        storagePath = path;
-        try {
-          const scanRes = await fetch(`${SUPABASE_URL}/functions/v1/scan-invoice`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
-            body: JSON.stringify({ fileBase64: bytesToBase64(bytes), mediaType }),
-          });
-          const scanJson = await scanRes.json();
-          if (!scanRes.ok || scanJson.error) {
-            extractionError = scanJson.error || `scan-invoice returned ${scanRes.status}`;
-          } else {
-            extracted = scanJson;
-          }
-        } catch (scanErr) {
-          extractionError = scanErr instanceof Error ? scanErr.message : "scan-invoice call failed";
-        }
-      }
-    } else {
-      extractionError = "No attachment found in this email.";
+    if (insertErr || !inserted) {
+      console.error("email-intake: failed to insert inbound_receipts row:", insertErr);
+      return new Response("OK", { status: 200 });
     }
 
-    const { error: insertErr } = await admin.from("inbound_receipts").insert({
-      from_email: fromEmail,
-      subject,
-      storage_path: storagePath,
-      file_name: fileName,
-      extracted,
-      extraction_error: extractionError,
-    });
-    if (insertErr) {
-      console.error("email-intake: failed to insert inbound_receipts row:", insertErr);
+    if (attachment) {
+      EdgeRuntime.waitUntil(
+        processAttachment(admin, inserted.id, attachment).catch((err) =>
+          console.error("email-intake: background processing failed:", err)
+        )
+      );
     }
 
     return new Response("OK", { status: 200 });
