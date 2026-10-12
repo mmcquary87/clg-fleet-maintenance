@@ -53,6 +53,18 @@ export function useUsersAdmin() {
     return null;
   };
 
+  const setCanDeleteWorkOrders = async (userId, canDeleteWorkOrders) => {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, can_delete_work_orders: canDeleteWorkOrders } : u)));
+    const { data, error: fnError } = await supabase.functions.invoke("update-user-permissions", {
+      body: { userId, canDeleteWorkOrders },
+    });
+    if (fnError || data?.error) {
+      await load(); // revert to server state on failure
+      return fnError?.message || data?.error;
+    }
+    return null;
+  };
+
   const setCanUseMechanicQueue = async (userId, canUseMechanicQueue) => {
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, can_use_mechanic_queue: canUseMechanicQueue } : u)));
     const { data, error: fnError } = await supabase.functions.invoke("update-user-permissions", {
@@ -65,5 +77,5 @@ export function useUsersAdmin() {
     return null;
   };
 
-  return { users, loading, error, reload: load, setCanEditRoster, setCanVoidWorkOrders, setCanUseMechanicQueue };
+  return { users, loading, error, reload: load, setCanEditRoster, setCanVoidWorkOrders, setCanDeleteWorkOrders, setCanUseMechanicQueue };
 }

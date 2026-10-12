@@ -40,14 +40,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { userId, canEditRoster, canVoidWorkOrders, canUseMechanicQueue } = await req.json();
+    const { userId, canEditRoster, canVoidWorkOrders, canDeleteWorkOrders, canUseMechanicQueue } = await req.json();
     if (!userId || typeof userId !== "string") {
       return new Response(JSON.stringify({ error: "userId is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (canEditRoster === undefined && canVoidWorkOrders === undefined && canUseMechanicQueue === undefined) {
-      return new Response(JSON.stringify({ error: "canEditRoster and/or canVoidWorkOrders and/or canUseMechanicQueue (boolean) is required" }), {
+    if (canEditRoster === undefined && canVoidWorkOrders === undefined && canDeleteWorkOrders === undefined && canUseMechanicQueue === undefined) {
+      return new Response(JSON.stringify({ error: "canEditRoster and/or canVoidWorkOrders and/or canDeleteWorkOrders and/or canUseMechanicQueue (boolean) is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -61,6 +61,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (canDeleteWorkOrders !== undefined && typeof canDeleteWorkOrders !== "boolean") {
+      return new Response(JSON.stringify({ error: "canDeleteWorkOrders must be a boolean" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     if (canUseMechanicQueue !== undefined && typeof canUseMechanicQueue !== "boolean") {
       return new Response(JSON.stringify({ error: "canUseMechanicQueue must be a boolean" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -70,6 +75,7 @@ Deno.serve(async (req) => {
     const patch: Record<string, boolean> = {};
     if (canEditRoster !== undefined) patch.can_edit_roster = canEditRoster;
     if (canVoidWorkOrders !== undefined) patch.can_void_work_orders = canVoidWorkOrders;
+    if (canDeleteWorkOrders !== undefined) patch.can_delete_work_orders = canDeleteWorkOrders;
     if (canUseMechanicQueue !== undefined) patch.can_use_mechanic_queue = canUseMechanicQueue;
 
     const adminClient = createClient(

@@ -95,12 +95,22 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const { order, loading, error, reload } = useWorkOrder(workOrderId);
   const { vendors } = useVendors();
   const { session } = useAuth();
-  const { canVoidWorkOrders } = useProfile(session?.user?.id);
+  const { canVoidWorkOrders, canDeleteWorkOrders } = useProfile(session?.user?.id);
 
   const [voiding, setVoiding] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [voidBusy, setVoidBusy] = useState(false);
   const [voidError, setVoidError] = useState(null);
+
+  // Permanent delete -- unlike void (reversible, keeps history), this
+  // actually removes the row. Gated server-side by a trigger requiring
+  // admin or can_delete_work_orders (20261012040000), same pattern as
+  // voiding's own trigger. Requires typing the work order's own number to
+  // confirm, since there's no "un-delete" the way there's an "un-void".
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const [editingPayment, setEditingPayment] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ method: PAYMENT_METHODS[0], reference: "", paidAt: todayIso() });
@@ -201,6 +211,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setClosing(false);
     setEditingDetails(false);
     setAddingInvoice(false);
+    setDeleting(false);
     setVoidReason("");
     setVoidError(null);
     setVoiding(true);
@@ -243,12 +254,40 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     }
   };
 
+  const openDeleteForm = () => {
+    setStatusError(null);
+    setClosing(false);
+    setEditingDetails(false);
+    setAddingInvoice(false);
+    setVoiding(false);
+    setEditingPayment(false);
+    setDeleteConfirmText("");
+    setDeleteError(null);
+    setDeleting(true);
+  };
+
+  const confirmDelete = async () => {
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const { error: deleteErr } = await supabase.from("work_orders").delete().eq("id", order.id);
+      if (deleteErr) throw deleteErr;
+      onChanged?.();
+      onClose();
+    } catch (err) {
+      setDeleteError(err.message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const openPaymentForm = () => {
     setStatusError(null);
     setClosing(false);
     setEditingDetails(false);
     setVoiding(false);
     setAddingInvoice(false);
+    setDeleting(false);
     setPaymentForm({ method: PAYMENT_METHODS[0], reference: "", paidAt: todayIso() });
     setPaymentError(null);
     setEditingPayment(true);
@@ -317,6 +356,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setStatusError(null);
     setEditingDetails(false);
     setAddingInvoice(false);
+    setDeleting(false);
     setCloseForm({
       invoiceRef: order.invoice_ref ?? "",
       poNumber: order.po_number ?? "",
@@ -338,6 +378,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setStatusError(null);
     setClosing(false);
     setAddingInvoice(false);
+    setDeleting(false);
     setDetailsForm({
       category: order.category ?? "",
       severity: order.severity ?? "",
@@ -520,6 +561,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setEditingDetails(false);
     setVoiding(false);
     setEditingPayment(false);
+    setDeleting(false);
     setAddInvoiceForm({ invoiceRef: "", poNumber: "", dateOpened: todayIso() });
     setAddInvoiceLineItems([emptyCloseLineItem({ category: order.category })]);
     setAddInvoiceFile(null);
@@ -674,7 +716,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                     </Badge>
                   )}
                 </div>
-                {!closing && !editingDetails && !voiding && !editingPayment && !addingInvoice && !order.voided && (
+                {!closing && !editingDetails && !voiding && !editingPayment && !addingInvoice && !deleting && !order.voided && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                     {order.approval_status === "needs_approval" && (
                       <Button size="sm" onClick={approve} disabled={statusBusy} iconLeft={statusBusy ? <Loader2 size={12} className="spin" /> : null}>
@@ -735,6 +777,11 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                         Void
                       </Button>
                     )}
+                    {canDeleteWorkOrders && (
+                      <Button size="sm" variant="outline" iconLeft={<Trash2 size={12} />} onClick={openDeleteForm} disabled={statusBusy} style={{ color: "var(--clg-scarlet)", borderColor: "var(--clg-scarlet)" }}>
+                        Delete
+                      </Button>
+                    )}
                   </div>
                 )}
                 {order.voided && canVoidWorkOrders && (
@@ -784,6 +831,34 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                       Confirm void
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setVoiding(false)} disabled={voidBusy}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {deleting && (
+                <div style={{ border: "1px solid var(--clg-scarlet)", borderRadius: "var(--clg-radius-md)", padding: 16, background: "var(--clg-surface-subtle)" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--clg-scarlet)", marginBottom: 12 }}>
+                    Permanently delete this work order
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--clg-text-body)", marginBottom: 12 }}>
+                    This removes the row entirely -- unlike voiding, there is no undo. Use Void instead unless this
+                    work order genuinely shouldn't exist (e.g. a duplicate created by mistake).
+                  </div>
+                  <FormField label={`Type the work order number ("${order.wo_number}") to confirm`}>
+                    <Input value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} placeholder={order.wo_number} />
+                  </FormField>
+                  {deleteError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 10 }}>{deleteError}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                    <Button
+                      size="sm" onClick={confirmDelete} disabled={deleteBusy || deleteConfirmText !== order.wo_number}
+                      iconLeft={deleteBusy ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
+                      style={{ background: "var(--clg-scarlet)", borderColor: "var(--clg-scarlet)" }}
+                    >
+                      Permanently delete
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setDeleting(false)} disabled={deleteBusy}>
                       Cancel
                     </Button>
                   </div>
