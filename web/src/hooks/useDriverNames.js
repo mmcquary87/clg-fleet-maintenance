@@ -14,6 +14,21 @@ import { supabase } from "../lib/supabaseClient";
 // one, via the shared in-flight promise) reuses it instead of refetching.
 let cache = null;
 let inFlight = null;
+let activeCache = null;
+let activeInFlight = null;
+
+// Active-only variant: just the synced `drivers` table filtered to
+// is_active, no union with the other 4 sources -- those exist precisely to
+// surface historical/unmatched names (old roster rows, old chargebacks,
+// etc.), which is exactly the clutter a form that only wants current
+// drivers (e.g. Log Incident) doesn't want back.
+async function fetchActiveDriverNames() {
+  const { data } = await supabase.from("drivers").select("id, name").eq("is_active", true);
+  return (data ?? [])
+    .filter((d) => d.name)
+    .map((d) => ({ id: d.id, name: d.name.trim() }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 async function fetchDriverNames() {
   const [driversRes, unitsRes, rosterRes, homeTimeRes, chargebackRes] = await Promise.all([
@@ -40,11 +55,28 @@ async function fetchDriverNames() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function useDriverNames() {
-  const [options, setOptions] = useState(cache ?? []);
-  const [loading, setLoading] = useState(!cache);
+export function useDriverNames({ activeOnly = false } = {}) {
+  const [options, setOptions] = useState((activeOnly ? activeCache : cache) ?? []);
+  const [loading, setLoading] = useState(!(activeOnly ? activeCache : cache));
 
   useEffect(() => {
+    if (activeOnly) {
+      if (activeCache) return; // an earlier mount already loaded this
+      let cancelled = false;
+      if (!activeInFlight) {
+        activeInFlight = fetchActiveDriverNames()
+          .then((opts) => { activeCache = opts; return opts; })
+          .finally(() => { activeInFlight = null; });
+      }
+      activeInFlight.then((opts) => {
+        if (!cancelled) {
+          setOptions(opts);
+          setLoading(false);
+        }
+      });
+      return () => { cancelled = true; };
+    }
+
     if (cache) return; // an earlier mount already loaded this
     let cancelled = false;
     if (!inFlight) {
@@ -59,7 +91,7 @@ export function useDriverNames() {
       }
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [activeOnly]);
 
   return { options, loading };
 }

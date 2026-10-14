@@ -9,9 +9,13 @@ const NEW_DRIVER = "__new__";
  * plus anything entered by hand), with a "+ Add a new driver" escape
  * hatch since not every driver is in Alvys yet. Reports both the name and
  * the matched driver's real id (null if unmatched/custom) so callers can
- * link records to a real driver instead of just a name string. */
-export default function DriverPicker({ value, driverId, onChange }) {
-  const { options } = useDriverNames();
+ * link records to a real driver instead of just a name string.
+ *
+ * activeOnly restricts the list to currently-active synced drivers (no
+ * historical/unmatched names from old roster/home-time/chargeback rows) --
+ * opt in for forms where picking a departed driver doesn't make sense. */
+export default function DriverPicker({ value, driverId, onChange, activeOnly = false }) {
+  const { options } = useDriverNames({ activeOnly });
   const [customMode, setCustomMode] = useState(false);
 
   useEffect(() => {

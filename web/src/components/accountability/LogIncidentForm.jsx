@@ -92,7 +92,12 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
 
       <form onSubmit={onSubmit}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, marginBottom: 20 }}>
-          <DriverPicker value={driverName} driverId={driverId} onChange={({ name, driverId: id }) => { setDriverName(name); setDriverId(id); }} />
+          <DriverPicker
+            value={driverName}
+            driverId={driverId}
+            onChange={({ name, driverId: id }) => { setDriverName(name); setDriverId(id); }}
+            activeOnly
+          />
 
           <Field label="Event date" required>
             <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
