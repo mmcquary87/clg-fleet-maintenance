@@ -29,10 +29,14 @@ const SAFETY_CATEGORIES = [
   { label: "Personal conveyance misuse", weight: 1.0, match: (n) => startsWithCI(n, "personal conveyance") || startsWithCI(n, "pc misuse") },
 ];
 
+// Missing Driver Certification / Missing Shipping ID / Missing Trailer
+// Name are intentionally excluded from scoring (see
+// 20261014030000_hos_score_exclude_admin_violations.sql) -- a 2026-10-14
+// spot check found this admin/paperwork family saturating HOS to 0 for
+// the fleet's best driver, worst driver, and a brand-new hire alike, so
+// it doesn't discriminate between good and bad driving. They still show
+// up in the panel's "unweighted" count for visibility, just not here.
 const HOS_CATEGORIES = [
-  { label: "Missing driver certification", weight: 1, match: (d) => startsWithCI(d, "missing driver certification") },
-  { label: "Missing shipping ID", weight: 0.25, match: (d) => startsWithCI(d, "missing shipping id") },
-  { label: "Missing trailer name", weight: 0.25, match: (d) => startsWithCI(d, "missing trailer name") },
   { label: "Missed rest break", weight: 0.75, match: (d) => startsWithCI(d, "missed rest break") },
   { label: "Shift driving limit (11-hr)", weight: 2.75, match: (d) => startsWithCI(d, "shift driving limit") },
   { label: "Cycle limit", weight: 2.75, match: (d) => startsWithCI(d, "cycle limit") },
