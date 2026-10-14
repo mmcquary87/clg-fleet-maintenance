@@ -450,9 +450,55 @@ function IntacctExportSettingsPanel() {
   );
 }
 
+// Inline-editable name cell -- local draft state so typing doesn't fire a
+// save per keystroke; a save icon appears only once the draft actually
+// differs from what's on file, same dirty-tracking pattern the unit
+// maintenance schedule editor uses.
+function EditableName({ user, onSave }) {
+  const [draft, setDraft] = useState(user.full_name || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setDraft(user.full_name || ""); }, [user.full_name]);
+
+  const dirty = draft.trim() !== (user.full_name || "") && draft.trim() !== "";
+
+  const save = async () => {
+    setSaving(true);
+    await onSave(user.id, draft.trim());
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <Input
+        value={draft} onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && dirty && !saving) save(); }}
+        style={{ fontSize: 12.5, padding: "5px 8px", fontWeight: 600, color: "var(--clg-navy)" }}
+      />
+      {dirty && (
+        <button
+          type="button" onClick={save} disabled={saving} title="Save name"
+          style={{
+            background: "none", border: "1px solid var(--clg-border-default)", borderRadius: "var(--clg-radius-sm)",
+            cursor: saving ? "not-allowed" : "pointer", padding: "5px 7px", display: "inline-flex", color: "var(--clg-royal)", flexShrink: 0,
+          }}
+        >
+          {saving ? <Loader2 size={12} className="spin" /> : <CheckCircle2 size={12} />}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function UsersPanel() {
-  const { users, loading, error, setCanEditRoster, setCanVoidWorkOrders, setCanDeleteWorkOrders, setCanUseMechanicQueue } = useUsersAdmin();
+  const { users, loading, error, setFullName, setCanEditRoster, setCanVoidWorkOrders, setCanDeleteWorkOrders, setCanUseMechanicQueue } = useUsersAdmin();
   const [toggleError, setToggleError] = useState(null);
+
+  const onSaveName = async (userId, fullName) => {
+    setToggleError(null);
+    const err = await setFullName(userId, fullName);
+    if (err) setToggleError(err);
+  };
 
   const onToggle = async (userId, next) => {
     setToggleError(null);
@@ -515,8 +561,8 @@ function UsersPanel() {
           <tbody>
             {users.map((u, i) => (
               <tr key={u.id} style={{ background: i % 2 ? "var(--clg-surface-subtle)" : "transparent" }}>
-                <td style={{ padding: "8px 10px", fontWeight: 600, color: "var(--clg-navy)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
-                  {u.full_name || "—"}
+                <td style={{ padding: "8px 10px", borderBottom: "1px solid var(--clg-border-subtle)", minWidth: 160 }}>
+                  <EditableName user={u} onSave={onSaveName} />
                 </td>
                 <td style={{ padding: "8px 10px", color: "var(--clg-text-muted)", borderBottom: "1px solid var(--clg-border-subtle)" }}>
                   {u.email || "—"}

@@ -29,6 +29,18 @@ export function useUsersAdmin() {
     load();
   }, [load]);
 
+  const setFullName = async (userId, fullName) => {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, full_name: fullName } : u)));
+    const { data, error: fnError } = await supabase.functions.invoke("update-user-permissions", {
+      body: { userId, fullName },
+    });
+    if (fnError || data?.error) {
+      await load(); // revert to server state on failure
+      return fnError?.message || data?.error;
+    }
+    return null;
+  };
+
   const setCanEditRoster = async (userId, canEditRoster) => {
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, can_edit_roster: canEditRoster } : u)));
     const { data, error: fnError } = await supabase.functions.invoke("update-user-permissions", {
@@ -77,5 +89,5 @@ export function useUsersAdmin() {
     return null;
   };
 
-  return { users, loading, error, reload: load, setCanEditRoster, setCanVoidWorkOrders, setCanDeleteWorkOrders, setCanUseMechanicQueue };
+  return { users, loading, error, reload: load, setFullName, setCanEditRoster, setCanVoidWorkOrders, setCanDeleteWorkOrders, setCanUseMechanicQueue };
 }

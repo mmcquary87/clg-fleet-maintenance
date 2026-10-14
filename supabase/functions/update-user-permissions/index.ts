@@ -40,14 +40,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { userId, canEditRoster, canVoidWorkOrders, canDeleteWorkOrders, canUseMechanicQueue } = await req.json();
+    const { userId, fullName, canEditRoster, canVoidWorkOrders, canDeleteWorkOrders, canUseMechanicQueue } = await req.json();
     if (!userId || typeof userId !== "string") {
       return new Response(JSON.stringify({ error: "userId is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (canEditRoster === undefined && canVoidWorkOrders === undefined && canDeleteWorkOrders === undefined && canUseMechanicQueue === undefined) {
-      return new Response(JSON.stringify({ error: "canEditRoster and/or canVoidWorkOrders and/or canDeleteWorkOrders and/or canUseMechanicQueue (boolean) is required" }), {
+    if (fullName === undefined && canEditRoster === undefined && canVoidWorkOrders === undefined && canDeleteWorkOrders === undefined && canUseMechanicQueue === undefined) {
+      return new Response(JSON.stringify({ error: "fullName and/or canEditRoster and/or canVoidWorkOrders and/or canDeleteWorkOrders and/or canUseMechanicQueue is required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (fullName !== undefined && (typeof fullName !== "string" || !fullName.trim())) {
+      return new Response(JSON.stringify({ error: "fullName must be a non-empty string" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -72,7 +77,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const patch: Record<string, boolean> = {};
+    const patch: Record<string, boolean | string> = {};
+    if (fullName !== undefined) patch.full_name = fullName.trim();
     if (canEditRoster !== undefined) patch.can_edit_roster = canEditRoster;
     if (canVoidWorkOrders !== undefined) patch.can_void_work_orders = canVoidWorkOrders;
     if (canDeleteWorkOrders !== undefined) patch.can_delete_work_orders = canDeleteWorkOrders;
