@@ -10,7 +10,7 @@ export default function Table({ columns = [], rows = [], zebra = true, style, ..
               fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
               color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
             }}>
-              {c.label || c}
+              {c.label ?? c}
             </th>
           ))}
         </tr>
