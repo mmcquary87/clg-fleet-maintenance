@@ -5,6 +5,7 @@ import { useDriverSafety } from "../../hooks/useDriverSafety";
 import { useFleetScoreHistory } from "../../hooks/useFleetScoreHistory";
 import IncidentMap from "./IncidentMap";
 import Dvir from "./Dvir";
+import DriverPointBreakdown from "./DriverPointBreakdown";
 
 // Same hues as StatusPill's TONES (not a new categorical palette) -- bars
 // need the saturated text color, not the pale pill background, to read at
@@ -127,7 +128,7 @@ function scoreCell(row) {
 
 const COLUMNS = [
   { key: "rank", label: "Rank", align: "right" },
-  { key: "driver_name", label: "Driver" },
+  { key: "driverCell", label: "Driver" },
   { key: "scoreCell", label: "Score", align: "right" },
   { key: "speeding_score", label: "Speeding", align: "right" },
   { key: "safety_score", label: "Safety", align: "right" },
@@ -141,7 +142,7 @@ const COLUMNS = [
 // overall_score; milesCell/eventsPer1k sort by their un-formatted number).
 const SORT_ACCESSORS = {
   rank: (r) => r.overall_score,
-  driver_name: (r) => r.driver_name?.toLowerCase(),
+  driverCell: (r) => r.driver_name?.toLowerCase(),
   scoreCell: (r) => r.overall_score,
   speeding_score: (r) => r.speeding_score,
   safety_score: (r) => r.safety_score,
@@ -174,6 +175,7 @@ function RankingsTable({ ranked }) {
   const [showAll, setShowAll] = useState(false);
   const [sortBy, setSortBy] = useState("scoreCell");
   const [sortDir, setSortDir] = useState("asc"); // lowest first, matches the old fixed default
+  const [breakdownRow, setBreakdownRow] = useState(null);
 
   const onSort = (key) => {
     if (key === sortBy) {
@@ -191,6 +193,14 @@ function RankingsTable({ ranked }) {
     const eventsPer1k = row.miles_driven > 0 ? combinedEvents / (row.miles_driven / 1000) : null;
     return {
       ...row,
+      driverCell: (
+        <button
+          onClick={() => setBreakdownRow(row)}
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, font: "inherit", color: "var(--clg-link)", fontWeight: 600, textAlign: "left" }}
+        >
+          {row.driver_name}
+        </button>
+      ),
       scoreCell: scoreCell(row),
       speeding_score: round1(row.speeding_score),
       safety_score: round1(row.safety_score),
@@ -205,7 +215,7 @@ function RankingsTable({ ranked }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", flexWrap: "wrap", gap: 8 }}>
-        <Eyebrow>Ranked · lowest score first</Eyebrow>
+        <Eyebrow>Ranked · lowest score first · click a driver for their point breakdown</Eyebrow>
         <div style={{ display: "flex", gap: 6 }}>
           {BAND_FILTERS.map((b) => (
             <Chip key={b} active={bandFilter === b} onClick={() => setBandFilter(b)}>

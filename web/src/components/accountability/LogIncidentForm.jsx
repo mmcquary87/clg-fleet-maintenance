@@ -7,6 +7,7 @@ import { useAccountabilityInfractions } from "../../hooks/useAccountabilityInfra
 
 const COACHING_STAGES = ["First Infraction", "Second Infraction", "Third Infraction", "Driver Being Fined", "Final Warning", "Termination"];
 const APPEAL_STATUSES = ["Not Submitted", "Pending", "Approved", "Denied"];
+const TRAINING_PLATFORMS = ["CarriersEdge", "Samsara", "TenStreet"];
 
 function textareaStyle() {
   return {
@@ -30,6 +31,7 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
   const [followUpDate, setFollowUpDate] = useState("");
   const [trainingAssigned, setTrainingAssigned] = useState(false);
   const [trainingDueDate, setTrainingDueDate] = useState("");
+  const [trainingPlatform, setTrainingPlatform] = useState("");
   const [appealStatus, setAppealStatus] = useState("Not Submitted");
   const [appealNotes, setAppealNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -65,6 +67,7 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
       follow_up_date: followUpDate || null,
       training_assigned: trainingAssigned,
       training_due_date: trainingAssigned ? (trainingDueDate || null) : null,
+      training_platform: trainingAssigned ? (trainingPlatform || null) : null,
       appeal_status: appealStatus,
       appeal_notes: appealNotes.trim() || null,
     });
@@ -138,6 +141,16 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
           {trainingAssigned && (
             <Field label="Training due date">
               <Input type="date" value={trainingDueDate} onChange={(e) => setTrainingDueDate(e.target.value)} />
+            </Field>
+          )}
+          {trainingAssigned && (
+            <Field label="Training platform">
+              <Select
+                value={trainingPlatform}
+                onChange={(e) => setTrainingPlatform(e.target.value)}
+                placeholder="Choose a platform"
+                options={TRAINING_PLATFORMS}
+              />
             </Field>
           )}
 
