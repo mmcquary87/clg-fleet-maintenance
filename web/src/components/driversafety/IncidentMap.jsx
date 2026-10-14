@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { Loader2 } from "lucide-react";
-import { Eyebrow } from "../../ds";
+import { Eyebrow, Select } from "../../ds";
 import { useIncidentMapEvents } from "../../hooks/useIncidentMapEvents";
 
 // Matches StatusPill's TONES hues (not a new categorical palette), as
@@ -38,11 +38,18 @@ function Chip({ active, onClick, children }) {
 export default function IncidentMap() {
   const { events, loading, error } = useIncidentMapEvents();
   const [filter, setFilter] = useState("all");
+  const [driverFilter, setDriverFilter] = useState("all");
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const layerGroupRef = useRef(null);
 
+  const driverOptions = useMemo(
+    () => Array.from(new Set(events.map((e) => e.driverName))).sort((a, b) => a.localeCompare(b)),
+    [events],
+  );
+
   const filtered = events.filter((e) => {
+    if (driverFilter !== "all" && e.driverName !== driverFilter) return false;
     if (filter === "all") return true;
     if (filter === "high") return e.tier === "high";
     return e.type === filter;
@@ -104,8 +111,15 @@ export default function IncidentMap() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, flexWrap: "wrap", gap: 8 }}>
-        <Eyebrow>{events.length} event{events.length === 1 ? "" : "s"} located · trailing 90 days</Eyebrow>
-        <div style={{ display: "flex", gap: 6 }}>
+        <Eyebrow>{filtered.length} event{filtered.length === 1 ? "" : "s"} located · trailing 90 days</Eyebrow>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ width: 180 }}>
+            <Select
+              value={driverFilter}
+              onChange={(e) => setDriverFilter(e.target.value)}
+              options={[{ value: "all", label: "All drivers" }, ...driverOptions.map((name) => ({ value: name, label: name }))]}
+            />
+          </div>
           {TYPE_FILTERS.map((f) => (
             <Chip key={f.id} active={filter === f.id} onClick={() => setFilter(f.id)}>{f.label}</Chip>
           ))}
@@ -137,9 +151,9 @@ export default function IncidentMap() {
           <Loader2 size={14} className="spin" /> Loading events…
         </div>
       )}
-      {!loading && events.length === 0 && !error && (
+      {!loading && filtered.length === 0 && !error && (
         <div style={{ padding: "16px 0", color: "var(--clg-text-muted)", fontSize: 13 }}>
-          No located events in the last 90 days.
+          {events.length === 0 ? "No located events in the last 90 days." : "No events match this filter."}
         </div>
       )}
     </div>
