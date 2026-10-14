@@ -136,18 +136,57 @@ const COLUMNS = [
   { key: "eventsPer1k", label: "Events/1K mi", align: "right" },
 ];
 
+// Cell keys hold formatted/JSX display values -- sorting needs the
+// underlying raw numeric field instead (rank and scoreCell both rank by
+// overall_score; milesCell/eventsPer1k sort by their un-formatted number).
+const SORT_ACCESSORS = {
+  rank: (r) => r.overall_score,
+  driver_name: (r) => r.driver_name?.toLowerCase(),
+  scoreCell: (r) => r.overall_score,
+  speeding_score: (r) => r.speeding_score,
+  safety_score: (r) => r.safety_score,
+  hos_score: (r) => r.hos_score,
+  milesCell: (r) => r.miles_driven,
+  eventsPer1k: (r) => {
+    const combined = (r.speeding_event_count || 0) + (r.safety_event_count || 0);
+    return r.miles_driven > 0 ? combined / (r.miles_driven / 1000) : null;
+  },
+};
+
+function sortRows(rows, sortBy, sortDir) {
+  const accessor = SORT_ACCESSORS[sortBy] || SORT_ACCESSORS.scoreCell;
+  return rows.slice().sort((a, b) => {
+    const va = accessor(a);
+    const vb = accessor(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1; // nulls/blanks sort last regardless of direction
+    if (vb == null) return -1;
+    if (typeof va === "string") {
+      const cmp = va.localeCompare(vb);
+      return sortDir === "asc" ? cmp : -cmp;
+    }
+    return sortDir === "asc" ? va - vb : vb - va;
+  });
+}
+
 function RankingsTable({ ranked }) {
   const [bandFilter, setBandFilter] = useState("all");
   const [showAll, setShowAll] = useState(false);
+  const [sortBy, setSortBy] = useState("scoreCell");
+  const [sortDir, setSortDir] = useState("asc"); // lowest first, matches the old fixed default
 
-  const filtered = ranked
-    .filter((d) => bandFilter === "all" || d.score_band === bandFilter)
-    .slice()
-    .sort((a, b) => a.overall_score - b.overall_score); // lowest first
+  const onSort = (key) => {
+    if (key === sortBy) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortDir("asc");
+    }
+  };
 
-  const visible = showAll ? filtered : filtered.slice(0, TABLE_PAGE_SIZE);
+  const filtered = ranked.filter((d) => bandFilter === "all" || d.score_band === bandFilter);
 
-  const rows = visible.map((row) => {
+  const rows = sortRows(filtered, sortBy, sortDir).map((row) => {
     const combinedEvents = (row.speeding_event_count || 0) + (row.safety_event_count || 0);
     const eventsPer1k = row.miles_driven > 0 ? combinedEvents / (row.miles_driven / 1000) : null;
     return {
@@ -161,6 +200,8 @@ function RankingsTable({ ranked }) {
     };
   });
 
+  const visible = showAll ? rows : rows.slice(0, TABLE_PAGE_SIZE);
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", flexWrap: "wrap", gap: 8 }}>
@@ -173,7 +214,7 @@ function RankingsTable({ ranked }) {
           ))}
         </div>
       </div>
-      <Table columns={COLUMNS} rows={rows} />
+      <Table columns={COLUMNS} rows={visible} sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
       <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 4px", fontSize: 12, color: "var(--clg-text-muted)" }}>
         <span>Showing {visible.length} of {filtered.length} scored drivers · trailing 90 days</span>
         {filtered.length > TABLE_PAGE_SIZE && (

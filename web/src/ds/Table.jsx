@@ -1,18 +1,32 @@
-/** Dense operational table: uppercase head, hairline rows, tabular numerals. */
-export default function Table({ columns = [], rows = [], zebra = true, style, ...rest }) {
+/** Dense operational table: uppercase head, hairline rows, tabular numerals.
+ * Pass sortBy/sortDir + onSort(key) to make columns with a `.key` clickable
+ * for sorting (columns without a key, or with sortable: false, stay static).
+ */
+export default function Table({ columns = [], rows = [], zebra = true, style, sortBy, sortDir, onSort, ...rest }) {
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--clg-size-small)", ...style }} {...rest}>
       <thead>
         <tr>
-          {columns.map((c) => (
-            <th key={c.key || c} style={{
-              textAlign: c.align || "left", padding: "10px 12px", fontFamily: "var(--clg-font-heading)",
-              fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
-              color: "var(--clg-text-brand)", borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
-            }}>
-              {c.label ?? c}
-            </th>
-          ))}
+          {columns.map((c) => {
+            const sortable = typeof onSort === "function" && !!c.key && c.sortable !== false;
+            const active = sortable && sortBy === c.key;
+            return (
+              <th
+                key={c.key || c}
+                onClick={sortable ? () => onSort(c.key) : undefined}
+                style={{
+                  textAlign: c.align || "left", padding: "10px 12px", fontFamily: "var(--clg-font-heading)",
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+                  color: "var(--clg-text-brand)",
+                  opacity: sortable && !active ? 0.75 : 1,
+                  borderBottom: "2px solid var(--clg-border-default)", whiteSpace: "nowrap",
+                  cursor: sortable ? "pointer" : undefined, userSelect: sortable ? "none" : undefined,
+                }}
+              >
+                {c.label ?? c}{active ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
