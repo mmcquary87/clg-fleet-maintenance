@@ -236,6 +236,7 @@ function RankingsTable({ ranked }) {
           </button>
         )}
       </div>
+      {breakdownRow && <DriverPointBreakdown row={breakdownRow} onClose={() => setBreakdownRow(null)} />}
     </div>
   );
 }
