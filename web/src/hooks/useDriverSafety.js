@@ -16,7 +16,15 @@ function isInGrace(row) {
   return row.overall_score === null && row.miles_driven > 0;
 }
 
-export function useDriverSafety() {
+// range: { start: "YYYY-MM-DD", end: "YYYY-MM-DD" } | null. null (the
+// default) uses the official trailing-90-day driver_safety_scorecard view
+// -- the same one Accountability's fine eligibility and the daily
+// fleet_score_snapshots are keyed to. Any other range calls the
+// driver_safety_scorecard_range(start, end) function instead, which runs
+// the identical formula over that window (see its migration's header for
+// the miles-driven caveat: event counts are exact for the chosen range,
+// but miles_driven is always the trailing-90-day Samsara snapshot).
+export function useDriverSafety(range = null) {
   const [scorecards, setScorecards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -25,10 +33,14 @@ export function useDriverSafety() {
     setLoading(true);
     setError(null);
 
-    const { data, error: err } = await supabase
-      .from("driver_safety_scorecard")
-      .select("*")
-      .order("overall_score", { ascending: false, nullsFirst: false });
+    const query = range
+      ? supabase.rpc("driver_safety_scorecard_range", {
+          window_start: range.start ? `${range.start}T00:00:00` : "-infinity",
+          window_end: range.end ? `${range.end}T23:59:59.999` : new Date().toISOString(),
+        })
+      : supabase.from("driver_safety_scorecard").select("*");
+
+    const { data, error: err } = await query.order("overall_score", { ascending: false, nullsFirst: false });
 
     if (err) {
       setError(err.message);
@@ -39,7 +51,7 @@ export function useDriverSafety() {
 
     setScorecards(data ?? []);
     setLoading(false);
-  }, []);
+  }, [range?.start, range?.end]);
 
   useEffect(() => {
     load();

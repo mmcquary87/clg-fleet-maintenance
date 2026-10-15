@@ -60,7 +60,11 @@ function bucketize(categories, items, nameOf) {
   return { rows: counts.filter((r) => r.count > 0), otherCount };
 }
 
-export function useDriverPointBreakdown(driverId) {
+// range: { start: "YYYY-MM-DD", end: "YYYY-MM-DD" } | null. null (default)
+// matches the official trailing-90-day scorecard; any other range mirrors
+// whatever window the Rankings tab's date-range tool has selected, so a
+// driver's breakdown always lines up with the score it's explaining.
+export function useDriverPointBreakdown(driverId, range = null) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -69,18 +73,21 @@ export function useDriverPointBreakdown(driverId) {
     if (!driverId) return;
     setLoading(true);
     setError(null);
-    const windowStart = new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
+    const windowStart = range?.start
+      ? `${range.start}T00:00:00`
+      : new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
+    const windowEnd = range?.end ? `${range.end}T23:59:59.999` : new Date().toISOString();
 
     const [speedingRes, safetyRes, hosRes] = await Promise.all([
       supabase.from("driver_speeding_intervals")
         .select("severity_level, max_speed_kmh, start_time")
-        .eq("driver_id", driverId).gte("start_time", windowStart),
+        .eq("driver_id", driverId).gte("start_time", windowStart).lte("start_time", windowEnd),
       supabase.from("driver_safety_events")
         .select("behavior_labels, coaching_state, event_time")
-        .eq("driver_id", driverId).gte("event_time", windowStart),
+        .eq("driver_id", driverId).gte("event_time", windowStart).lte("event_time", windowEnd),
       supabase.from("driver_hos_violations")
         .select("description, violation_start_time")
-        .eq("driver_id", driverId).gte("violation_start_time", windowStart),
+        .eq("driver_id", driverId).gte("violation_start_time", windowStart).lte("violation_start_time", windowEnd),
     ]);
 
     const err = speedingRes.error || safetyRes.error || hosRes.error;
@@ -131,7 +138,7 @@ export function useDriverPointBreakdown(driverId) {
       },
     });
     setLoading(false);
-  }, [driverId]);
+  }, [driverId, range?.start, range?.end]);
 
   useEffect(() => { load(); }, [load]);
 

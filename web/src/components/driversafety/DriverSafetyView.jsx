@@ -6,6 +6,7 @@ import { useFleetScoreHistory } from "../../hooks/useFleetScoreHistory";
 import IncidentMap from "./IncidentMap";
 import Dvir from "./Dvir";
 import DriverPointBreakdown from "./DriverPointBreakdown";
+import DateRangeFilter from "../DateRangeFilter";
 
 // Same hues as StatusPill's TONES (not a new categorical palette) -- bars
 // need the saturated text color, not the pale pill background, to read at
@@ -170,7 +171,7 @@ function sortRows(rows, sortBy, sortDir) {
   });
 }
 
-function RankingsTable({ ranked }) {
+function RankingsTable({ ranked, range }) {
   const [bandFilter, setBandFilter] = useState("all");
   const [showAll, setShowAll] = useState(false);
   const [sortBy, setSortBy] = useState("scoreCell");
@@ -236,7 +237,7 @@ function RankingsTable({ ranked }) {
           </button>
         )}
       </div>
-      {breakdownRow && <DriverPointBreakdown row={breakdownRow} onClose={() => setBreakdownRow(null)} />}
+      {breakdownRow && <DriverPointBreakdown row={breakdownRow} range={range} onClose={() => setBreakdownRow(null)} />}
     </div>
   );
 }
@@ -379,7 +380,8 @@ const TABS = [
 ];
 
 export default function DriverSafetyView() {
-  const { ranked, graceDrivers, totals, loading, error } = useDriverSafety();
+  const [range, setRange] = useState(null);
+  const { ranked, graceDrivers, totals, loading, error } = useDriverSafety(range);
   const { snapshots, changeSinceFirst, loading: snapshotsLoading } = useFleetScoreHistory();
   const [tab, setTab] = useState("rankings");
 
@@ -412,6 +414,23 @@ export default function DriverSafetyView() {
       {ledeSentence(totals) && (
         <div style={{ fontSize: 13, color: "var(--clg-text-muted)", marginTop: 4, maxWidth: 640 }}>{ledeSentence(totals)}</div>
       )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
+        <DateRangeFilter onChange={setRange} disableAllTime />
+        {range && (
+          <button
+            onClick={() => setRange(null)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-link)", fontSize: 12, fontWeight: 600 }}
+          >
+            Reset to default (trailing 90 days)
+          </button>
+        )}
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
+        {range
+          ? "Showing a custom window -- speeding/safety/HOS counts are exact for this range, but miles driven (and events-per-1k-miles) still reflect Samsara's trailing-90-day snapshot, not this specific range."
+          : "Showing the official trailing-90-day window -- same data Accountability's fine eligibility uses."}
+      </div>
 
       {error && (
         <div style={{ padding: 16, background: "#FBEAEB", color: "var(--clg-ruby)", fontSize: 13, marginTop: 16 }}>{error}</div>
@@ -461,7 +480,7 @@ export default function DriverSafetyView() {
         {tab === "rankings" && (
           <>
             <RankingsBarChart ranked={ranked} fleetAverage={totals.fleetAverage} />
-            <RankingsTable ranked={ranked} />
+            <RankingsTable ranked={ranked} range={range} />
           </>
         )}
         {tab === "map" && <IncidentMap />}

@@ -35,8 +35,11 @@ function Section({ title, subtitle, rows, emptyNote, footnote }) {
 
 // row: one record from driver_safety_scorecard (driver_id, driver_name,
 // speeding_score, safety_score, hos_score, overall_score, ...)
-export default function DriverPointBreakdown({ row, onClose }) {
-  const { data, loading, error } = useDriverPointBreakdown(row.driver_id);
+// range: whatever window the Rankings tab's date-range tool currently has
+// selected (null = official trailing 90 days), so the breakdown matches
+// the score it's explaining.
+export default function DriverPointBreakdown({ row, range = null, onClose }) {
+  const { data, loading, error } = useDriverPointBreakdown(row.driver_id, range);
 
   return (
     <div
@@ -59,7 +62,7 @@ export default function DriverPointBreakdown({ row, onClose }) {
               {row.driver_name}
             </div>
             <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
-              Overall {row.overall_score != null ? round1(row.overall_score) : "—"} · trailing 90 days
+              Overall {row.overall_score != null ? round1(row.overall_score) : "—"} · {range ? `${range.start ?? "earliest"} to ${range.end ?? "today"}` : "trailing 90 days"}
             </div>
           </div>
           <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-text-muted)" }}>
