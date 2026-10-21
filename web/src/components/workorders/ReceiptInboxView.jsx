@@ -124,6 +124,11 @@ function ReceiptCard({ receipt, onCreate, onDismiss, signedUrl }) {
 export default function ReceiptInboxView() {
   const { receipts, loading, error, dismiss, markCreated, signedUrl } = useInboundReceipts();
   const [creatingFor, setCreatingFor] = useState(null);
+  const [unitQuery, setUnitQuery] = useState("");
+
+  const filteredReceipts = unitQuery.trim()
+    ? receipts.filter((r) => (r.extracted?.unitNumberGuess || "").toLowerCase().includes(unitQuery.trim().toLowerCase()))
+    : receipts;
 
   const openCreate = (receipt) => setCreatingFor(receipt);
 
@@ -162,12 +167,18 @@ export default function ReceiptInboxView() {
       <div style={{ marginBottom: 20 }}>
         <Eyebrow tone="brand">Receipt Inbox</Eyebrow>
         <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, marginTop: 4 }}>
-          {receipts.length} receipt{receipts.length === 1 ? "" : "s"} to review
+          {filteredReceipts.length} receipt{filteredReceipts.length === 1 ? "" : "s"} to review
         </h2>
         <p style={{ fontSize: 13.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
           Roadside and vendor receipts forwarded by email land here first — nothing becomes a real work order until
           you review and save it.
         </p>
+        <Input
+          value={unitQuery}
+          onChange={(e) => setUnitQuery(e.target.value)}
+          placeholder="Search by unit number"
+          style={{ marginTop: 12, maxWidth: 280 }}
+        />
       </div>
 
       {creatingFor && (
@@ -185,13 +196,15 @@ export default function ReceiptInboxView() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "40px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
           <Loader2 size={16} className="spin" /> Loading…
         </div>
-      ) : receipts.length === 0 ? (
+      ) : filteredReceipts.length === 0 ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "48px 20px", textAlign: "center", color: "var(--clg-text-muted)", background: "#fff", borderRadius: "var(--clg-radius-md)", boxShadow: "var(--clg-shadow-resting)" }}>
           <Mail size={24} />
-          <div style={{ fontSize: 13 }}>Nothing waiting for review.</div>
+          <div style={{ fontSize: 13 }}>
+            {receipts.length === 0 ? "Nothing waiting for review." : "No receipts match that unit number."}
+          </div>
         </div>
       ) : (
-        receipts.map((r) => (
+        filteredReceipts.map((r) => (
           <ReceiptCard key={r.id} receipt={r} onCreate={openCreate} onDismiss={dismiss} signedUrl={signedUrl} />
         ))
       )}
