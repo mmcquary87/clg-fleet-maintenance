@@ -9,6 +9,7 @@ import { groupSumByPartCategory } from "../lib/categorySplit";
 import { useMilesDriven } from "../hooks/useMilesDriven";
 import EmptyState from "./EmptyState";
 import AssetLifecycleCard from "./units/AssetLifecycleCard";
+import WorkOrderDetailModal from "./workorders/WorkOrderDetailModal";
 
 // Below this, a unit's odometer/GPS delta for the period is too thin to
 // trust as a cost/mile ratio -- a truck that sat in the shop most of the
@@ -93,11 +94,12 @@ function SectionCard({ children, style }) {
   );
 }
 
-export default function UnitView({ records, range, canViewAssetLifecycle }) {
+export default function UnitView({ records, range, canViewAssetLifecycle, onChanged }) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [ownershipSort, setOwnershipSort] = useState("highest");
   const [selected, setSelected] = useState(null);
+  const [openWorkOrderId, setOpenWorkOrderId] = useState(null);
   const {
     perUnit: milesPerUnit, matchedButNoDataCount, matchedButNoDataSample,
     unmatchedTruckCount, unmatchedTruckSample,
@@ -412,7 +414,15 @@ export default function UnitView({ records, range, canViewAssetLifecycle }) {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 20 }}>
             {selectedRecords.map((r) => (
-              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: "1px solid var(--clg-border-subtle)", borderRadius: "var(--clg-radius-sm)" }}>
+              <button
+                key={r.id}
+                onClick={() => setOpenWorkOrderId(r.id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", width: "100%",
+                  border: "1px solid var(--clg-border-subtle)", borderRadius: "var(--clg-radius-sm)",
+                  background: "none", cursor: "pointer", textAlign: "left", font: "inherit",
+                }}
+              >
                 <span style={{ flexShrink: 0, background: CAT_COLORS[r.category] || "#888", color: "#fff", fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: "var(--clg-radius-pill)" }}>
                   {r.category}
                 </span>
@@ -423,13 +433,21 @@ export default function UnitView({ records, range, canViewAssetLifecycle }) {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--clg-navy)", fontVariantNumeric: "tabular-nums" }}>
                   {fmtMoney2(r.cost)}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </SectionCard>
       )}
 
       {selectedUnit && canViewAssetLifecycle && <AssetLifecycleCard unitNumber={selectedUnit.unit} />}
+
+      {openWorkOrderId && (
+        <WorkOrderDetailModal
+          workOrderId={openWorkOrderId}
+          onClose={() => setOpenWorkOrderId(null)}
+          onChanged={onChanged}
+        />
+      )}
     </>
   );
 }
