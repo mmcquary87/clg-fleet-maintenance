@@ -3,6 +3,7 @@ import { ChevronDown, Loader2, Download, Thermometer, MapPin } from "lucide-reac
 import { Card, Button, StatusPill, Eyebrow, Select, Input } from "../../ds";
 import { useAlvysCheckCalls } from "../../hooks/useAlvysCheckCalls";
 import { supabase } from "../../lib/supabaseClient";
+import { logWorkOrderActivity } from "../../lib/workOrderActivityLog";
 import { CATEGORIES } from "../../lib/categories";
 import {
   groupByTrip, sortByStaleness, boardSummary, isStale, stalenessHours,
@@ -44,7 +45,7 @@ function RaiseWorkOrderInline({ call, unitId, onDone }) {
   const submit = async () => {
     setSubmitting(true);
     setError(null);
-    const { error: err } = await supabase.from("work_orders").insert({
+    const { data: inserted, error: err } = await supabase.from("work_orders").insert({
       unit_id: unitId,
       category,
       complaint: description.trim() || call.description || "Reported on a check call",
@@ -54,9 +55,12 @@ function RaiseWorkOrderInline({ call, unitId, onDone }) {
       source: "manual",
       date_opened: new Date().toISOString().slice(0, 10),
       alvys_check_call_id: call.id,
-    });
+    }).select("id, wo_number").single();
     setSubmitting(false);
     if (err) { setError(err.message); return; }
+    if (inserted) {
+      logWorkOrderActivity({ workOrderId: inserted.id, woNumber: inserted.wo_number, action: "created", detail: "Raised from a check call note" });
+    }
     setDone(true);
     onDone?.();
   };

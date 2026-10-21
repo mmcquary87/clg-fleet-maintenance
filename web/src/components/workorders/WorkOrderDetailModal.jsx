@@ -7,6 +7,8 @@ import { updateUnitMaintenanceFields } from "../../hooks/useUnits";
 import { useAuth } from "../../hooks/useAuth";
 import { useProfile } from "../../hooks/useProfile";
 import { supabase } from "../../lib/supabaseClient";
+import { logWorkOrderActivity } from "../../lib/workOrderActivityLog";
+import { useWorkOrderActivityLog } from "../../hooks/useWorkOrderActivityLog";
 import { buildMailto } from "../../lib/mailto";
 import { uploadReceipt, fileToBase64 } from "../../lib/invoiceFiles";
 import { describeFunctionError } from "../../lib/functionError";
@@ -78,8 +80,90 @@ function FormField({ label, children }) {
   );
 }
 
+const ACTION_LABEL = {
+  created: "Created",
+  status_changed: "Status changed",
+  approved: "Approved",
+  voided: "Voided",
+  unvoided: "Un-voided",
+  deleted: "Deleted",
+  marked_paid: "Marked paid",
+  payment_reopened: "Payment reopened",
+  chargeback_deducted: "Chargeback marked deducted",
+  chargeback_undeducted: "Chargeback deduction reopened",
+  edited: "Details edited",
+  closed: "Closed",
+  invoice_added: "Invoice added",
+};
+
+function ActivityLogPanel({ woNumber }) {
+  const [open, setOpen] = useState(false);
+  const { entries, loading } = useWorkOrderActivityLog(open ? woNumber : null);
+
+  return (
+    <div style={{ borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 12 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11.5, color: "var(--clg-royal)", fontWeight: 600 }}
+      >
+        {open ? "Hide activity log" : "Show activity log"}
+      </button>
+      {open && (
+        loading ? (
+          <div style={{ fontSize: 12, color: "var(--clg-text-muted)", marginTop: 8 }}>Loading…</div>
+        ) : entries.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--clg-text-muted)", marginTop: 8 }}>No activity logged yet.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            {entries.map((e) => (
+              <div key={e.id} style={{ fontSize: 12, color: "var(--clg-text-body)" }}>
+                <span style={{ fontWeight: 600 }}>{ACTION_LABEL[e.action] || e.action}</span>
+                {" by "}{e.actor}{" · "}{new Date(e.created_at).toLocaleString()}
+                {e.detail && <div style={{ color: "var(--clg-text-muted)", marginTop: 1 }}>{e.detail}</div>}
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 function emptyCloseLineItem(overrides) {
   return { id: uid(), category: CATEGORIES[0], description: "", cost: "", inspectionType: "", ...overrides };
+}
+
+// Plain-language diff for the activity log -- only the fields that
+// actually changed, as "Label: old → new" (blank shown as "—").
+const DETAILS_DIFF_FIELDS = [
+  ["Category", (o) => o.category, (f) => f.category],
+  ["Severity", (o) => o.severity, (f) => f.severity],
+  ["System/component", (o) => o.system_component, (f) => f.systemComponent],
+  ["Complaint", (o) => o.complaint, (f) => f.complaint],
+  ["Assigned bay", (o) => o.assigned_bay, (f) => f.assignedBay],
+  ["Assigned tech", (o) => o.assigned_tech, (f) => f.assignedTech],
+  ["Promised back", (o) => o.promised_back?.slice(0, 10), (f) => f.promisedBack],
+  ["PO #", (o) => o.po_number, (f) => f.poNumber],
+  ["Waiting on parts", (o) => !!o.waiting_on_parts, (f) => f.waitingOnParts],
+  ["Parts ETA", (o) => o.parts_eta?.slice(0, 10), (f) => f.partsEta],
+  ["Chargeback", (o) => !!o.is_chargeback, (f) => f.isChargeback],
+  ["Chargeback driver", (o) => o.chargeback_driver_name, (f) => f.chargebackDriver],
+];
+
+function diffDetails(order, form, vendors) {
+  const diffs = [];
+  for (const [label, fromOrder, fromForm] of DETAILS_DIFF_FIELDS) {
+    const before = fromOrder(order) ?? "";
+    const after = fromForm(form) ?? "";
+    if (String(before) !== String(after)) diffs.push(`${label}: ${before === "" ? "—" : before} → ${after === "" ? "—" : after}`);
+  }
+  const beforeVendorId = order.vendor?.id ?? "";
+  const afterVendorId = form.vendorId ?? "";
+  if (beforeVendorId !== afterVendorId) {
+    const afterVendor = vendors.find((v) => v.id === afterVendorId);
+    diffs.push(`Vendor: ${order.vendor?.name || "—"} → ${afterVendor?.name || "—"}`);
+  }
+  return diffs.join("; ") || null;
 }
 
 function emptyDetailsForm() {
@@ -174,6 +258,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     try {
       const { error: updateErr } = await supabase.from("work_orders").update({ status: newStatus }).eq("id", order.id);
       if (updateErr) throw updateErr;
+      logWorkOrderActivity({ workOrderId: order.id, woNumber: order.wo_number, action: "status_changed", detail: `${order.status} → ${newStatus}` });
       await reload();
       onChanged?.();
     } catch (err) {
@@ -197,6 +282,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         approved_at: new Date().toISOString(),
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
+      logWorkOrderActivity({ workOrderId: order.id, woNumber: order.wo_number, action: "approved" });
       await reload();
       onChanged?.();
     } catch (err) {
@@ -227,6 +313,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         voided_reason: voidReason.trim() || null,
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
+      logWorkOrderActivity({ workOrderId: order.id, woNumber: order.wo_number, action: "voided", detail: voidReason.trim() || null });
       setVoiding(false);
       await reload();
       onChanged?.();
@@ -245,6 +332,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         voided: false, voided_at: null, voided_reason: null,
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
+      logWorkOrderActivity({ workOrderId: order.id, woNumber: order.wo_number, action: "unvoided" });
       await reload();
       onChanged?.();
     } catch (err) {
@@ -270,6 +358,14 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setDeleteBusy(true);
     setDeleteError(null);
     try {
+      // Logged before the delete, not after -- once the row is gone there's
+      // nothing left to log against (work_order_id goes null, but the
+      // wo_number/detail captured here is what makes the entry still mean
+      // something).
+      await logWorkOrderActivity({
+        workOrderId: order.id, woNumber: order.wo_number, action: "deleted",
+        detail: `Unit ${order.unit?.number || "—"} · ${order.category} · ${money(order.cost)}`,
+      });
       const { error: deleteErr } = await supabase.from("work_orders").delete().eq("id", order.id);
       if (deleteErr) throw deleteErr;
       onChanged?.();
@@ -304,6 +400,10 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         paid_at: paymentForm.paidAt,
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
+      logWorkOrderActivity({
+        workOrderId: order.id, woNumber: order.wo_number, action: "marked_paid",
+        detail: `${paymentForm.method}${paymentForm.reference.trim() ? ` · Ref ${paymentForm.reference.trim()}` : ""}`,
+      });
       setEditingPayment(false);
       await reload();
       onChanged?.();
@@ -322,6 +422,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         payment_status: "unpaid", payment_method: null, payment_reference: null, paid_at: null,
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
+      logWorkOrderActivity({ workOrderId: order.id, woNumber: order.wo_number, action: "payment_reopened" });
       await reload();
       onChanged?.();
     } catch (err) {
@@ -339,10 +440,12 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setPaymentBusy(true);
     setPaymentError(null);
     try {
+      const wasDeducted = !!order.chargeback_deducted_at;
       const { error: updateErr } = await supabase.from("work_orders").update({
-        chargeback_deducted_at: order.chargeback_deducted_at ? null : new Date().toISOString(),
+        chargeback_deducted_at: wasDeducted ? null : new Date().toISOString(),
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
+      logWorkOrderActivity({ workOrderId: order.id, woNumber: order.wo_number, action: wasDeducted ? "chargeback_undeducted" : "chargeback_deducted" });
       await reload();
       onChanged?.();
     } catch (err) {
@@ -420,6 +523,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
 
+      logWorkOrderActivity({ workOrderId: order.id, woNumber: order.wo_number, action: "edited", detail: diffDetails(order, detailsForm, vendors) });
       setEditingDetails(false);
       await reload();
       onChanged?.();
@@ -488,6 +592,11 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
 
+      logWorkOrderActivity({
+        workOrderId: order.id, woNumber: order.wo_number, action: "closed",
+        detail: `${money(Number(first.cost) || 0)}${extra.length > 0 ? ` · ${extra.length} additional invoice line item work order(s) created` : ""}`,
+      });
+
       let extraWorkOrderIds = [];
       if (extra.length > 0 && order.unit?.id) {
         const rows = extra.map((li) => ({
@@ -505,9 +614,15 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
           receipt_path: receiptPath,
           work_order_group_id: order.work_order_group_id,
         }));
-        const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id");
+        const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id, wo_number");
         if (insertErr) throw insertErr;
         extraWorkOrderIds = (inserted ?? []).map((r) => r.id);
+        for (const row of inserted ?? []) {
+          logWorkOrderActivity({
+            workOrderId: row.id, woNumber: row.wo_number, action: "created",
+            detail: `Additional invoice line item from closing ${order.wo_number}`,
+          });
+        }
       }
 
       // A file uploaded at close time also becomes a real
@@ -634,7 +749,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         receipt_path: receiptPath,
         work_order_group_id: order.work_order_group_id,
       }));
-      const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id");
+      const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id, wo_number");
       if (insertErr) throw insertErr;
 
       if (receiptPath && inserted?.length > 0) {
@@ -644,6 +759,17 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
         }));
         const { error: docErr } = await supabase.from("work_order_documents").insert(docRows);
         if (docErr) throw docErr;
+      }
+
+      logWorkOrderActivity({
+        workOrderId: order.id, woNumber: order.wo_number, action: "invoice_added",
+        detail: `${rows.length} line item(s) · ${money(addInvoiceTotal)}`,
+      });
+      for (const row of inserted ?? []) {
+        logWorkOrderActivity({
+          workOrderId: row.id, woNumber: row.wo_number, action: "created",
+          detail: `Additional invoice added on ${order.wo_number}`,
+        });
       }
 
       setAddingInvoice(false);
@@ -1282,6 +1408,8 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 {order.updated_at && order.updated_at !== order.created_at && ` · Updated ${new Date(order.updated_at).toLocaleString()}`}
                 {order.alvys_maintenance_id && " · Imported from Alvys"}
               </div>
+
+              {!closing && <ActivityLogPanel woNumber={order.wo_number} />}
             </div>
           </>
         )}

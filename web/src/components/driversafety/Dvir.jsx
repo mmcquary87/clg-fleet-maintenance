@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Eyebrow, StatusPill, Table, Button, Input, Select } from "../../ds";
 import { useDvirDefects } from "../../hooks/useDvirDefects";
 import { supabase } from "../../lib/supabaseClient";
+import { logWorkOrderActivity } from "../../lib/workOrderActivityLog";
 import { CATEGORIES } from "../../lib/categories";
 
 const STATUS_FILTERS = ["all", "open", "resolved"];
@@ -72,7 +73,7 @@ function DvirWorkOrderCell({ defect, onRaised }) {
   const submit = async () => {
     setSubmitting(true);
     setError(null);
-    const { error: err } = await supabase.from("work_orders").insert({
+    const { data: inserted, error: err } = await supabase.from("work_orders").insert({
       unit_id: defect.unit_id,
       category,
       complaint: description.trim() || defect.defect_type || "DVIR defect",
@@ -82,9 +83,12 @@ function DvirWorkOrderCell({ defect, onRaised }) {
       source: "samsara_dvir",
       date_opened: new Date().toISOString().slice(0, 10),
       dvir_defect_id: defect.id,
-    });
+    }).select("id, wo_number").single();
     setSubmitting(false);
     if (err) { setError(err.message); return; }
+    if (inserted) {
+      logWorkOrderActivity({ workOrderId: inserted.id, woNumber: inserted.wo_number, action: "created", detail: `Raised from a DVIR defect: ${defect.defect_type || "defect"}` });
+    }
     onRaised?.();
   };
 

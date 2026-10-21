@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X, Loader2, Plus, Trash2, Sparkles } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert, Eyebrow } from "../ds";
 import { supabase } from "../lib/supabaseClient";
+import { logWorkOrderActivity } from "../lib/workOrderActivityLog";
 import { CATEGORIES, sanitizeCategory } from "../lib/categories";
 import { uploadReceipt, fileToBase64 } from "../lib/invoiceFiles";
 import { PAYMENT_METHODS } from "../lib/paymentMethods";
@@ -165,8 +166,15 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
         } : {}),
       }));
 
-      const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id");
+      const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id, wo_number, category, cost");
       if (insertErr) throw insertErr;
+
+      for (const row of inserted ?? []) {
+        logWorkOrderActivity({
+          workOrderId: row.id, woNumber: row.wo_number, action: "created",
+          detail: `${row.category} · $${Number(row.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        });
+      }
 
       // Also a real work_order_documents row per created work order (not
       // just the legacy receipt_path column above) so the uploaded
