@@ -11,6 +11,7 @@ import AssetLifecycleCard from "./AssetLifecycleCard";
 import UnitDocumentsPanel from "./UnitDocumentsPanel";
 import UnitCheckinsPanel from "./UnitCheckinsPanel";
 import UnitInspectionsPanel from "./UnitInspectionsPanel";
+import UnitInventoryPanel from "./UnitInventoryPanel";
 
 const OWNERSHIP_LABEL = { owned: "CLG-owned", penske_lease: "Penske lease", hale_lease: "Hale lease" };
 const OWNERSHIP_TONE = { owned: "neutral", penske_lease: "brand", hale_lease: "brand" };
@@ -20,6 +21,7 @@ const TABS = [
   { id: "service", label: "Service" },
   { id: "value", label: "Value & Insurance" },
   { id: "documents", label: "Documents" },
+  { id: "inventory", label: "Inventory" },
   { id: "compliance", label: "Compliance" },
 ];
 
@@ -273,6 +275,8 @@ export default function UnitDetailPage({ unitId, onBack, canViewAssetLifecycle }
       )}
 
       {tab === "documents" && <UnitDocumentsPanel unitId={unitId} />}
+
+      {tab === "inventory" && <UnitInventoryPanel unitId={unitId} />}
 
       {tab === "compliance" && (
         <div>
