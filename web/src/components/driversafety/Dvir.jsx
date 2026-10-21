@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { Eyebrow, StatusPill, Table } from "../../ds";
+import { Eyebrow, StatusPill, Table, Button, Input, Select } from "../../ds";
 import { useDvirDefects } from "../../hooks/useDvirDefects";
+import { supabase } from "../../lib/supabaseClient";
+import { CATEGORIES } from "../../lib/categories";
 
 const STATUS_FILTERS = ["all", "open", "resolved"];
 const STATUS_LABEL = { all: "All", open: "Open", resolved: "Resolved" };
@@ -33,10 +35,74 @@ const COLUMNS = [
   { key: "comment", label: "Comment" },
   { key: "statusCell", label: "Status" },
   { key: "resolvedByCell", label: "Resolved by" },
+  { key: "woCell", label: "Work order" },
 ];
 
+// Mirrors the Check Call board's "Raise a work order from this note"
+// (CheckCallBoard.jsx's RaiseWorkOrderInline) -- same Open-Proposed/manual
+// intake pattern, just tagged source: "samsara_dvir" and linked back to
+// the defect via dvir_defect_id so a repeat visit shows the existing WO
+// instead of offering to raise a duplicate.
+function DvirWorkOrderCell({ defect, onRaised }) {
+  const existing = defect.work_orders?.[0];
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [description, setDescription] = useState(defect.comment || defect.defect_type || "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  if (existing) {
+    return <StatusPill tone={existing.status === "Closed" ? "green" : "yellow"}>{existing.wo_number}</StatusPill>;
+  }
+  if (!defect.unit_id) {
+    return <span style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>No unit linked</span>;
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button" onClick={() => setOpen(true)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11.5, color: "var(--clg-royal)", fontWeight: 600, textDecoration: "underline" }}
+      >
+        Create work order
+      </button>
+    );
+  }
+
+  const submit = async () => {
+    setSubmitting(true);
+    setError(null);
+    const { error: err } = await supabase.from("work_orders").insert({
+      unit_id: defect.unit_id,
+      category,
+      complaint: description.trim() || defect.defect_type || "DVIR defect",
+      severity: "Routine",
+      status: "Open-Proposed",
+      intake_source: "manual",
+      source: "samsara_dvir",
+      date_opened: new Date().toISOString().slice(0, 10),
+      dvir_defect_id: defect.id,
+    });
+    setSubmitting(false);
+    if (err) { setError(err.message); return; }
+    onRaised?.();
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 220 }}>
+      {error && <div style={{ fontSize: 11, color: "var(--clg-scarlet)" }}>{error}</div>}
+      <Select value={category} onChange={(e) => setCategory(e.target.value)} options={CATEGORIES} />
+      <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's wrong" />
+      <div style={{ display: "flex", gap: 6 }}>
+        <Button size="sm" onClick={submit} disabled={submitting} iconLeft={submitting ? <Loader2 size={13} className="spin" /> : null}>Create</Button>
+        <Button size="sm" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dvir() {
-  const { defects, totals, loading, error } = useDvirDefects();
+  const { defects, totals, loading, error, reload } = useDvirDefects();
   const [statusFilter, setStatusFilter] = useState("all");
   const [driverQuery, setDriverQuery] = useState("");
 
@@ -61,6 +127,7 @@ export default function Dvir() {
       : d.resolved_by_name
         ? `${d.resolved_by_name} (${d.resolved_by_type ?? "unknown"})`
         : "—",
+    woCell: <DvirWorkOrderCell defect={d} onRaised={reload} />,
   }));
 
   if (loading) {
@@ -98,9 +165,10 @@ export default function Dvir() {
       )}
 
       <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 10, lineHeight: 1.5 }}>
-        Informational only — DVIR defects never affect a driver's score. "Resolved by" is whoever closed the defect
-        out in Samsara, not necessarily who reported it; {totals.linkedToDriver} of {totals.total} are linked to a
-        driver record in this app.
+        DVIR defects never affect a driver's score. "Resolved by" is whoever closed the defect out in Samsara, not
+        necessarily who reported it; {totals.linkedToDriver} of {totals.total} are linked to a driver record in this
+        app. Use "Create work order" to raise an Open-Proposed work order from a defect for a dispatcher/mechanic to
+        review.
       </div>
 
       <Table columns={COLUMNS} rows={rows} />

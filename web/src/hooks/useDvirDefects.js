@@ -15,7 +15,7 @@ export function useDvirDefects() {
 
     const { data, error: err } = await supabase
       .from("dvir_defects")
-      .select("id, defect_type, comment, is_resolved, created_at, resolved_at, resolved_by_name, resolved_by_type, unit:units(number, type), driver:drivers(name)")
+      .select("id, unit_id, defect_type, comment, is_resolved, created_at, resolved_at, resolved_by_name, resolved_by_type, unit:units(number, type), driver:drivers(name), work_orders(id, wo_number, status)")
       .gte("created_at", since)
       .order("created_at", { ascending: false });
 
