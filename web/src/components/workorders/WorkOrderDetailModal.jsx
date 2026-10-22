@@ -185,6 +185,8 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const [voidReason, setVoidReason] = useState("");
   const [voidBusy, setVoidBusy] = useState(false);
   const [voidError, setVoidError] = useState(null);
+  const [groupSiblings, setGroupSiblings] = useState([]);
+  const [voidWholeGroup, setVoidWholeGroup] = useState(false);
 
   // Permanent delete -- unlike void (reversible, keeps history), this
   // actually removes the row. Gated server-side by a trigger requiring
@@ -300,20 +302,42 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setDeleting(false);
     setVoidReason("");
     setVoidError(null);
+    setVoidWholeGroup(false);
+    setGroupSiblings([]);
     setVoiding(true);
+    // Lets a grouped invoice (several work_orders rows sharing one
+    // work_order_group_id -- see groupByWorkOrder in WorkOrdersView.jsx)
+    // be voided all at once instead of one row at a time, for exactly the
+    // case Debbie hit with WO-6588: an estimate that created a dozen
+    // linked rows that all needed to go away together.
+    if (order.work_order_group_id) {
+      supabase.from("work_orders").select("id, wo_number")
+        .eq("work_order_group_id", order.work_order_group_id)
+        .neq("id", order.id)
+        .then(({ data }) => setGroupSiblings(data ?? []));
+    }
   };
 
   const confirmVoid = async () => {
     setVoidBusy(true);
     setVoidError(null);
     try {
+      const idsToVoid = voidWholeGroup ? [order.id, ...groupSiblings.map((s) => s.id)] : [order.id];
       const { error: updateErr } = await supabase.from("work_orders").update({
         voided: true,
         voided_at: new Date().toISOString(),
         voided_reason: voidReason.trim() || null,
-      }).eq("id", order.id);
+      }).in("id", idsToVoid);
       if (updateErr) throw updateErr;
       logWorkOrderActivity({ workOrderId: order.id, woNumber: order.wo_number, action: "voided", detail: voidReason.trim() || null });
+      if (voidWholeGroup) {
+        for (const s of groupSiblings) {
+          logWorkOrderActivity({
+            workOrderId: s.id, woNumber: s.wo_number, action: "voided",
+            detail: `Voided together with ${order.wo_number}${voidReason.trim() ? ` — ${voidReason.trim()}` : ""}`,
+          });
+        }
+      }
       setVoiding(false);
       await reload();
       onChanged?.();
@@ -951,10 +975,19 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                   <FormField label="Reason (optional)">
                     <Input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} placeholder="e.g. duplicate entry, entered on wrong unit" />
                   </FormField>
+                  {groupSiblings.length > 0 && (
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12.5, marginTop: 12, cursor: "pointer" }}>
+                      <input type="checkbox" checked={voidWholeGroup} onChange={(e) => setVoidWholeGroup(e.target.checked)} style={{ marginTop: 2 }} />
+                      <span>
+                        Also void the other {groupSiblings.length} work order{groupSiblings.length === 1 ? "" : "s"} in this group
+                        ({groupSiblings.map((s) => s.wo_number).join(", ")})
+                      </span>
+                    </label>
+                  )}
                   {voidError && <div style={{ color: "var(--clg-scarlet)", fontSize: 12, marginTop: 10 }}>{voidError}</div>}
                   <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                     <Button size="sm" onClick={confirmVoid} disabled={voidBusy} iconLeft={voidBusy ? <Loader2 size={13} className="spin" /> : <Ban size={13} />}>
-                      Confirm void
+                      {voidWholeGroup ? `Confirm void (${groupSiblings.length + 1} work orders)` : "Confirm void"}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setVoiding(false)} disabled={voidBusy}>
                       Cancel
