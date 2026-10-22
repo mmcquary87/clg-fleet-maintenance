@@ -21,8 +21,14 @@
 // ("Pickup start date must be before end date"), confirming Start is a
 // real, bound-checked field.
 //
-// Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets. Doesn't touch
-// our own database at all — pure passthrough/aggregation over Alvys.
+// Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets. Also reads (not
+// writes) our own drivers/units tables with the caller's own auth, purely
+// to resolve driver/truck display names for the outlier filter's picker
+// (see the driverRoster/truckRoster comment below) -- every number this
+// backs still comes straight from Alvys, nothing here is a passthrough
+// over our own data.
+
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ALVYS_TOKEN_URL = "https://auth.alvys.com/oauth/token";
 const ALVYS_API_BASE = "https://integrations.alvys.com/api/p/v1.0";
@@ -162,18 +168,6 @@ async function fetchKbxTransferTypes(token: string): Promise<Map<string, "relief
   return byLoadNumber;
 }
 
-// Best-effort name extraction -- Alvys's exact field for a driver/truck
-// display name on a trip was never confirmed against live data (see
-// sampleDriver1/sampleTruck diagnostics below); these fall back through
-// the plausible shapes rather than showing a raw opaque Id when one of
-// them is right.
-function driverLabel(d: any): string {
-  return d?.Name || [d?.FirstName, d?.LastName].filter(Boolean).join(" ") || d?.Id || "Unknown driver";
-}
-function truckLabel(t: any): string {
-  return t?.Number || t?.Name || t?.Id || "Unknown truck";
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -184,6 +178,14 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Read-only, caller's own auth (same pattern as samsara-fleet-mpg) --
+    // just for resolving names below, never for the Alvys calls above.
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } },
+    );
 
     const token = await getAlvysToken();
 
@@ -215,14 +217,37 @@ Deno.serve(async (req) => {
     // truckIds filter below, so the picker always offers the full set of
     // people/trucks active this period even once a selection narrows the
     // KPI numbers themselves.
-    const driverRosterMap = new Map<string, string>();
-    const truckRosterMap = new Map<string, string>();
+    //
+    // Alvys's trip payload itself carries no driver/truck display name at
+    // all (confirmed live, 2026-10-22 -- Driver1 is just {Id, Fleet,
+    // ContractorType, Rates...}, Truck just {Id, Fleet}), so names are
+    // resolved from our own already-synced tables instead: drivers.id IS
+    // Alvys's Driver.Id (alvys-sync-drivers upserts by d.Id directly), and
+    // units.alvys_asset_id IS Alvys's Truck.Id (alvys-sync-equipment).
+    // Falls back to the raw id only for a driver/truck somehow not yet
+    // synced (e.g. brand new, ahead of the next 6-hour sync).
+    const driverIdsSeen = new Set<string>();
+    const truckIdsSeen = new Set<string>();
     for (const t of allTrips) {
-      if (t.Driver1?.Id) driverRosterMap.set(t.Driver1.Id, driverLabel(t.Driver1));
-      if (t.Truck?.Id) truckRosterMap.set(t.Truck.Id, truckLabel(t.Truck));
+      if (t.Driver1?.Id) driverIdsSeen.add(t.Driver1.Id);
+      if (t.Truck?.Id) truckIdsSeen.add(t.Truck.Id);
     }
-    const driverRoster = [...driverRosterMap.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-    const truckRoster = [...truckRosterMap.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    const driverNameById = new Map<string, string>();
+    if (driverIdsSeen.size > 0) {
+      const { data } = await supabase.from("drivers").select("id, name").in("id", [...driverIdsSeen]);
+      for (const d of data ?? []) driverNameById.set(d.id, d.name);
+    }
+    const truckNumberByAlvysId = new Map<string, string>();
+    if (truckIdsSeen.size > 0) {
+      const { data } = await supabase.from("units").select("alvys_asset_id, number").in("alvys_asset_id", [...truckIdsSeen]);
+      for (const u of data ?? []) truckNumberByAlvysId.set(u.alvys_asset_id, u.number);
+    }
+    const driverRoster = [...driverIdsSeen]
+      .map((id) => ({ id, name: driverNameById.get(id) ?? id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const truckRoster = [...truckIdsSeen]
+      .map((id) => ({ id, name: truckNumberByAlvysId.get(id) ?? id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     // Outlier filter: when driverIds/truckIds are passed, every KPI below
     // is recomputed over just those trips -- same aggregation math,
@@ -466,15 +491,12 @@ Deno.serve(async (req) => {
       dropHookDetentionEvents: dropHookStops.detentionEvents,
       freeTimeHoursAssumed: FREE_TIME_HOURS,
       periodWeeks: Math.round(weeks * 100) / 100,
-      // Diagnostic for KPI 17 feasibility: does Alvys expose a driver NAME
-      // anywhere on the trip, or only the opaque Driver1.Id we already use?
-      // If a name field exists here, our roster's free-text driver_name
-      // could potentially be matched against it. Remove once answered.
-      sampleDriver1: trips.find((t: any) => t.Driver1)?.Driver1 ?? null,
-      // Same diagnostic purpose as sampleDriver1 -- confirms (or corrects)
-      // truckLabel()'s guess at which field carries a human-readable
-      // truck number/name. Remove once confirmed.
-      sampleTruck: trips.find((t: any) => t.Truck)?.Truck ?? null,
+      // Confirmed live (2026-10-22): Alvys's trip payload carries no
+      // driver/truck name field at all -- Driver1 is just {Id, Fleet,
+      // ContractorType, Rates...}, Truck just {Id, Fleet}. driverRoster/
+      // truckRoster above resolve real names from our own drivers/units
+      // tables instead; this KPI 17 feasibility question is answered "no,
+      // not from trips/search."
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error
