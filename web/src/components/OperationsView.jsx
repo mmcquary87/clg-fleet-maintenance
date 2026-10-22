@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Gauge } from "lucide-react";
 import { Card, Badge, Eyebrow, Button } from "../ds";
 import { MODULES, KPIS, APPROVED_TARGETS, FLEET_MILE_TARGETS } from "../lib/opsKpis";
@@ -94,6 +94,80 @@ function fleetRowStatus(fleetName, value) {
   return toleranceStatus(value, approved.target, approved.tolerancePct, "higherIsBetter");
 }
 
+// KPI numbers computed from alvys-trips-report -- the only ones the
+// driver/truck filter below actually narrows (see useAlvysTripsReport.js
+// and alvys-trips-report/index.ts: the filter recomputes everything from
+// a smaller trip set, but every other KPI's hook has no driver/truck
+// concept at all yet).
+const FILTERABLE_KPI_NOS = [3, 6, 7, 9, 12, 15, 16];
+
+function MultiSelectDropdown({ label, options, selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onDocClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const toggle = (id) => {
+    onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  };
+
+  const summary = selected.length === 0
+    ? `All ${label.toLowerCase()}`
+    : selected.length === 1
+    ? (options.find((o) => o.id === selected[0])?.name ?? "1 selected")
+    : `${selected.length} ${label.toLowerCase()} selected`;
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--clg-border-default)",
+          borderRadius: "var(--clg-radius-sm)", padding: "7px 12px", background: "var(--clg-surface-card)",
+          cursor: "pointer", fontSize: 12.5, color: "var(--clg-text-body)",
+        }}
+      >
+        {label}: <strong>{summary}</strong>
+        <ChevronDown size={12} style={{ transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 20, minWidth: 240, maxHeight: 280, overflowY: "auto",
+          background: "var(--clg-surface-card)", border: "1px solid var(--clg-border-default)", borderRadius: "var(--clg-radius-sm)",
+          boxShadow: "var(--clg-shadow-resting)", padding: 6,
+        }}>
+          {options.length === 0 ? (
+            <div style={{ padding: 8, fontSize: 12, color: "var(--clg-text-muted)" }}>None in this date range</div>
+          ) : (
+            <>
+              {selected.length > 0 && (
+                <button
+                  onClick={() => onChange([])}
+                  style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", fontSize: 12, color: "var(--clg-royal)" }}
+                >
+                  Clear selection
+                </button>
+              )}
+              {options.map((o) => (
+                <label key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", fontSize: 12.5, cursor: "pointer" }}>
+                  <input type="checkbox" checked={selected.includes(o.id)} onChange={() => toggle(o.id)} />
+                  {o.name}
+                </label>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HeadlineTile({ kpi, value, secondary }) {
   const status = statusFor(kpi, value);
   const color = STATUS_COLOR[status === "pending" ? "reporting" : status];
@@ -123,9 +197,11 @@ export default function OperationsView() {
   const [range, setRange] = useState(thisMonthRange());
   const [selectedNo, setSelectedNo] = useState(6);
   const [formulaOpen, setFormulaOpen] = useState(false);
+  const [driverFilter, setDriverFilter] = useState([]);
+  const [truckFilter, setTruckFilter] = useState([]);
 
   const { data: mpgData, loading: mpgLoading, error: mpgError } = useFleetMpg(range);
-  const { data: tripsData, loading: tripsLoading, error: tripsError } = useAlvysTripsReport(range);
+  const { data: tripsData, loading: tripsLoading, error: tripsError } = useAlvysTripsReport(range, { driverIds: driverFilter, truckIds: truckFilter });
   // Daily exception measure, not a range-windowed report like the others —
   // reuses the same reset-aware ETA projection the Tracking page already
   // computes rather than a separate rollup, so it always reflects live
@@ -313,8 +389,18 @@ export default function OperationsView() {
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 12 }}>
         <DateRangeFilter onChange={setRange} disableAllTime />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+        <MultiSelectDropdown label="Drivers" options={tripsData?.driverRoster ?? []} selected={driverFilter} onChange={setDriverFilter} />
+        <MultiSelectDropdown label="Trucks" options={tripsData?.truckRoster ?? []} selected={truckFilter} onChange={setTruckFilter} />
+      </div>
+      <div style={{ fontSize: 11, color: "var(--clg-text-muted)", marginBottom: 20, lineHeight: 1.5 }}>
+        {(driverFilter.length > 0 || truckFilter.length > 0)
+          ? `KPIs ${FILTERABLE_KPI_NOS.join(", ")} (revenue/tractor, empty mile %, on-time %, revenue miles/driver, detention) are scoped to your selection. Every other KPI below stays fleet-wide — outlier-hunting for those isn't wired up yet.`
+          : `Pick one or more drivers/trucks to scope KPIs ${FILTERABLE_KPI_NOS.join(", ")} down to them and spot outliers — everything else here stays fleet-wide.`}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 28 }}>

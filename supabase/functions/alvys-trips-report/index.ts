@@ -162,11 +162,23 @@ async function fetchKbxTransferTypes(token: string): Promise<Map<string, "relief
   return byLoadNumber;
 }
 
+// Best-effort name extraction -- Alvys's exact field for a driver/truck
+// display name on a trip was never confirmed against live data (see
+// sampleDriver1/sampleTruck diagnostics below); these fall back through
+// the plausible shapes rather than showing a raw opaque Id when one of
+// them is right.
+function driverLabel(d: any): string {
+  return d?.Name || [d?.FirstName, d?.LastName].filter(Boolean).join(" ") || d?.Id || "Unknown driver";
+}
+function truckLabel(t: any): string {
+  return t?.Number || t?.Name || t?.Id || "Unknown truck";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { startDate, endDate } = await req.json();
+    const { startDate, endDate, driverIds, truckIds } = await req.json();
     if (!startDate || !endDate) {
       return new Response(JSON.stringify({ error: "startDate and endDate (ISO) are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -196,7 +208,33 @@ Deno.serve(async (req) => {
 
     const byId = new Map<string, any>();
     for (const t of [...pickedUp.items, ...delivered.items]) byId.set(t.Id, t);
-    const trips = [...byId.values()];
+    const allTrips = [...byId.values()];
+
+    // Driver/truck roster for the Operations Dashboard's outlier filter --
+    // built from EVERY trip in the window regardless of any driverIds/
+    // truckIds filter below, so the picker always offers the full set of
+    // people/trucks active this period even once a selection narrows the
+    // KPI numbers themselves.
+    const driverRosterMap = new Map<string, string>();
+    const truckRosterMap = new Map<string, string>();
+    for (const t of allTrips) {
+      if (t.Driver1?.Id) driverRosterMap.set(t.Driver1.Id, driverLabel(t.Driver1));
+      if (t.Truck?.Id) truckRosterMap.set(t.Truck.Id, truckLabel(t.Truck));
+    }
+    const driverRoster = [...driverRosterMap.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    const truckRoster = [...truckRosterMap.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+
+    // Outlier filter: when driverIds/truckIds are passed, every KPI below
+    // is recomputed over just those trips -- same aggregation math,
+    // narrower input, so this is the only place the filter needs to apply.
+    const driverIdSet = Array.isArray(driverIds) && driverIds.length > 0 ? new Set(driverIds) : null;
+    const truckIdSet = Array.isArray(truckIds) && truckIds.length > 0 ? new Set(truckIds) : null;
+    const matchesFilter = (t: any) =>
+      (!driverIdSet || driverIdSet.has(t.Driver1?.Id)) && (!truckIdSet || truckIdSet.has(t.Truck?.Id));
+    const trips = (driverIdSet || truckIdSet) ? allTrips.filter(matchesFilter) : allTrips;
+    if (driverIdSet || truckIdSet) {
+      plannedPickups.items = plannedPickups.items.filter(matchesFilter);
+    }
 
     let totalEmptyMiles = 0;
     let totalLoadedMiles = 0;
@@ -360,6 +398,9 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       tripsConsidered: trips.length,
+      driverRoster,
+      truckRoster,
+      filtersApplied: { driverIds: driverIdSet ? [...driverIdSet] : null, truckIds: truckIdSet ? [...truckIdSet] : null },
       diagnostics: {
         pickupSearchReportedTotal: pickedUp.reportedTotal,
         pickupSearchFetched: pickedUp.items.length,
@@ -430,6 +471,10 @@ Deno.serve(async (req) => {
       // If a name field exists here, our roster's free-text driver_name
       // could potentially be matched against it. Remove once answered.
       sampleDriver1: trips.find((t: any) => t.Driver1)?.Driver1 ?? null,
+      // Same diagnostic purpose as sampleDriver1 -- confirms (or corrects)
+      // truckLabel()'s guess at which field carries a human-readable
+      // truck number/name. Remove once confirmed.
+      sampleTruck: trips.find((t: any) => t.Truck)?.Truck ?? null,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error

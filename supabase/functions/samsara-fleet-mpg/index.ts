@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { startDate, endDate } = await req.json();
+    const { startDate, endDate, unitIds } = await req.json();
     if (!startDate || !endDate) {
       return new Response(JSON.stringify({ error: "startDate and endDate (RFC 3339 date) are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -53,8 +53,10 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { data: units, error: unitsErr } = await supabase
+    let unitsQuery = supabase
       .from("units").select("id, number, samsara_vehicle_id").not("samsara_vehicle_id", "is", null);
+    if (Array.isArray(unitIds) && unitIds.length > 0) unitsQuery = unitsQuery.in("id", unitIds);
+    const { data: units, error: unitsErr } = await unitsQuery;
     if (unitsErr) throw unitsErr;
     if (units.length === 0) {
       return new Response(JSON.stringify({ fleetMpg: null, totalMiles: 0, totalGallons: 0, perVehicle: [], unitsWithSamsara: 0 }), {
