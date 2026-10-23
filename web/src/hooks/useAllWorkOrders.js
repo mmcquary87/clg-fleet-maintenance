@@ -31,7 +31,8 @@ export function useAllWorkOrders(range) {
         "date_opened, date_closed, invoice_ref, po_number, is_chargeback, chargeback_driver_name, chargeback_deducted_at, " +
         "voided, voided_at, voided_reason, vendor_id, waiting_on_parts, assigned_bay, " +
         "payment_status, payment_method, payment_reference, paid_at, exported_to_intacct_at, " +
-        "unit:units(id, number), vendor:vendors(id, name)"
+        "unit:units(id, number), vendor:vendors(id, name), " +
+        "lineItems:work_order_line_items(id, category, description, cost, is_chargeback, chargeback_driver_name)"
       )
       .order("date_opened", { ascending: false })
       .range(0, (throughPage + 1) * PAGE_SIZE - 1);

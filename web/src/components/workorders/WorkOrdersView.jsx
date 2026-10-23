@@ -11,6 +11,27 @@ import DateRangeFilter from "../DateRangeFilter";
 import WorkOrderDetailModal from "./WorkOrderDetailModal";
 import IntacctExportModal from "./IntacctExportModal";
 
+// CSV export has always been one row per category/cost -- back when each
+// category was its own work_orders row that was automatic; now that
+// several categories can live as line items under one work order, this
+// explodes each one back into its own CSV row (using the line item's own
+// category/cost/chargeback fields) so the exported spreadsheet's
+// granularity doesn't change. A work order with no line items (the common
+// single-category case) exports exactly as it always has.
+function flattenForCsv(rows) {
+  return rows.flatMap((o) => {
+    if (!o.lineItems || o.lineItems.length === 0) return [o];
+    return o.lineItems.map((li) => ({
+      ...o,
+      category: li.category,
+      description: li.description || o.description,
+      cost: li.cost,
+      is_chargeback: li.is_chargeback,
+      chargeback_driver_name: li.chargeback_driver_name,
+    }));
+  });
+}
+
 const EXPORT_COLUMNS = [
   { label: "WO #", value: (o) => o.wo_number },
   { label: "Unit", value: (o) => o.unit?.number },
@@ -231,12 +252,16 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
         if (tab === "Needs approval") return o.approval_status === "needs_approval";
         return o.status === tab;
       })
-      .filter((o) => category === "All" || o.category === category)
+      // A multi-category invoice's own top-level category is just its
+      // first line item's -- match on ANY of its line items too, so
+      // filtering by "Tires" surfaces a WO whose primary category is
+      // "Brakes" but which also has a Tires line item.
+      .filter((o) => category === "All" || o.category === category || o.lineItems?.some((li) => li.category === category))
       .filter((o) => unit === "All" || o.unit?.number === unit)
       .filter((o) => {
         if (!query.trim()) return true;
         const q = query.toLowerCase();
-        return [o.wo_number, o.unit?.number, o.vendor?.name, o.category, o.description, o.complaint, o.invoice_ref]
+        return [o.wo_number, o.unit?.number, o.vendor?.name, o.category, o.description, o.complaint, o.invoice_ref, ...(o.lineItems ?? []).flatMap((li) => [li.category, li.description])]
           .filter(Boolean).some((v) => v.toLowerCase().includes(q));
       })
       // Who's blocking it first (needs your approval), then oldest/longest-
@@ -410,7 +435,7 @@ export default function WorkOrdersView({ initialCategory, isAdmin }) {
             <>
               <Button
                 variant="outline" size="sm" iconLeft={<Download size={14} />}
-                onClick={() => downloadCsv(`work-orders-${new Date().toISOString().slice(0, 10)}.csv`, filtered, EXPORT_COLUMNS)}
+                onClick={() => downloadCsv(`work-orders-${new Date().toISOString().slice(0, 10)}.csv`, flattenForCsv(filtered), EXPORT_COLUMNS)}
                 disabled={filtered.length === 0}
               >
                 Export CSV

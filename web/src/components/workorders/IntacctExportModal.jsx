@@ -43,7 +43,7 @@ export default function IntacctExportModal({ onClose }) {
         .select(
           "id, wo_number, category, cost, date_closed, invoice_ref, complaint, description, " +
           "vendor:vendors(id, name, intacct_vendor_id), unit:units(type, owner_operator_assigned), " +
-          "parts:work_order_parts(quantity, unit_cost)"
+          "parts:work_order_parts(quantity, unit_cost), lineItems:work_order_line_items(category, cost)"
         )
         .eq("status", "Closed")
         .eq("voided", false)

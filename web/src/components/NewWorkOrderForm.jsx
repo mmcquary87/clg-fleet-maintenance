@@ -135,57 +135,77 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
       const receiptPath = file ? await uploadReceipt(file) : existingReceipt?.storagePath || null;
       const receiptFileName = file ? file.name : existingReceipt?.fileName || null;
 
-      // One invoice can have several line items (categories) -- each still
-      // becomes its own work_orders row (Spend/Board/CSV/Intacct export/
-      // chargebacks all key off one category+cost per row), but sharing one
-      // group id lets the Work Orders list show them bundled as a single
-      // work order instead of as unrelated ones.
-      const groupId = crypto.randomUUID();
-      const rows = lineItems.map((li) => ({
+      // One invoice can have several line items (categories) -- this is
+      // always ONE work_orders row (one WO number, one status, one void/
+      // payment state). A single line item sets category/cost directly on
+      // that row, exactly as it always has. More than one line item sets
+      // the first item's category/description as the row's own (for every
+      // consumer that still expects a single string there) and inserts
+      // the rest into work_order_line_items -- that table's own trigger
+      // then keeps this row's cost in sync as the true sum.
+      const first = lineItems[0];
+      const multiItem = lineItems.length > 1;
+      const woRow = {
         unit_id: unitId,
         vendor_id: vendorId,
-        category: li.category,
-        cost: Number(li.cost) || 0,
+        category: first.category,
+        cost: multiItem ? totalCost : (Number(first.cost) || 0),
         status: f.status,
         date_opened: f.dateOpened,
         date_closed: f.dateClosed || null,
         invoice_ref: f.invoiceRef || null,
         po_number: f.poNumber || null,
-        description: li.description || null,
+        description: first.description || null,
         source: "manual",
         receipt_path: receiptPath,
-        work_order_group_id: groupId,
-        is_chargeback: li.isChargeback,
-        chargeback_driver_name: li.isChargeback ? (li.chargebackDriver.trim() || null) : null,
-        chargeback_driver_id: li.isChargeback ? li.chargebackDriverId : null,
+        // Chargeback stays at the work-order level only for the common
+        // single-item case -- a multi-item invoice's chargeback-eligible
+        // line(s) are flagged on their own work_order_line_items row
+        // instead, since not every category in one invoice is necessarily
+        // chargeback-eligible.
+        is_chargeback: !multiItem && first.isChargeback,
+        chargeback_driver_name: !multiItem && first.isChargeback ? (first.chargebackDriver.trim() || null) : null,
+        chargeback_driver_id: !multiItem && first.isChargeback ? first.chargebackDriverId : null,
         ...(f.status === "Closed" && markPaid ? {
           payment_status: "paid",
           payment_method: paymentMethod,
           payment_reference: paymentReference.trim() || null,
           paid_at: f.dateClosed || f.dateOpened,
         } : {}),
-      }));
+      };
 
-      const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id, wo_number, category, cost");
+      const { data: created, error: insertErr } = await supabase.from("work_orders").insert(woRow).select("id, wo_number").single();
       if (insertErr) throw insertErr;
 
-      for (const row of inserted ?? []) {
-        logWorkOrderActivity({
-          workOrderId: row.id, woNumber: row.wo_number, action: "created",
-          detail: `${row.category} · $${Number(row.cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-        });
+      if (multiItem) {
+        const lineItemRows = lineItems.map((li) => ({
+          work_order_id: created.id,
+          category: li.category,
+          description: li.description || null,
+          cost: Number(li.cost) || 0,
+          is_chargeback: li.isChargeback,
+          chargeback_driver_name: li.isChargeback ? (li.chargebackDriver.trim() || null) : null,
+          chargeback_driver_id: li.isChargeback ? li.chargebackDriverId : null,
+        }));
+        const { error: liErr } = await supabase.from("work_order_line_items").insert(lineItemRows);
+        if (liErr) throw liErr;
       }
 
-      // Also a real work_order_documents row per created work order (not
-      // just the legacy receipt_path column above) so the uploaded
-      // invoice shows up in each one's multi-document list right away --
-      // see 20260918130000_work_order_documents.sql.
-      if (receiptPath && inserted?.length > 0) {
+      logWorkOrderActivity({
+        workOrderId: created.id, woNumber: created.wo_number, action: "created",
+        detail: multiItem
+          ? `${lineItems.length} line items (${lineItems.map((li) => li.category).join(", ")}) · $${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+          : `${first.category} · $${(Number(first.cost) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      });
+
+      // Also a real work_order_documents row (not just the legacy
+      // receipt_path column above) so the uploaded invoice shows up in the
+      // multi-document list right away -- see 20260918130000_work_order_documents.sql.
+      if (receiptPath) {
         const { data: { user } } = await supabase.auth.getUser();
-        const docRows = inserted.map((row) => ({
-          work_order_id: row.id, storage_path: receiptPath, file_name: receiptFileName, uploaded_by: user?.id ?? null,
-        }));
-        const { error: docErr } = await supabase.from("work_order_documents").insert(docRows);
+        const { error: docErr } = await supabase.from("work_order_documents").insert({
+          work_order_id: created.id, storage_path: receiptPath, file_name: receiptFileName, uploaded_by: user?.id ?? null,
+        });
         if (docErr) throw docErr;
       }
 
@@ -218,7 +238,7 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
         }
       }
 
-      onSaved(inserted?.[0]?.id);
+      onSaved(created.id);
     } catch (err) {
       setError(err.message);
     } finally {

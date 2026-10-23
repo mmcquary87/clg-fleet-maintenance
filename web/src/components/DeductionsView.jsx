@@ -30,7 +30,7 @@ export default function DeductionsView({ range }) {
 
   const toggleDeducted = async (r) => {
     setBusyId(r.id);
-    await setDeducted(r.id, !r.chargeback_deducted_at);
+    await setDeducted(r, !r.chargeback_deducted_at);
     setBusyId(null);
   };
 

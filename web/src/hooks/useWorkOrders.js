@@ -3,11 +3,14 @@ import { supabase } from "../lib/supabaseClient";
 
 // Flattens a work_orders row (joined with units/vendors) into the shape
 // the dashboard views expect: { unit, unitType, category, vendor, cost, date, ref, desc }
-// `parts` carries each logged part's own category/cost so the Spend-by-
-// category chart can split spend across them (see lib/categorySplit.js)
-// instead of counting every part's cost under the work order's own single
-// category -- everything else here (filtering, CSV export, vendor
-// grouping) keeps using the work order's own `category` unchanged.
+// `lineItems` is the real per-category invoice breakdown for a work order
+// that covers several repair categories (work_order_line_items) -- when
+// present, lib/categorySplit.js uses it as the authoritative split instead
+// of the older `parts`-based proportional estimate (mechanic-logged parts
+// against an already-fixed total). Everything else here (filtering, CSV
+// export, vendor grouping) keeps using the work order's own `category`
+// unchanged -- that's still a real, correct category for the common
+// single-category case, just not the whole picture for a multi-item one.
 function toRecord(row) {
   return {
     id: row.id,
@@ -24,6 +27,10 @@ function toRecord(row) {
       category: p.category ?? null,
       quantity: Number(p.quantity) || 0,
       unitCost: p.unit_cost != null ? Number(p.unit_cost) : null,
+    })),
+    lineItems: (row.lineItems ?? []).map((li) => ({
+      category: li.category,
+      amount: Number(li.cost) || 0,
     })),
   };
 }
@@ -53,7 +60,7 @@ export function useWorkOrders(range) {
           .from("work_orders")
           .select(
             "id, category, cost, date_closed, invoice_ref, description, unit:units(number, type, ownership), vendor:vendors(name), " +
-            "parts:work_order_parts(category, quantity, unit_cost)"
+            "parts:work_order_parts(category, quantity, unit_cost), lineItems:work_order_line_items(category, cost)"
           )
           .eq("status", "Closed")
           .eq("voided", false)

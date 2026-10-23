@@ -603,12 +603,14 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       const dateClosed = closeForm.dateClosed || todayIso();
       const receiptPath = closeFile ? await uploadReceipt(closeFile) : order.receipt_path || null;
       const [first, ...extra] = closeLineItems;
+      const multiItem = extra.length > 0;
+      const closeTotal = closeLineItems.reduce((s, li) => s + (Number(li.cost) || 0), 0);
 
       const { error: updateErr } = await supabase.from("work_orders").update({
         status: "Closed",
         category: first.category,
         description: first.description || order.description,
-        cost: Number(first.cost) || 0,
+        cost: multiItem ? closeTotal : (Number(first.cost) || 0),
         invoice_ref: closeForm.invoiceRef || null,
         po_number: closeForm.poNumber || null,
         date_closed: dateClosed,
@@ -616,50 +618,36 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
 
-      logWorkOrderActivity({
-        workOrderId: order.id, woNumber: order.wo_number, action: "closed",
-        detail: `${money(Number(first.cost) || 0)}${extra.length > 0 ? ` · ${extra.length} additional invoice line item work order(s) created` : ""}`,
-      });
-
-      let extraWorkOrderIds = [];
-      if (extra.length > 0 && order.unit?.id) {
-        const rows = extra.map((li) => ({
-          unit_id: order.unit.id,
-          vendor_id: order.vendor?.id ?? null,
+      // Several repair categories on one invoice are now line items under
+      // this SAME work order (work_order_line_items), not separate sibling
+      // work_orders rows -- the table's own trigger keeps this row's cost
+      // in sync as the true sum. ALL line items (including the first) go
+      // in here once there's more than one, so that sum is complete.
+      if (multiItem) {
+        const lineItemRows = closeLineItems.map((li) => ({
+          work_order_id: order.id,
           category: li.category,
           description: li.description || null,
           cost: Number(li.cost) || 0,
-          status: "Closed",
-          date_opened: order.date_opened || dateClosed,
-          date_closed: dateClosed,
-          invoice_ref: closeForm.invoiceRef || null,
-          po_number: closeForm.poNumber || null,
-          source: "manual",
-          receipt_path: receiptPath,
-          work_order_group_id: order.work_order_group_id,
         }));
-        const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id, wo_number");
-        if (insertErr) throw insertErr;
-        extraWorkOrderIds = (inserted ?? []).map((r) => r.id);
-        for (const row of inserted ?? []) {
-          logWorkOrderActivity({
-            workOrderId: row.id, woNumber: row.wo_number, action: "created",
-            detail: `Additional invoice line item from closing ${order.wo_number}`,
-          });
-        }
+        const { error: liErr } = await supabase.from("work_order_line_items").insert(lineItemRows);
+        if (liErr) throw liErr;
       }
+
+      logWorkOrderActivity({
+        workOrderId: order.id, woNumber: order.wo_number, action: "closed",
+        detail: `${money(closeTotal)}${multiItem ? ` · ${closeLineItems.length} line items` : ""}`,
+      });
 
       // A file uploaded at close time also becomes a real
       // work_order_documents row (not just the legacy receipt_path column
-      // above) so it shows up immediately in the multi-document list on
-      // every work order this close created/touched, same as attaching
-      // one manually via WorkOrderDocumentsPanel.
+      // above) so it shows up immediately in the multi-document list, same
+      // as attaching one manually via WorkOrderDocumentsPanel.
       if (closeFile) {
         const { data: { user } } = await supabase.auth.getUser();
-        const docRows = [order.id, ...extraWorkOrderIds].map((workOrderId) => ({
-          work_order_id: workOrderId, storage_path: receiptPath, file_name: closeFile.name, uploaded_by: user?.id ?? null,
-        }));
-        const { error: docErr } = await supabase.from("work_order_documents").insert(docRows);
+        const { error: docErr } = await supabase.from("work_order_documents").insert({
+          work_order_id: order.id, storage_path: receiptPath, file_name: closeFile.name, uploaded_by: user?.id ?? null,
+        });
         if (docErr) throw docErr;
       }
 
@@ -758,43 +746,34 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       const dateOpened = addInvoiceForm.dateOpened || todayIso();
       const receiptPath = addInvoiceFile ? await uploadReceipt(addInvoiceFile) : null;
 
-      const rows = addInvoiceLineItems.map((li) => ({
-        unit_id: order.unit.id,
-        vendor_id: order.vendor?.id ?? null,
+      // A second invoice on the same job adds work_order_line_items under
+      // THIS work order (same WO number, same status/void/payment state)
+      // instead of creating new sibling work_orders rows -- the line
+      // items table's own trigger folds the new cost into order.cost.
+      const lineItemRows = addInvoiceLineItems.map((li) => ({
+        work_order_id: order.id,
         category: li.category,
         description: li.description || null,
         cost: Number(li.cost) || 0,
-        status: order.status,
-        date_opened: dateOpened,
-        date_closed: order.status === "Closed" ? dateOpened : null,
-        invoice_ref: addInvoiceForm.invoiceRef || null,
-        po_number: addInvoiceForm.poNumber || null,
-        source: "manual",
-        receipt_path: receiptPath,
-        work_order_group_id: order.work_order_group_id,
       }));
-      const { data: inserted, error: insertErr } = await supabase.from("work_orders").insert(rows).select("id, wo_number");
-      if (insertErr) throw insertErr;
+      const { error: liErr } = await supabase.from("work_order_line_items").insert(lineItemRows);
+      if (liErr) throw liErr;
 
-      if (receiptPath && inserted?.length > 0) {
+      if (receiptPath) {
         const { data: { user } } = await supabase.auth.getUser();
-        const docRows = inserted.map((row) => ({
-          work_order_id: row.id, storage_path: receiptPath, file_name: addInvoiceFile.name, uploaded_by: user?.id ?? null,
-        }));
-        const { error: docErr } = await supabase.from("work_order_documents").insert(docRows);
+        const { error: docErr } = await supabase.from("work_order_documents").insert({
+          work_order_id: order.id, storage_path: receiptPath, file_name: addInvoiceFile.name, uploaded_by: user?.id ?? null,
+        });
         if (docErr) throw docErr;
       }
 
       logWorkOrderActivity({
         workOrderId: order.id, woNumber: order.wo_number, action: "invoice_added",
-        detail: `${rows.length} line item(s) · ${money(addInvoiceTotal)}`,
+        detail: `${lineItemRows.length} line item(s) · ${money(addInvoiceTotal)}`
+          + (addInvoiceForm.invoiceRef ? ` · Ref ${addInvoiceForm.invoiceRef}` : "")
+          + (addInvoiceForm.poNumber ? ` · PO ${addInvoiceForm.poNumber}` : "")
+          + ` · dated ${dateOpened}`,
       });
-      for (const row of inserted ?? []) {
-        logWorkOrderActivity({
-          workOrderId: row.id, woNumber: row.wo_number, action: "created",
-          detail: `Additional invoice added on ${order.wo_number}`,
-        });
-      }
 
       setAddingInvoice(false);
       await reload();
@@ -1361,6 +1340,37 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                   {order.description && order.description !== order.complaint && (
                     <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: order.complaint ? 4 : 0 }}>{order.description}</div>
                   )}
+                </div>
+              )}
+
+              {order.lineItems?.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10.5, color: "var(--clg-text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+                    Line items ({order.lineItems.length})
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {order.lineItems.map((li) => (
+                      <div
+                        key={li.id}
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                          fontSize: 12.5, color: "var(--clg-text-body)", background: "var(--clg-surface-subtle)",
+                          borderRadius: "var(--clg-radius-sm)", padding: "6px 10px",
+                        }}
+                      >
+                        <span style={{ minWidth: 0 }}>
+                          <strong>{li.category}</strong>
+                          {li.description ? ` — ${li.description}` : ""}
+                          {li.is_chargeback && (
+                            <span style={{ marginLeft: 6, fontSize: 10.5, color: "var(--clg-scarlet)", fontWeight: 700 }}>
+                              CHARGEBACK{li.chargeback_driver_name ? ` · ${li.chargeback_driver_name}` : ""}
+                            </span>
+                          )}
+                        </span>
+                        <span style={{ fontWeight: 600, color: "var(--clg-navy)", flexShrink: 0 }}>{money(li.cost)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

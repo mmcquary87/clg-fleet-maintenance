@@ -11,6 +11,14 @@
 // logged) stays under the work order's own category -- the split always
 // sums back to exactly the original cost, never inventing or losing money.
 export function splitCostByCategory(record) {
+  // Real invoice line items (work_order_line_items) are the authoritative
+  // breakdown when present -- each one's cost already sums to record.cost
+  // via that table's own DB trigger, so no proportional scaling is needed
+  // the way the parts-based estimate below requires.
+  if (record.lineItems?.length > 0) {
+    return record.lineItems.map((li) => ({ category: li.category, amount: li.amount }));
+  }
+
   const parts = (record.parts ?? []).filter((p) => p.unitCost != null);
   if (parts.length === 0) return [{ category: record.category, amount: record.cost }];
 

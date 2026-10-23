@@ -61,14 +61,18 @@ export function partsCostFor(order) {
   return (order.parts ?? []).reduce((s, p) => s + (Number(p.quantity) || 0) * (Number(p.unit_cost) || 0), 0);
 }
 
-// Returns the GL account number for a work order's non-parts (Inspection/
-// Tires/Repairs) line, or null if the needed account isn't configured.
-function repairAccountFor(order, glMap) {
+// Returns the GL account number for a non-parts (Inspection/Tires/Repairs)
+// line in the given category, or null if the needed account isn't
+// configured. Takes category explicitly (not read off `order.category`)
+// so a multi-category invoice can route each of its line items to its own
+// account instead of lumping everything under the work order's own first/
+// primary category.
+function repairAccountFor(category, order, glMap) {
   const isTruck = order.unit?.type === "Truck";
-  if (order.category === "DOT Inspection" || order.category === "Mid-Trip Inspection") {
+  if (category === "DOT Inspection" || category === "Mid-Trip Inspection") {
     return isTruck ? glMap.truck_inspection_account : glMap.trailer_inspection_account;
   }
-  if (order.category === "Tires") {
+  if (category === "Tires") {
     return isTruck ? glMap.truck_tires_account : glMap.trailer_tires_account;
   }
   if (isTruck) {
@@ -104,14 +108,20 @@ function baseRow({ vendorId, invoiceRef, poNumber, dateClosed, defaultTerms, des
 }
 
 // workOrders: rows joined with vendor:{ intacct_vendor_id }, unit:{ type,
-// owner_operator_assigned }, and parts:work_order_parts(quantity,
-// unit_cost) -- carrying category/date_closed/cost/invoice_ref/wo_number/
-// complaint/description.
+// owner_operator_assigned }, parts:work_order_parts(quantity, unit_cost),
+// and lineItems:work_order_line_items(category, cost) -- carrying
+// category/date_closed/cost/invoice_ref/wo_number/complaint/description.
 //
-// Returns { eligible: [{ order, row }], skipped: [{ order, reason }] }. A
-// vendor-attached work order with parts also logged produces two rows
-// (parts + remaining repair amount); every other exportable case
-// produces exactly one.
+// Returns { eligible: [{ order, row }], skipped: [{ order, reason }] }, all
+// lines for one work order sharing the same BILL_NO/VENDOR_ID (one Sage
+// bill) with different LINE_NOs. A vendor-attached work order with
+// mechanic-logged parts also produces a parts line alongside whatever
+// repair line(s) below. A work order covering several repair categories
+// (work_order_line_items) produces one repair line PER line item, each
+// routed to its own category's GL account -- instead of lumping the whole
+// invoice under its first/primary category the way a single combined
+// "repair amount" would. A work order with no line items produces exactly
+// one repair line, routed by its own category, same as always.
 export function buildIntacctBillRows(workOrders, { glMap, defaultTerms, batchTitle }) {
   const eligible = [];
   const skipped = [];
@@ -128,7 +138,14 @@ export function buildIntacctBillRows(workOrders, { glMap, defaultTerms, batchTit
 
     const description = o.complaint || o.description || "";
     const parts = Math.min(partsCostFor(o), totalCost);
-    const repairAmount = totalCost - parts;
+    const repairTotal = totalCost - parts;
+    // Several categories' worth of repair, or just the one combined amount
+    // under the work order's own category -- either way this always sums
+    // to repairTotal.
+    const repairLines = o.lineItems?.length > 0
+      ? o.lineItems.map((li) => ({ category: li.category, amount: Number(li.cost) || 0 }))
+      : (repairTotal > 0 ? [{ category: o.category, amount: repairTotal }] : []);
+
     let lineNo = 1;
     const rows = [];
     const reasons = [];
@@ -147,17 +164,18 @@ export function buildIntacctBillRows(workOrders, { glMap, defaultTerms, batchTit
       }
     }
 
-    if (repairAmount > 0) {
-      const repairAcct = repairAccountFor(o, glMap);
+    for (const { category, amount } of repairLines) {
+      if (amount <= 0) continue;
+      const repairAcct = repairAccountFor(category, o, glMap);
       if (repairAcct) {
         const row = baseRow({ vendorId, invoiceRef: o.invoice_ref, poNumber: o.wo_number, dateClosed: o.date_closed, defaultTerms, description, batchTitle });
         row.LINE_NO = lineNo++;
-        row.MEMO = `WO ${o.wo_number || o.id} — ${description}`.slice(0, 1000);
+        row.MEMO = `WO ${o.wo_number || o.id} — ${category} — ${description}`.slice(0, 1000);
         row.ACCT_NO = repairAcct;
-        row.AMOUNT = repairAmount.toFixed(2);
+        row.AMOUNT = amount.toFixed(2);
         rows.push(row);
       } else {
-        reasons.push(`no GL account configured for "${o.category}" on this unit type/ownership`);
+        reasons.push(`no GL account configured for "${category}" on this unit type/ownership`);
       }
     }
 
