@@ -30,7 +30,9 @@ export const PM_DUE_SOON_WINDOW_MILES = 2500;
 //                         first odometer-tracked service here).
 //   "whichever_first"  -- both schedules are tracked at once and the
 //                         milestone is due at whichever comes first (e.g.
-//                         Fuel Filter: "every 6 months or 50,000 mi").
+//                         Fuel Filter: "every 6 months or 40,000 mi").
+// `appliesTo` (optional) restricts a milestone to one unit.type -- omitted
+// entirely means it applies to every unit, same as before this existed.
 export const MILESTONES = [
   { key: "pm", label: "PM / Oil", lastField: "last_pm_date", intervalField: "pm_interval_days", fixedInterval: null,
     mileage: { lastField: "last_pm_odometer", intervalField: "pm_interval_miles" }, mileageRule: "prefer" },
@@ -45,6 +47,10 @@ export const MILESTONES = [
     mileage: { lastField: "last_differential_oil_odometer", intervalField: "differential_oil_interval_miles" }, mileageRule: "only" },
   { key: "fuel_filter", label: "Fuel Filter", lastField: "last_fuel_filter_date", intervalField: "fuel_filter_interval_days", fixedInterval: null,
     mileage: { lastField: "last_fuel_filter_odometer", intervalField: "fuel_filter_interval_miles" }, mileageRule: "whichever_first" },
+  { key: "grease_fifth_wheel", label: "Grease Fifth Wheel", lastField: "last_grease_fifth_wheel_date", intervalField: "grease_fifth_wheel_interval_days", fixedInterval: null,
+    appliesTo: "Trailer" },
+  { key: "grease_chassis", label: "Grease Chassis", lastField: "last_grease_chassis_date", intervalField: "grease_chassis_interval_days", fixedInterval: null,
+    appliesTo: "Truck" },
 ];
 
 function todayStr() {
@@ -130,7 +136,9 @@ export function resolveMilestone(m, unit, dueOverride) {
 
 // Worst status across all milestones for a unit — drives the roster's at-a-glance badge.
 export function worstStatus(unit) {
-  const statuses = MILESTONES.map((m) => resolveMilestone(m, unit).status);
+  const statuses = MILESTONES
+    .filter((m) => !m.appliesTo || m.appliesTo === unit.type)
+    .map((m) => resolveMilestone(m, unit).status);
   if (statuses.includes("overdue")) return "overdue";
   if (statuses.includes("due_soon")) return "due_soon";
   if (statuses.every((s) => s === "unknown")) return "unknown";

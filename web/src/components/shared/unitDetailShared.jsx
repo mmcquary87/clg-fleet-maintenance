@@ -216,7 +216,7 @@ export function MilestoneRow({ milestone: m, unit, onSave, saving, dueOverride }
 export function MaintenanceSchedule({ unit, maintenanceDue, onSave, saving }) {
   return (
     <>
-      {MILESTONES.map((m) => {
+      {MILESTONES.filter((m) => !m.appliesTo || m.appliesTo === unit.type).map((m) => {
         const isAnnual = m.key === "annual";
         const isMidtrip = m.key === "midtrip";
         const isPm = m.key === "pm";

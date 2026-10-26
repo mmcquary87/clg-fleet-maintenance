@@ -34,6 +34,7 @@ export function useUnits() {
         "last_cabin_air_filter_date, cabin_air_filter_interval_days, " +
         "last_differential_oil_odometer, differential_oil_interval_miles, " +
         "last_fuel_filter_date, fuel_filter_interval_days, last_fuel_filter_odometer, fuel_filter_interval_miles, " +
+        "last_grease_fifth_wheel_date, grease_fifth_wheel_interval_days, last_grease_chassis_date, grease_chassis_interval_days, " +
         "ownership, owner_operator_assigned, plate_number, current_market_value, domicile, warranty_status, " +
         "issue_tag, issue_tag_note"
       )
