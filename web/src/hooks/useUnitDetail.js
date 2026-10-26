@@ -5,6 +5,11 @@ const UNIT_SELECT =
   "id, number, type, vin, is_active, current_location, driver_name, odometer, " +
   "year, make, model, fuel_type, last_fuel_percent, samsara_synced_at, load_trip_id, domicile, warranty_status, " +
   "last_pm_date, pm_interval_days, last_pm_odometer, pm_interval_miles, last_annual_inspection_date, last_midtrip_date, midtrip_interval_days, " +
+  "last_transmission_fluid_odometer, transmission_fluid_interval_miles, " +
+  "last_engine_air_filter_date, engine_air_filter_interval_days, last_engine_air_filter_odometer, engine_air_filter_interval_miles, " +
+  "last_cabin_air_filter_date, cabin_air_filter_interval_days, " +
+  "last_differential_oil_odometer, differential_oil_interval_miles, " +
+  "last_fuel_filter_date, fuel_filter_interval_days, last_fuel_filter_odometer, fuel_filter_interval_miles, " +
   "ownership, owner_operator_assigned, plate_number, plate_expires_at, lease_reference, lease_status_note, in_service_date, " +
   "current_market_value, current_market_value_date, market_value_mom_depreciation_pct, " +
   "can_move_load, issue_tag, issue_tag_note";

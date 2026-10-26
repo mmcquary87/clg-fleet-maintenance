@@ -29,6 +29,11 @@ export function useUnits() {
       .select(
         "id, number, type, vin, is_active, current_location, created_at, odometer, can_move_load, idle_since, " +
         "last_pm_date, pm_interval_days, last_pm_odometer, pm_interval_miles, last_annual_inspection_date, last_midtrip_date, midtrip_interval_days, " +
+        "last_transmission_fluid_odometer, transmission_fluid_interval_miles, " +
+        "last_engine_air_filter_date, engine_air_filter_interval_days, last_engine_air_filter_odometer, engine_air_filter_interval_miles, " +
+        "last_cabin_air_filter_date, cabin_air_filter_interval_days, " +
+        "last_differential_oil_odometer, differential_oil_interval_miles, " +
+        "last_fuel_filter_date, fuel_filter_interval_days, last_fuel_filter_odometer, fuel_filter_interval_miles, " +
         "ownership, owner_operator_assigned, plate_number, current_market_value, domicile, warranty_status, " +
         "issue_tag, issue_tag_note"
       )
