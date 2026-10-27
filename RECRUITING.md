@@ -66,7 +66,7 @@ Every lead gets exactly one segment. The segment decides the pitch.
 
 | System | Role | Access |
 | --- | --- | --- |
-| Tenstreet | Applications, driver qualification files, MVR/PSP consents | API access requested; until confirmed, use CSV export/import. **2026-09-27 decision:** candidate identity + application/pipeline stage syncs into CLG OS (same `leads`/`onboarding_case_steps` tables recruiters already work in — see below). Sensitive DQF content (SSN, medical cert, drug test result, license image) stays in Tenstreet only; CLG OS links out to the Tenstreet record rather than storing it. Tenstreet remains the compliance system of record for DQF itself |
+| Tenstreet | Applications, driver qualification files, MVR/PSP consents | API access confirmed 2026-10-14 (Grant Scheppler, Martech) — inbound-only: Tenstreet's own dashboard pushes XML to an HTTPS endpoint CLG provides (`tenstreet-application-intake`/`tenstreet-documents-intake` Edge Functions, `20261027020000_tenstreet_integration.sql`); CLG OS never polls or requests anything. Candidate identity + application/pipeline stage syncs into `leads` (`source_code = 'tenstreet'`), same as CSV import. **2026-10-27 decision (supersedes the 2026-09-27 one below):** CLG wants Tenstreet data pulled in fully rather than left as a link-out — the 2026-09-27 decision assumed CLG OS would only ever query *out* to Tenstreet, which doesn't hold now that Tenstreet pushes to us by design. Sensitive DQF content (SSN, MVR/PSP files) IS now stored here: SSN encrypted (`pgcrypto`, key in Edge Function secrets only) with a last-4 field for lookups, files in a private `tenstreet-documents` storage bucket, and all of it (plus `tenstreet_inbound_log`, `tenstreet_applicant_identity`, `tenstreet_documents`) gated to the `recruiter`/`admin` roles specifically — tighter than the broad `authenticated` RLS every other recruiting table uses, since this is materially more sensitive than the rest of the CRM data. Tenstreet remains the compliance system of record for DQF itself; this is a durable copy, not a replacement for it. See the two edge functions' own header comments for the still-open questions sent back to Tenstreet (real sample XML, root element name, applicant dedupe key, auth mechanism, DEV company ID) |
 | FMCSA QCMobile | Carrier authority, power units, safety and inspection data | Free web key, stored as an Edge Function secret |
 | Aljex (Descartes) | Brokerage carriers and load history — the warmest leads | API or scheduled export (TBD) |
 | Alvys | Asset-side TMS / dispatch | Existing API connection (already integrated elsewhere in this app) |
@@ -146,7 +146,12 @@ Build one module per session. Each must pass its tests before the next starts.
    `vetting.py`/`scoring.py`, config-driven, stamped `score_status =
    'provisional'` until CLG approves a scoring config). Aljex importer and
    the inbound web form endpoint are **not built** — see the open scope
-   decision below.
+   decision below. **2026-10-27: Tenstreet's live push API built** —
+   `tenstreet-application-intake`/`tenstreet-documents-intake` Edge
+   Functions (see section 4) are the real-time source once Tenstreet
+   finishes pointing their account at these endpoints;
+   `TenstreetImportForm.jsx`'s manual CSV path stays as a fallback/backfill
+   tool, not removed.
 3. **Vetting** — flags are mechanically derived and stored (module 2). A
    recruiter can see them and act on them: each open flag gets an optional
    note plus Clear (false positive) / Confirm (accurate, doesn't block)
@@ -271,7 +276,7 @@ and pace are confirmed.
 - **Dry-run by default.** No real email or SMS leaves the system unless explicitly enabled. Dev and tests always dry-run.
 - **TCPA.** No automated texts without recorded prior consent. Cold FMCSA leads are contacted by email or phone first. Honor STOP/opt-out instantly and permanently. Respect quiet hours in the recipient's time zone.
 - **CAN-SPAM.** Every email includes CLG's physical address and a working unsubscribe.
-- **Background checks** (MVR, PSP) run through Tenstreet with the candidate's consent. Never pull them from this system.
+- **Background checks** (MVR, PSP) run through Tenstreet with the candidate's consent. **2026-10-27 update:** Tenstreet's own API now pushes these files and the SSNs that identify them to CLG OS (section 4) — storing what Tenstreet pushes to the dedicated, recruiter/admin-only tables and bucket described there is sanctioned; this system still never independently requests or pulls a background check on its own.
 - **Fair screening.** Scoring uses only business factors (authority, safety, equipment, lanes, experience). Never collect or use age, race, religion, national origin, sex, disability, or similar attributes.
 - **Human in the loop.** The AI never makes a lease offer, promises a start date, or states terms outside the rate sheet config.
 - **PII.** Secrets in Edge Function secrets only, never committed. Encrypt phone and email at rest where the platform supports it. Log actions, not full message bodies, in application logs.
@@ -301,7 +306,11 @@ registration date, easy to mistake for one.
 
 ## 9. Open questions (ask before assuming)
 
-- Tenstreet API access: yes or no?
+- Tenstreet API access: confirmed 2026-10-14 (see section 4). Still open —
+  sent back to Tenstreet, not yet answered: real sample XML (the guides'
+  own linked samples weren't retrievable), the application feed's root
+  element name, a stable applicant ID to dedupe on, how Tenstreet
+  authenticates to our endpoint, CLG's real/test Company ID.
 - Aljex access method: API or export?
 - Maintenance escrow contribution per settlement
 - Minimum available days to earn the guarantee
