@@ -1,0 +1,12 @@
+-- Fleet Maintenance System — enforce one work order per DVIR defect.
+--
+-- work_orders.dvir_defect_id (20261021010000_dvir_defect_work_order_link.sql)
+-- already guarantees a work order links to at most one defect (it's a
+-- single-value column), but nothing stopped two DIFFERENT work orders from
+-- both pointing at the same defect -- e.g. "Create work order" raised one,
+-- then someone later "Attach existing" another onto the same defect without
+-- unlinking the first. CLG wants strictly one defect : one work order
+-- (2026-10-27), so a partial unique index enforces it at the database level
+-- (partial, not a plain unique constraint, so any number of NEVER-linked
+-- work orders -- dvir_defect_id null -- stay unrestricted).
+create unique index work_orders_dvir_defect_id_unique on work_orders(dvir_defect_id) where dvir_defect_id is not null;

@@ -39,36 +39,63 @@ const COLUMNS = [
   { key: "woCell", label: "Work order" },
 ];
 
+const LINK_ACTION_STYLE = { background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11.5, color: "var(--clg-royal)", fontWeight: 600, textDecoration: "underline" };
+
 // Mirrors the Check Call board's "Raise a work order from this note"
 // (CheckCallBoard.jsx's RaiseWorkOrderInline) -- same Open-Proposed/manual
 // intake pattern, just tagged source: "samsara_dvir" and linked back to
 // the defect via dvir_defect_id so a repeat visit shows the existing WO
-// instead of offering to raise a duplicate.
+// instead of offering to raise a duplicate. "Attach existing" covers the
+// other way a duplicate happens -- the real repair work order already got
+// created through a different channel (manual entry, Alvys import, a
+// mechanic) before anyone looked at this defect -- so a dispatcher can
+// link the two instead of creating a second one. A partial unique index
+// on work_orders.dvir_defect_id (20261027010000) keeps this strictly one
+// defect : one work order; "Unlink" clears a wrong attachment so a
+// different work order can be attached (or a new one raised) instead.
 function DvirWorkOrderCell({ defect, onRaised }) {
   const existing = defect.work_orders?.[0];
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("idle"); // "idle" | "create" | "attach"
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [description, setDescription] = useState(defect.comment || defect.defect_type || "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [candidates, setCandidates] = useState([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [chosenId, setChosenId] = useState("");
 
-  if (existing) {
-    return <StatusPill tone={existing.status === "Closed" ? "green" : "yellow"}>{existing.wo_number}</StatusPill>;
-  }
-  if (!defect.unit_id) {
-    return <span style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>No unit linked</span>;
-  }
+  const unlink = async () => {
+    setSubmitting(true);
+    setError(null);
+    const { error: err } = await supabase.from("work_orders").update({ dvir_defect_id: null }).eq("id", existing.id);
+    setSubmitting(false);
+    if (err) { setError(err.message); return; }
+    logWorkOrderActivity({ workOrderId: existing.id, woNumber: existing.wo_number, action: "unlinked", detail: `Unlinked from a DVIR defect: ${defect.defect_type || "defect"}` });
+    onRaised?.();
+  };
 
-  if (!open) {
-    return (
-      <button
-        type="button" onClick={() => setOpen(true)}
-        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11.5, color: "var(--clg-royal)", fontWeight: 600, textDecoration: "underline" }}
-      >
-        Create work order
-      </button>
-    );
-  }
+  const openAttach = async () => {
+    setMode("attach");
+    setCandidatesLoading(true);
+    const { data } = await supabase.from("work_orders")
+      .select("id, wo_number, category, status, date_opened")
+      .eq("unit_id", defect.unit_id).eq("voided", false).is("dvir_defect_id", null)
+      .order("date_opened", { ascending: false }).limit(25);
+    setCandidates(data ?? []);
+    setCandidatesLoading(false);
+  };
+
+  const attach = async () => {
+    if (!chosenId) return;
+    setSubmitting(true);
+    setError(null);
+    const chosen = candidates.find((c) => c.id === chosenId);
+    const { error: err } = await supabase.from("work_orders").update({ dvir_defect_id: defect.id }).eq("id", chosenId);
+    setSubmitting(false);
+    if (err) { setError(err.message); return; }
+    if (chosen) logWorkOrderActivity({ workOrderId: chosen.id, woNumber: chosen.wo_number, action: "linked", detail: `Attached to a DVIR defect: ${defect.defect_type || "defect"}` });
+    onRaised?.();
+  };
 
   const submit = async () => {
     setSubmitting(true);
@@ -92,6 +119,57 @@ function DvirWorkOrderCell({ defect, onRaised }) {
     onRaised?.();
   };
 
+  if (existing) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <StatusPill tone={existing.status === "Closed" ? "green" : "yellow"}>{existing.wo_number}</StatusPill>
+        <button
+          type="button" onClick={unlink} disabled={submitting}
+          title="Unlink this work order so a different one can be attached, or a new one raised"
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, color: "var(--clg-text-muted)", textDecoration: "underline" }}
+        >
+          Unlink
+        </button>
+      </div>
+    );
+  }
+  if (!defect.unit_id) {
+    return <span style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>No unit linked</span>;
+  }
+
+  if (mode === "idle") {
+    return (
+      <div style={{ display: "flex", gap: 12 }}>
+        <button type="button" onClick={() => setMode("create")} style={LINK_ACTION_STYLE}>Create work order</button>
+        <button type="button" onClick={openAttach} style={LINK_ACTION_STYLE}>Attach existing</button>
+      </div>
+    );
+  }
+
+  if (mode === "attach") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 240 }}>
+        {error && <div style={{ fontSize: 11, color: "var(--clg-scarlet)" }}>{error}</div>}
+        {candidatesLoading ? (
+          <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+            <Loader2 size={12} className="spin" /> Loading this unit's work orders…
+          </div>
+        ) : candidates.length === 0 ? (
+          <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>No open, unlinked work orders on this unit.</div>
+        ) : (
+          <Select
+            value={chosenId} onChange={(e) => setChosenId(e.target.value)} placeholder="Choose a work order"
+            options={candidates.map((c) => ({ value: c.id, label: `${c.wo_number} — ${c.category} (${c.status}, ${fmtDate(c.date_opened)})` }))}
+          />
+        )}
+        <div style={{ display: "flex", gap: 6 }}>
+          <Button size="sm" onClick={attach} disabled={submitting || !chosenId} iconLeft={submitting ? <Loader2 size={13} className="spin" /> : null}>Attach</Button>
+          <Button size="sm" variant="outline" onClick={() => setMode("idle")} disabled={submitting}>Cancel</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 220 }}>
       {error && <div style={{ fontSize: 11, color: "var(--clg-scarlet)" }}>{error}</div>}
@@ -99,7 +177,7 @@ function DvirWorkOrderCell({ defect, onRaised }) {
       <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's wrong" />
       <div style={{ display: "flex", gap: 6 }}>
         <Button size="sm" onClick={submit} disabled={submitting} iconLeft={submitting ? <Loader2 size={13} className="spin" /> : null}>Create</Button>
-        <Button size="sm" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>Cancel</Button>
+        <Button size="sm" variant="outline" onClick={() => setMode("idle")} disabled={submitting}>Cancel</Button>
       </div>
     </div>
   );
@@ -171,8 +249,8 @@ export default function Dvir() {
       <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 10, lineHeight: 1.5 }}>
         DVIR defects never affect a driver's score. "Resolved by" is whoever closed the defect out in Samsara, not
         necessarily who reported it; {totals.linkedToDriver} of {totals.total} are linked to a driver record in this
-        app. Use "Create work order" to raise an Open-Proposed work order from a defect for a dispatcher/mechanic to
-        review.
+        app. Use "Create work order" to raise an Open-Proposed work order from a defect, or "Attach existing" if the
+        repair was already logged through another channel — avoids a duplicate. "Unlink" undoes either one.
       </div>
 
       <Table columns={COLUMNS} rows={rows} />
