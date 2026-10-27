@@ -11,10 +11,10 @@
 // dashboard, this function's settings) -- same precedent as email-intake
 // and tenstreet-application-intake (see that function's header for the
 // auth-mechanism reasoning). The URL Tenstreet is given already carries a
-// long random secret as its final path segment, checked below.
+// long random secret as a `key` query parameter, checked below.
 //
 // Required Edge Function secrets:
-//   TENSTREET_DOCUMENTS_URL_SECRET — the path secret above (deliberately a
+//   TENSTREET_DOCUMENTS_URL_SECRET — the query-parameter secret above (deliberately a
 //     DIFFERENT secret than the application feed's, so either can be
 //     rotated independently)
 //   TENSTREET_ENCRYPTION_KEY — same key tenstreet-application-intake uses;
@@ -135,9 +135,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   const url = new URL(req.url);
-  const providedSecret = url.pathname.split("/").filter(Boolean).pop() ?? "";
+  const providedSecret = url.searchParams.get("key") ?? "";
   if (providedSecret !== URL_SECRET) {
-    console.error("tenstreet-documents-intake: bad or missing URL secret");
+    console.error("tenstreet-documents-intake: bad or missing key query parameter");
     return new Response("Forbidden", { status: 401 });
   }
 

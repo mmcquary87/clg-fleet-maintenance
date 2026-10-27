@@ -10,14 +10,14 @@
 // dashboard, this function's settings) -- Tenstreet has no Supabase user
 // session to present, same precedent as email-intake (Mailgun). Tenstreet's
 // guide never specifies how it authenticates TO us, so the URL Tenstreet is
-// given already carries a long random secret as its final path segment,
+// given already carries a long random secret as a `key` query parameter,
 // checked below -- Tenstreet just needs "an HTTPS endpoint," no custom
 // header or Basic-auth setup on their end. If Tenstreet later confirms they
 // CAN send a custom header or Basic auth, switch to that instead (a header
 // is stronger than a URL, which can end up logged somewhere).
 //
 // Required Edge Function secrets:
-//   TENSTREET_APPLICATION_URL_SECRET — the path secret above
+//   TENSTREET_APPLICATION_URL_SECRET — the query-parameter secret above
 //   TENSTREET_ENCRYPTION_KEY — passphrase pgcrypto encrypts the SSN/raw
 //     XML with at rest (see 20261027020000_tenstreet_integration.sql);
 //     lives only here, never in the database
@@ -109,9 +109,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   const url = new URL(req.url);
-  const providedSecret = url.pathname.split("/").filter(Boolean).pop() ?? "";
+  const providedSecret = url.searchParams.get("key") ?? "";
   if (providedSecret !== URL_SECRET) {
-    console.error("tenstreet-application-intake: bad or missing URL secret");
+    console.error("tenstreet-application-intake: bad or missing key query parameter");
     return new Response("Forbidden", { status: 401 });
   }
 
