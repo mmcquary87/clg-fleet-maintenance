@@ -47,10 +47,23 @@
 //
 // Speeding interval driver attribution: /speeding-intervals/stream only
 // ever returns a vehicle (asset) id, never a driver — unlike
-// safety-events and hos/violations. Approximated via each vehicle's
-// staticAssignedDriver (from /fleet/vehicles, same endpoint
-// samsara-fleet-mpg/samsara-miles already use) — accurate for CLG's
-// typical one-driver-per-truck setup, less so for team-driven trucks.
+// safety-events and hos/violations. Originally approximated via each
+// vehicle's single staticAssignedDriver field (from /fleet/vehicles) --
+// confirmed broken 2026-10-28 (Alberto Avila driving unit 8619 for weeks
+// scored a phantom Speeding 100 because 8619 had no Static Assigned Driver
+// set in Samsara at all; that field is also not time-aware, so it can't
+// handle a truck changing drivers). Replaced with a real time-windowed
+// join against /fleet/driver-vehicle-assignments (confirmed via
+// samsara-explore-driver-vehicle-assignments, 2026-10-28): Samsara already
+// auto-generates assignment records with exact start/end timestamps
+// whenever a driver logs HOS activity against a vehicle, so each speeding
+// interval is matched to whichever driver's assignment window actually
+// covers that interval's own startTime -- accurate even for a truck that
+// changes drivers mid-week, and self-corrects as soon as a driver's HOS
+// app activity links them to a vehicle (no manual Samsara setup required).
+// An interval with no covering assignment is left unattributed (driver_id
+// null) rather than guessed -- same "real N/A, not a fake 100" principle
+// as the rest of this scoring system.
 //
 // Requires SAMSARA_API secret + service role.
 
@@ -228,15 +241,61 @@ Deno.serve(async (req) => {
       .from("units").select("id, samsara_vehicle_id").not("samsara_vehicle_id", "is", null);
     if (unitsErr) throw unitsErr;
     const unitIdByVehicleId = new Map(units.map((u: any) => [u.samsara_vehicle_id, u.id]));
+    const vehicleIds = units.map((u: any) => u.samsara_vehicle_id);
 
-    // Static assigned driver per vehicle — the only driver attribution
-    // /speeding-intervals/stream's vehicle-only data allows (see header).
-    const samsaraVehicles = await fetchAllPaginated("/fleet/vehicles", { limit: "200" });
-    const assignedDriverIdByVehicleId = new Map<string, string>(
-      samsaraVehicles
-        .filter((v: any) => v.staticAssignedDriver?.id)
-        .map((v: any) => [v.id, v.staticAssignedDriver.id]),
-    );
+    // --- Driver-Vehicle Assignments (time-windowed, for Speeding attribution) ---
+    // Padded 2 days before the sync window so an assignment that started
+    // before this window opened (but is still active into it) is still
+    // found -- a speeding interval right at windowStart shouldn't go
+    // unattributed just because its covering assignment began earlier.
+    // Same per-batch resilience as HOS violations/Speeding below: one bad
+    // vehicle id shouldn't take down every other vehicle's assignment data.
+    const ASSIGNMENT_PAD_MS = 2 * 24 * 3600 * 1000;
+    const assignmentFetchStart = new Date(start.getTime() - ASSIGNMENT_PAD_MS).toISOString();
+    const assignmentBatchErrors: string[] = [];
+    const assignmentsByVehicle = new Map<string, Array<{ start: number; end: number | null; driverId: string }>>();
+    let assignmentRecordsFetched = 0;
+    for (const batch of chunk(vehicleIds, VEHICLE_BATCH_SIZE)) {
+      let records: any[];
+      try {
+        records = await fetchAllPaginated("/fleet/driver-vehicle-assignments", {
+          filterBy: "vehicles", vehicleIds: batch.join(","), startTime: assignmentFetchStart, endTime,
+        });
+      } catch (err) {
+        assignmentBatchErrors.push(err instanceof Error ? err.message : String(err));
+        continue;
+      }
+      for (const rec of records) {
+        const vehicleId = rec.vehicle?.id;
+        const driverId = rec.driver?.id;
+        if (!vehicleId || !driverId || !rec.startTime) continue;
+        const list = assignmentsByVehicle.get(vehicleId) ?? [];
+        list.push({
+          start: new Date(rec.startTime).getTime(),
+          end: rec.endTime ? new Date(rec.endTime).getTime() : null,
+          driverId,
+        });
+        assignmentsByVehicle.set(vehicleId, list);
+        assignmentRecordsFetched++;
+      }
+    }
+    for (const list of assignmentsByVehicle.values()) list.sort((a, b) => a.start - b.start);
+
+    // Binary search for the assignment window (if any) covering tsMs --
+    // assignment windows are contiguous/non-overlapping in real data, so
+    // the last one starting at-or-before tsMs is the one to check.
+    function findDriverAtTime(vehicleId: string, tsMs: number): string | null {
+      const list = assignmentsByVehicle.get(vehicleId);
+      if (!list || list.length === 0) return null;
+      let lo = 0, hi = list.length - 1, ans = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (list[mid].start <= tsMs) { ans = mid; lo = mid + 1; } else hi = mid - 1;
+      }
+      if (ans === -1) return null;
+      const a = list[ans];
+      return (a.end === null || tsMs <= a.end) ? a.driverId : null;
+    }
 
     // --- Safety Events (driverIds filter is silently ignored — pull all) ---
     const safetyEvents = await fetchAllPaginated("/fleet/safety-events", { startTime, endTime, limit: "200" });
@@ -328,7 +387,6 @@ Deno.serve(async (req) => {
     // stale unit.samsara_vehicle_id degrades only its own batch of up to 50
     // vehicles; surfaced in the response so it's visible, not swallowed.
     const speedingBatchErrors: string[] = [];
-    const vehicleIds = units.map((u: any) => u.samsara_vehicle_id);
     const speedingRows: any[] = [];
     for (const batch of chunk(vehicleIds, VEHICLE_BATCH_SIZE)) {
       let trips: any[];
@@ -348,7 +406,7 @@ Deno.serve(async (req) => {
           // (only moderate/heavy/severe count) and is by far the
           // dominant volume on any highway trip — skip storing it.
           if (!iv.startTime || iv.severityLevel === "light") continue;
-          const assignedSamsaraDriverId = assignedDriverIdByVehicleId.get(vehicleId) ?? null;
+          const assignedSamsaraDriverId = findDriverAtTime(vehicleId, new Date(iv.startTime).getTime());
           speedingRows.push({
             id: `${vehicleId}:${iv.startTime}`,
             samsara_vehicle_id: vehicleId,
@@ -436,11 +494,14 @@ Deno.serve(async (req) => {
       samsaraDriversFound: samsaraDrivers.length,
       driversLinkedByName: driverIdBySamsaraId.size,
       unmatchedSamsaraDrivers,
-      vehiclesWithAssignedDriver: assignedDriverIdByVehicleId.size,
+      driverVehicleAssignmentsFetched: assignmentRecordsFetched,
+      assignmentBatchErrors,
       safetyEventsUpserted,
       violationsUpserted,
       violationBatchErrors,
       speedingIntervalsUpserted: speedingUpserted,
+      speedingIntervalsAttributed: speedingRows.filter((r: any) => r.driver_id).length,
+      speedingIntervalsUnattributed: speedingRows.filter((r: any) => !r.driver_id).length,
       speedingBatchErrors,
       fuelEnergyRowsUpserted: fuelEnergyUpserted,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
