@@ -9,7 +9,10 @@ function speedingWeight(severityLevel) {
 
 // Same behavior-label weight matching as driver_safety_scorecard_view.sql's
 // safety_points CTE, reproduced here client-side since this map needs a
-// per-event severity tier, not a per-driver sum.
+// per-event severity tier, not a per-driver sum. Yard Move/Personal
+// Conveyance misuse removed -- neither is a Samsara behavior label (both are
+// scored from manually-logged driver_incidents, which carry no lat/lng and
+// so can never plot on this map anyway) -- see 20261028030000.
 const SAFETY_WEIGHTS = [
   [/harsh brake|braking/i, 0.75],
   [/rolling stop/i, 0.75],
@@ -19,8 +22,6 @@ const SAFETY_WEIGHTS = [
   [/crash/i, 2.0],
   [/roadside parking/i, 0.75],
   [/ran red light|red light/i, 2.0],
-  [/yard move/i, 0.75],
-  [/personal conveyance|pc misuse/i, 1.0],
 ];
 
 function safetyEventWeight(behaviorLabels) {
@@ -57,7 +58,8 @@ export function useIncidentMapEvents() {
         .from("driver_speeding_intervals")
         .select("id, start_time, severity_level, latitude, longitude, driver:drivers(name)")
         .gte("start_time", since)
-        .not("latitude", "is", null),
+        .not("latitude", "is", null)
+        .eq("is_dismissed", false),
       supabase
         .from("driver_safety_events")
         .select("id, event_time, behavior_labels, coaching_state, latitude, longitude, driver:drivers(name)")

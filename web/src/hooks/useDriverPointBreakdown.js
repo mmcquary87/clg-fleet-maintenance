@@ -16,6 +16,9 @@ function startsWithCI(str, prefix) {
 
 const SPEEDING_WEIGHTS = { moderate: 0.25, heavy: 0.75, severe: 1.75 };
 
+// Yard move / personal-conveyance misuse removed from here -- neither is a
+// Samsara behavior label (both are manually-logged driver_incidents, folded
+// into the HOS bucket below instead) -- see 20261028030000.
 const SAFETY_CATEGORIES = [
   { label: "Harsh brake / braking", weight: 0.75, match: (n) => startsWithCI(n, "harsh brake") || startsWithCI(n, "braking") },
   { label: "Rolling stop", weight: 0.75, match: (n) => startsWithCI(n, "rolling stop") },
@@ -25,8 +28,6 @@ const SAFETY_CATEGORIES = [
   { label: "Crash", weight: 2.0, match: (n) => startsWithCI(n, "crash") },
   { label: "Roadside parking", weight: 0.75, match: (n) => startsWithCI(n, "roadside parking") },
   { label: "Ran red light", weight: 2.0, match: (n) => startsWithCI(n, "ran red light") || startsWithCI(n, "red light") },
-  { label: "Yard move", weight: 0.75, match: (n) => startsWithCI(n, "yard move") },
-  { label: "Personal conveyance misuse", weight: 1.0, match: (n) => startsWithCI(n, "personal conveyance") || startsWithCI(n, "pc misuse") },
 ];
 
 // Missing Driver Certification / Missing Shipping ID / Missing Trailer
@@ -42,6 +43,12 @@ const HOS_CATEGORIES = [
   { label: "Cycle limit", weight: 2.75, match: (d) => startsWithCI(d, "cycle limit") },
   { label: "Shift duty limit", weight: 2.75, match: (d) => startsWithCI(d, "shift duty limit") },
 ];
+
+// Yard Move / PC Misuse have no Samsara violation type -- Safety logs them
+// manually (Log Incident -> driver_incidents), and 20261028030000 folds
+// them into the live Driver Score's HOS bucket from there. Mirrored here
+// the same way.
+const MANUAL_HOS_FAMILIES = ["Yard Move", "Personal Conveyance"];
 
 function bucketize(categories, items, nameOf) {
   const counts = categories.map((c) => ({ label: c.label, weight: c.weight, count: 0, points: 0 }));
@@ -78,19 +85,27 @@ export function useDriverPointBreakdown(driverId, range = null) {
       : new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
     const windowEnd = range?.end ? `${range.end}T23:59:59.999` : new Date().toISOString();
 
-    const [speedingRes, safetyRes, hosRes] = await Promise.all([
+    const [speedingRes, safetyRes, hosRes, manualHosRes] = await Promise.all([
       supabase.from("driver_speeding_intervals")
         .select("severity_level, max_speed_kmh, start_time")
-        .eq("driver_id", driverId).gte("start_time", windowStart).lte("start_time", windowEnd),
+        .eq("driver_id", driverId).eq("is_dismissed", false)
+        .gte("start_time", windowStart).lte("start_time", windowEnd),
       supabase.from("driver_safety_events")
         .select("behavior_labels, coaching_state, event_time")
         .eq("driver_id", driverId).gte("event_time", windowStart).lte("event_time", windowEnd),
       supabase.from("driver_hos_violations")
         .select("description, violation_start_time")
         .eq("driver_id", driverId).gte("violation_start_time", windowStart).lte("violation_start_time", windowEnd),
+      // Manually-logged Yard Move/PC Misuse incidents use the infraction's
+      // own rollover_days for a default (trailing-90-day) load, same as the
+      // scorecard view; a caller-given range filters by event_date instead,
+      // same as driver_safety_scorecard_range -- see 20261028030000.
+      supabase.from("driver_incidents")
+        .select("event_date, infraction:accountability_infractions(name, violation_family, points, rollover_days)")
+        .eq("driver_id", driverId),
     ]);
 
-    const err = speedingRes.error || safetyRes.error || hosRes.error;
+    const err = speedingRes.error || safetyRes.error || hosRes.error || manualHosRes.error;
     if (err) {
       setError(err.message);
       setData(null);
@@ -118,6 +133,32 @@ export function useDriverPointBreakdown(driverId, range = null) {
     const hosRowsRaw = hosRes.data ?? [];
     const hos = bucketize(HOS_CATEGORIES, hosRowsRaw, (v) => v.description);
 
+    // Manually-logged Yard Move / PC Misuse, filtered to the same window as
+    // everything else above: a caller-given range filters by event_date
+    // directly; the default (no range) load uses each infraction's own
+    // rollover_days instead, matching driver_safety_scorecard's point-decay
+    // window rather than the 90-day telemetry window used elsewhere here.
+    const todayMs = Date.now();
+    const manualRows = (manualHosRes.data ?? []).filter((r) => {
+      if (!r.infraction || !MANUAL_HOS_FAMILIES.includes(r.infraction.violation_family)) return false;
+      const eventMs = new Date(`${r.event_date}T00:00:00`).getTime();
+      if (range?.start || range?.end) {
+        return eventMs >= new Date(windowStart).getTime() && eventMs <= new Date(windowEnd).getTime();
+      }
+      const rolloverMs = (r.infraction.rollover_days ?? 60) * 24 * 3600 * 1000;
+      return eventMs >= todayMs - rolloverMs;
+    });
+    const manualHosByName = new Map();
+    for (const r of manualRows) {
+      const name = r.infraction.name;
+      const row = manualHosByName.get(name) ?? { label: name, weight: r.infraction.points, count: 0, points: 0 };
+      row.count += 1;
+      row.points += r.infraction.points;
+      manualHosByName.set(name, row);
+    }
+    const manualHosRows = [...manualHosByName.values()];
+    const hosRowsCombined = [...hos.rows, ...manualHosRows];
+
     setData({
       windowStart,
       speeding: {
@@ -132,9 +173,9 @@ export function useDriverPointBreakdown(driverId, range = null) {
         points: safety.rows.reduce((s, r) => s + r.points, 0),
       },
       hos: {
-        rows: hos.rows,
+        rows: hosRowsCombined,
         otherCount: hos.otherCount,
-        points: hos.rows.reduce((s, r) => s + r.points, 0),
+        points: hosRowsCombined.reduce((s, r) => s + r.points, 0),
       },
     });
     setLoading(false);

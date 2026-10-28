@@ -272,8 +272,8 @@ function GraceAndScoring({ graceDrivers }) {
         </div>
         <ul style={{ fontSize: 12.5, color: "var(--clg-text-body)", lineHeight: 1.8, paddingLeft: 18, marginTop: 8 }}>
           <li><strong>Speeding</strong> decays exponentially with penalty points (moderate 0.25, heavy 0.75, severe 1.75 per interval).</li>
-          <li><strong>Safety</strong> loses 5 points per weighted event (following distance 1.5, forward collision 1.75, crash 2.0, harsh brake/turn/rolling stop/yard move/personal-conveyance misuse 0.75–1.0); dismissed events don't count.</li>
-          <li><strong>HOS</strong> loses 4 points per weighted violation (missed cert 1.0, missed rest break 0.75, shift/cycle/duty limit 2.75 each).</li>
+          <li><strong>Safety</strong> loses 5 points per weighted event (following distance 1.5, forward collision 1.75, crash 2.0, harsh brake/turn/rolling stop 0.75–1.0); dismissed events and dismissed speeding intervals don't count.</li>
+          <li><strong>HOS</strong> loses 4 points per weighted violation (missed rest break 0.75, shift/cycle/duty limit 2.75 each, plus manually-logged Yard Move misuse 1.0 and Personal Conveyance misuse 0.75 — Samsara has no violation type for either, so Safety logs them directly). Missing Driver Certification/Shipping ID/Trailer Name don't count toward HOS.</li>
         </ul>
         <div style={{ fontSize: 12.5, color: "var(--clg-text-body)", marginTop: 8, lineHeight: 1.6 }}>
           Overall = <code>100 × (average of the three / 100)^1.7</code>, capped at 100 — the curve rewards staying clean across
