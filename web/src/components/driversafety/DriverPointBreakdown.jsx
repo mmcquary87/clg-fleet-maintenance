@@ -80,10 +80,12 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
           {data && (
             <>
               <Section
-                title={`Speeding — score ${round1(row.speeding_score)}`}
+                title={row.speeding_score === null ? "Speeding — N/A" : `Speeding — score ${round1(row.speeding_score)}`}
                 subtitle="Intervals at or under 85mph, by severity (100 × e^(−points/700))"
                 rows={data.speeding.bySeverity}
-                emptyNote="No scored speeding intervals in the window."
+                emptyNote={row.speeding_score === null
+                  ? "No vehicle currently assigned to this driver in Samsara -- Speeding can't be measured, and is excluded from their Overall Score rather than counted as a perfect 100."
+                  : "No scored speeding intervals in the window."}
                 footnote={data.speeding.excludedOver85 > 0 ? `${data.speeding.excludedOver85} interval(s) over 85mph excluded from scoring.` : null}
               />
               <Section
@@ -106,7 +108,9 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
                   : null}
               />
               <div style={{ fontSize: 11, color: "var(--clg-text-muted)", borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 10 }}>
-                Overall = 100 × (average of the three / 100)^1.7, capped at 100.
+                {row.speeding_score === null
+                  ? "Overall = 100 × (average of Safety + HOS only / 100)^1.7, capped at 100 -- Speeding excluded (no vehicle assignment)."
+                  : "Overall = 100 × (average of the three / 100)^1.7, capped at 100."}
               </div>
             </>
           )}

@@ -4,10 +4,7 @@ import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
 import DriverPicker from "../roster/DriverPicker";
 import { useAccountabilityInfractions } from "../../hooks/useAccountabilityInfractions";
-
-const COACHING_STAGES = ["First Infraction", "Second Infraction", "Third Infraction", "Driver Being Fined", "Final Warning", "Termination"];
-const APPEAL_STATUSES = ["Not Submitted", "Pending", "Approved", "Denied"];
-const TRAINING_PLATFORMS = ["CarriersEdge", "Samsara", "TenStreet"];
+import { COACHING_STAGES, APPEAL_STATUSES, TRAINING_PLATFORMS } from "../../lib/accountabilityEnums";
 
 function textareaStyle() {
   return {

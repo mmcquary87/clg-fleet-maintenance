@@ -203,7 +203,9 @@ function RankingsTable({ ranked, range }) {
         </button>
       ),
       scoreCell: scoreCell(row),
-      speeding_score: round1(row.speeding_score),
+      speeding_score: row.speeding_score === null
+        ? <span title="No vehicle assignment in Samsara -- Speeding not measured" style={{ color: "var(--clg-text-muted)" }}>N/A</span>
+        : round1(row.speeding_score),
       safety_score: round1(row.safety_score),
       hos_score: round1(row.hos_score),
       milesCell: Math.round(row.miles_driven).toLocaleString(),
@@ -271,7 +273,7 @@ function GraceAndScoring({ graceDrivers }) {
           Speed, Safety and HOS each start at 100 over a trailing 90-day window:
         </div>
         <ul style={{ fontSize: 12.5, color: "var(--clg-text-body)", lineHeight: 1.8, paddingLeft: 18, marginTop: 8 }}>
-          <li><strong>Speeding</strong> decays exponentially with penalty points (moderate 0.25, heavy 0.75, severe 1.75 per interval).</li>
+          <li><strong>Speeding</strong> decays exponentially with penalty points (moderate 0.25, heavy 0.75, severe 1.75 per interval). Shows "N/A" instead of a perfect 100 when Samsara has no vehicle currently assigned to the driver — excluded from their average rather than silently counted as clean.</li>
           <li><strong>Safety</strong> loses 5 points per weighted event (following distance 1.5, forward collision 1.75, crash 2.0, harsh brake/turn/rolling stop 0.75–1.0); dismissed events and dismissed speeding intervals don't count.</li>
           <li><strong>HOS</strong> loses 4 points per weighted violation (missed rest break 0.75, shift/cycle/duty limit 2.75 each, plus manually-logged Yard Move misuse 1.0 and Personal Conveyance misuse 0.75 — Samsara has no violation type for either, so Safety logs them directly). Missing Driver Certification/Shipping ID/Trailer Name don't count toward HOS.</li>
         </ul>

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-
-const SEVERITIES = ["Minor", "Moderate", "Heavy", "Severe"];
+import { SEVERITIES } from "../lib/accountabilityEnums";
 
 export function useDriverIncidents() {
   const [incidents, setIncidents] = useState([]);

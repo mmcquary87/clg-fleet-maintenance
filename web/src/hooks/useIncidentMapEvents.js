@@ -1,39 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { useAccountabilityInfractions } from "./useAccountabilityInfractions";
+import { buildScoringIndex } from "../lib/accountabilityScoring";
 
 const WINDOW_DAYS = 90; // matches driver_safety_scorecard's scoring window
-
-function speedingWeight(severityLevel) {
-  return { moderate: 0.25, heavy: 0.75, severe: 1.75 }[severityLevel] ?? 0;
-}
-
-// Same behavior-label weight matching as driver_safety_scorecard_view.sql's
-// safety_points CTE, reproduced here client-side since this map needs a
-// per-event severity tier, not a per-driver sum. Yard Move/Personal
-// Conveyance misuse removed -- neither is a Samsara behavior label (both are
-// scored from manually-logged driver_incidents, which carry no lat/lng and
-// so can never plot on this map anyway) -- see 20261028030000.
-const SAFETY_WEIGHTS = [
-  [/harsh brake|braking/i, 0.75],
-  [/rolling stop/i, 0.75],
-  [/following distance/i, 1.5],
-  [/forward collision/i, 1.75],
-  [/harsh turn/i, 1.0],
-  [/crash/i, 2.0],
-  [/roadside parking/i, 0.75],
-  [/ran red light|red light/i, 2.0],
-];
-
-function safetyEventWeight(behaviorLabels) {
-  let max = 0;
-  for (const label of behaviorLabels ?? []) {
-    const name = label?.name ?? "";
-    for (const [re, w] of SAFETY_WEIGHTS) {
-      if (re.test(name)) max = Math.max(max, w);
-    }
-  }
-  return max;
-}
 
 // Three tiers across both event types, on our own point scale (max 2.0),
 // not the old Power BI report's unrelated raw-point scale.
@@ -43,15 +13,27 @@ function severityTier(weight) {
   return "minor";
 }
 
+function safetyEventWeight(index, behaviorLabels) {
+  let max = 0;
+  for (const label of behaviorLabels ?? []) {
+    const hit = index.matchSafetyLabel(label?.name);
+    if (hit) max = Math.max(max, hit.weight);
+  }
+  return max;
+}
+
 export function useIncidentMapEvents() {
+  const { infractions, loading: infractionsLoading } = useAccountabilityInfractions();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
+    if (infractionsLoading) return;
     setLoading(true);
     setError(null);
     const since = new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
+    const index = buildScoringIndex(infractions);
 
     const [speedingRes, safetyRes] = await Promise.all([
       supabase
@@ -76,7 +58,7 @@ export function useIncidentMapEvents() {
     }
 
     const speedingEvents = (speedingRes.data ?? []).map((r) => {
-      const weight = speedingWeight(r.severity_level);
+      const weight = index.matchSpeedingSeverity(r.severity_level)?.weight ?? 0;
       return {
         id: `speeding:${r.id}`,
         type: "speeding",
@@ -93,7 +75,7 @@ export function useIncidentMapEvents() {
     const safetyEvents = (safetyRes.data ?? [])
       .filter((r) => (r.coaching_state ?? "") !== "Dismissed")
       .map((r) => {
-        const weight = safetyEventWeight(r.behavior_labels);
+        const weight = safetyEventWeight(index, r.behavior_labels);
         const labelNames = (r.behavior_labels ?? []).map((l) => l?.name).filter(Boolean).join(", ") || "Safety event";
         return {
           id: `safety:${r.id}`,
@@ -110,7 +92,7 @@ export function useIncidentMapEvents() {
 
     setEvents([...speedingEvents, ...safetyEvents]);
     setLoading(false);
-  }, []);
+  }, [infractions, infractionsLoading]);
 
   useEffect(() => {
     load();
