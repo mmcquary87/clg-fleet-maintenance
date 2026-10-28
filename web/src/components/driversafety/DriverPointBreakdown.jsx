@@ -101,7 +101,9 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
                 subtitle="Weighted violation types (100 − points × 4)"
                 rows={data.hos.rows}
                 emptyNote="No scored HOS violations in the window."
-                footnote={data.hos.otherCount > 0 ? `${data.hos.otherCount} unweighted violation(s) not shown.` : null}
+                footnote={data.hos.otherCount > 0
+                  ? `${data.hos.otherCount} administrative/paperwork flag(s) (e.g. missing certification, shipping ID, or trailer name) excluded -- these are logbook/documentation gaps, not real hours-of-service clock violations, and never affect this score.`
+                  : null}
               />
               <div style={{ fontSize: 11, color: "var(--clg-text-muted)", borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 10 }}>
                 Overall = 100 × (average of the three / 100)^1.7, capped at 100.

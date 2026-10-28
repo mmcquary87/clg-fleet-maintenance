@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Input, Button } from "../ds";
 
 function toISO(d) {
@@ -40,9 +40,23 @@ const ALL_PRESETS = [
 // bordered/pill-shaped buttons.
 export default function DateRangeFilter({ onChange, disableAllTime = false }) {
   const PRESETS = disableAllTime ? ALL_PRESETS.filter((p) => p.id !== "all") : ALL_PRESETS;
-  const [active, setActive] = useState(disableAllTime ? "month" : "all");
+  const initialPresetId = disableAllTime ? "month" : "all";
+  const [active, setActive] = useState(initialPresetId);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+
+  // The control highlighted a default preset on first render without ever
+  // calling onChange -- the parent's own query kept whatever default state
+  // it picked (e.g. a trailing-90-day view) while the control visually
+  // claimed "This month" was already selected, so the page looked filtered
+  // when it wasn't (confirmed root cause of a reported Driver Safety
+  // Scorecard "MTD doesn't match" report, 2026-10-28).
+  useEffect(() => {
+    const preset = PRESETS.find((p) => p.id === initialPresetId);
+    if (preset) onChange(preset.range());
+    // Fire once on mount only -- selectPreset covers every change after.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectPreset = (preset) => {
     setActive(preset.id);
