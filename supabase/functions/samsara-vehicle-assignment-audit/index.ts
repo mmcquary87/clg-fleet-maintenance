@@ -80,6 +80,17 @@ Deno.serve(async (req) => {
     if (unitsRes.error) throw unitsRes.error;
     if (driversRes.error) throw driversRes.error;
 
+    // Confirmed real failure (2026-10-28, multiple units): a unit whose
+    // samsara_vehicle_id no longer resolves to a live Samsara vehicle (sold/
+    // decommissioned/device swapped) 404s samsara-sync-driver-safety's whole
+    // /speeding-intervals/stream batch for every vehicle in it. That sync is
+    // now resilient to this (catches per-batch), but the stale id itself
+    // still needs fixing on our side -- this is the punch list.
+    const liveVehicleIds = new Set(vehicles.map((v: any) => v.id));
+    const unitsWithStaleVehicleId = unitsRes.data
+      .filter((u: any) => !liveVehicleIds.has(u.samsara_vehicle_id))
+      .map((u: any) => ({ unitNumber: u.number, staleSamsaraVehicleId: u.samsara_vehicle_id }));
+
     const unitNumberByVehicleId = new Map(unitsRes.data.map((u: any) => [u.samsara_vehicle_id, u.number]));
     const driverNameBySamsaraId = new Map(driversRes.data.map((d: any) => [d.samsara_driver_id, d.name]));
     const assignedSamsaraDriverIds = new Set(
@@ -115,7 +126,9 @@ Deno.serve(async (req) => {
         vehiclesWithNoDriverAssigned: vehiclesWithNoDriverAssigned.length,
         activeDriversLinkedToSamsara: driversRes.data.filter((d: any) => d.is_active).length,
         activeDriversWithNoVehicleAssigned: driversWithNoVehicleAssigned.length,
+        unitsWithStaleVehicleId: unitsWithStaleVehicleId.length,
       },
+      unitsWithStaleVehicleId,
       driversWithNoVehicleAssigned,
       vehiclesWithNoDriverAssigned,
       vehiclesWithUnmatchedDriver,
