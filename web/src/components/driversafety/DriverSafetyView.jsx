@@ -379,6 +379,22 @@ const TABS = [
   { id: "grace", label: "Grace & scoring" },
 ];
 
+// Matches accountability_infractions.rollover_days (60) -- lets Safety view
+// the Scorecard over the same span an Accountability Center infraction
+// stays active for, side by side with the Scorecard's own default 90-day
+// window. Page-specific (DateRangeFilter's extraPresets), not a global
+// preset -- meaningless on the other pages reusing that same component.
+const ROLLING_60_PRESET = {
+  id: "rolling60",
+  label: "Rolling 60 days",
+  range: () => {
+    const t = new Date();
+    const start = new Date(t);
+    start.setDate(t.getDate() - 59);
+    return { start: start.toISOString().slice(0, 10), end: t.toISOString().slice(0, 10) };
+  },
+};
+
 export default function DriverSafetyView() {
   const [range, setRange] = useState(null);
   const { scorecards, ranked, graceDrivers, totals, loading, error } = useDriverSafety(range);
@@ -425,7 +441,7 @@ export default function DriverSafetyView() {
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
-        <DateRangeFilter onChange={setRange} disableAllTime />
+        <DateRangeFilter onChange={setRange} disableAllTime extraPresets={[ROLLING_60_PRESET]} />
         {loading && (
           <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-muted)" }}>
             <Loader2 size={13} className="spin" /> Updating…

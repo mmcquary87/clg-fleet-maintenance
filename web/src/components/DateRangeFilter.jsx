@@ -26,20 +26,27 @@ const ALL_PRESETS = [
   { id: "quarter", label: "This quarter", range: () => { const t = new Date(); const q = Math.floor(t.getMonth() / 3); return { start: toISO(new Date(t.getFullYear(), q * 3, 1)), end: toISO(t) }; } },
   { id: "ytd", label: "YTD", range: () => { const t = new Date(); return { start: toISO(new Date(t.getFullYear(), 0, 1)), end: toISO(t) }; } },
   { id: "all", label: "All time", range: () => null },
-  { id: "custom", label: "Custom", range: null },
 ];
+
+const CUSTOM_PRESET = { id: "custom", label: "Custom", range: null };
 
 // disableAllTime: for date filters backed by a live external API that has
 // no "give me everything" mode (e.g. Alvys trips/search always needs a
 // bounded PickupDateRange/DeliveryDateRange) — "All time" there wouldn't
 // just be slow, it silently returns nothing, which reads as broken.
 //
+// extraPresets: page-specific presets inserted before "Custom" -- e.g. the
+// Driver Safety Scorecard's "Rolling 60 days" (matches
+// accountability_infractions.rollover_days, meaningless on the other pages
+// that reuse this same component, so it isn't in ALL_PRESETS).
+//
 // Rendered as one Smoke-track segmented control (CLG OS design package:
 // "do not use free-floating pills for these — the choice is one-of-N, and
 // pill radii are reserved for small status chips"), not individually
 // bordered/pill-shaped buttons.
-export default function DateRangeFilter({ onChange, disableAllTime = false }) {
-  const PRESETS = disableAllTime ? ALL_PRESETS.filter((p) => p.id !== "all") : ALL_PRESETS;
+export default function DateRangeFilter({ onChange, disableAllTime = false, extraPresets = [] }) {
+  const basePresets = disableAllTime ? ALL_PRESETS.filter((p) => p.id !== "all") : ALL_PRESETS;
+  const PRESETS = [...basePresets, ...extraPresets, CUSTOM_PRESET];
   const initialPresetId = disableAllTime ? "month" : "all";
   const [active, setActive] = useState(initialPresetId);
   const [customStart, setCustomStart] = useState("");
