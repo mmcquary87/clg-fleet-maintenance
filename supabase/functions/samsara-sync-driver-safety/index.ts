@@ -264,11 +264,22 @@ Deno.serve(async (req) => {
     }
 
     // --- HOS Violations (driverIds filter works here — batch to keep query params sane) ---
+    // A single bad/removed driver id 404s Samsara's whole batch response
+    // (same failure mode confirmed on /speeding-intervals/stream below,
+    // 2026-10-28) -- caught per-batch so one stale id can't take down every
+    // other driver's HOS sync for the run.
+    const violationBatchErrors: string[] = [];
     const violationRows: any[] = [];
     for (const batch of chunk(samsaraDrivers.map((d: any) => d.id), DRIVER_BATCH_SIZE)) {
-      const results = await fetchAllPaginated("/fleet/hos/violations", {
-        driverIds: batch.join(","), startTime, endTime, limit: "200",
-      });
+      let results: any[];
+      try {
+        results = await fetchAllPaginated("/fleet/hos/violations", {
+          driverIds: batch.join(","), startTime, endTime, limit: "200",
+        });
+      } catch (err) {
+        violationBatchErrors.push(err instanceof Error ? err.message : String(err));
+        continue;
+      }
       for (const entry of results) {
         for (const v of entry.violations ?? []) {
           const samsaraDriverId = v.driver?.id ?? entry.driver?.id ?? null;
@@ -309,12 +320,26 @@ Deno.serve(async (req) => {
     }
 
     // --- Speeding Intervals (assetIds required, capped at 50 per call) ---
+    // A single removed/decommissioned vehicle id 404s Samsara's whole batch
+    // ("No devices found for asset id: ...", confirmed real failure
+    // 2026-10-28) -- this used to throw and abort the entire sync run
+    // (including Fuel/Energy below), silently starving speeding data for
+    // every vehicle, not just the bad one. Caught per-batch instead so one
+    // stale unit.samsara_vehicle_id degrades only its own batch of up to 50
+    // vehicles; surfaced in the response so it's visible, not swallowed.
+    const speedingBatchErrors: string[] = [];
     const vehicleIds = units.map((u: any) => u.samsara_vehicle_id);
     const speedingRows: any[] = [];
     for (const batch of chunk(vehicleIds, VEHICLE_BATCH_SIZE)) {
-      const trips = await fetchAllPaginated("/speeding-intervals/stream", {
-        assetIds: batch.join(","), startTime, endTime,
-      });
+      let trips: any[];
+      try {
+        trips = await fetchAllPaginated("/speeding-intervals/stream", {
+          assetIds: batch.join(","), startTime, endTime,
+        });
+      } catch (err) {
+        speedingBatchErrors.push(err instanceof Error ? err.message : String(err));
+        continue;
+      }
       for (const trip of trips) {
         const vehicleId = trip.asset?.id;
         if (!vehicleId) continue;
@@ -414,7 +439,9 @@ Deno.serve(async (req) => {
       vehiclesWithAssignedDriver: assignedDriverIdByVehicleId.size,
       safetyEventsUpserted,
       violationsUpserted,
+      violationBatchErrors,
       speedingIntervalsUpserted: speedingUpserted,
+      speedingBatchErrors,
       fuelEnergyRowsUpserted: fuelEnergyUpserted,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
