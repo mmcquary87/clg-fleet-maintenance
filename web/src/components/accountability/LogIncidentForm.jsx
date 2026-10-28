@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
@@ -22,6 +22,7 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
   const [eventDate, setEventDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [infractionId, setInfractionId] = useState("");
   const [coachingStage, setCoachingStage] = useState("First Infraction");
+  const [stageIsSuggested, setStageIsSuggested] = useState(false);
   const [notes, setNotes] = useState("");
   const [driverResponse, setDriverResponse] = useState("");
   const [issuedBy, setIssuedBy] = useState(session?.user?.email ?? "");
@@ -35,6 +36,30 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
   const [error, setError] = useState(null);
 
   const selectedInfraction = infractions.find((i) => i.id === infractionId);
+
+  // Suggestion only, not automation (CLG direction, 2026-10-28) --
+  // accountability_suggested_coaching_stage counts this driver's active
+  // same-family infractions and proposes the next step in the 6-stage
+  // ladder; Safety can still pick a different stage before saving (the
+  // official doc's "may skip steps" provision). Re-suggests whenever the
+  // driver or the infraction's violation_family changes; a manual override
+  // sticks until then.
+  useEffect(() => {
+    if (!driverId || !selectedInfraction) {
+      setStageIsSuggested(false);
+      return;
+    }
+    let cancelled = false;
+    supabase.rpc("accountability_suggested_coaching_stage", {
+      p_driver_id: driverId,
+      p_violation_family: selectedInfraction.violation_family,
+    }).then(({ data, error: rpcError }) => {
+      if (cancelled || rpcError || !data) return;
+      setCoachingStage(data);
+      setStageIsSuggested(true);
+    });
+    return () => { cancelled = true; };
+  }, [driverId, selectedInfraction?.violation_family]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -117,7 +142,16 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
           </Field>
 
           <Field label="Coaching stage" required>
-            <Select value={coachingStage} onChange={(e) => setCoachingStage(e.target.value)} options={COACHING_STAGES} />
+            <Select
+              value={coachingStage}
+              onChange={(e) => { setCoachingStage(e.target.value); setStageIsSuggested(false); }}
+              options={COACHING_STAGES}
+            />
+            {stageIsSuggested && (
+              <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
+                Suggested from this driver's active {selectedInfraction?.violation_family} infractions — change it if the situation calls for skipping a step.
+              </div>
+            )}
           </Field>
           <Field label="Issued by" required>
             <Input value={issuedBy} onChange={(e) => setIssuedBy(e.target.value)} placeholder="Name of the manager/safety lead" />
