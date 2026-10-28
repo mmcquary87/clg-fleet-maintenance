@@ -381,11 +381,20 @@ const TABS = [
 
 export default function DriverSafetyView() {
   const [range, setRange] = useState(null);
-  const { ranked, graceDrivers, totals, loading, error } = useDriverSafety(range);
+  const { scorecards, ranked, graceDrivers, totals, loading, error } = useDriverSafety(range);
   const { snapshots, changeSinceFirst, loading: snapshotsLoading } = useFleetScoreHistory();
   const [tab, setTab] = useState("rankings");
 
-  if (loading) {
+  // Only the very first load (no data at all yet) replaces the page with a
+  // bare spinner. A range change also sets `loading` true, but scorecards
+  // from the previous range are still in state at that point (useDriverSafety
+  // doesn't clear them until the new data arrives) -- showing the bare
+  // spinner there used to unmount DateRangeFilter on every click, which
+  // reset its internal "active" state to its hardcoded default and
+  // re-fired that default's range via its mount effect, snapping the
+  // selection back to "This month" no matter what was picked (confirmed
+  // root cause of a reported "dates don't move" report, 2026-10-28).
+  if (loading && scorecards.length === 0) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "60px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
         <Loader2 size={16} className="spin" /> Loading the scorecard…
@@ -417,6 +426,11 @@ export default function DriverSafetyView() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
         <DateRangeFilter onChange={setRange} disableAllTime />
+        {loading && (
+          <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-muted)" }}>
+            <Loader2 size={13} className="spin" /> Updating…
+          </span>
+        )}
         {range && (
           <button
             onClick={() => setRange(null)}
