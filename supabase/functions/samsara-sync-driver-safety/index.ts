@@ -273,8 +273,20 @@ Deno.serve(async (req) => {
         for (const v of entry.violations ?? []) {
           const samsaraDriverId = v.driver?.id ?? entry.driver?.id ?? null;
           if (!samsaraDriverId || !v.violationStartTime) continue;
+          // Dedup key is (driver, day, type), not violationStartTime: Samsara
+          // re-stamps violationStartTime to "now" on every poll while a
+          // condition stays active (confirmed via real data, 2026-10-28 --
+          // one driver had 14 rows for the same Missing Driver Certification
+          // day, timestamps exactly 15 minutes apart matching this sync's own
+          // cron cadence), so keying on it multiplied one real condition into
+          // a new row every run instead of updating one. day/type is stable
+          // across repeated polls of the same ongoing violation. This also
+          // affects scored HOS categories (Shift Driving/Cycle/Duty Limit,
+          // Missed Rest Break) -- see 20261029020000's cleanup migration for
+          // the one-time dedup of rows already synced under the old key.
+          const dedupKey = v.day?.startTime ?? v.violationStartTime;
           violationRows.push({
-            id: `${samsaraDriverId}:${v.violationStartTime}:${v.type ?? ""}`,
+            id: `${samsaraDriverId}:${dedupKey}:${v.type ?? ""}`,
             samsara_driver_id: samsaraDriverId,
             driver_id: driverIdBySamsaraId.get(samsaraDriverId) ?? null,
             day_start: v.day?.startTime ?? null,
