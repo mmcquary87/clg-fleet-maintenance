@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Mail, ExternalLink, FilePlus2, X } from "lucide-react";
 import { Card, Button, Input, Alert, Eyebrow } from "../../ds";
 import { useInboundReceipts } from "../../hooks/useInboundReceipts";
 import { CATEGORIES } from "../../lib/categories";
+import { findDuplicateWorkOrders } from "../../lib/workOrderDuplicates";
 import NewWorkOrderForm from "../NewWorkOrderForm";
 
 function money(n) {
@@ -13,7 +14,20 @@ function lineItemsTotal(lineItems) {
   return (lineItems || []).reduce((s, li) => s + (Number(li.cost) || 0), 0);
 }
 
-function ReceiptCard({ receipt, onCreate, onDismiss, signedUrl }) {
+function DuplicateBanner({ duplicateInfo }) {
+  if (!duplicateInfo || (duplicateInfo.workOrders.length === 0 && duplicateInfo.receipts.length === 0)) return null;
+  const parts = [
+    ...duplicateInfo.workOrders.map((wo) => `WO #${wo.wo_number} (${wo.date_opened}, ${money(wo.cost)}, ${wo.status})`),
+    ...(duplicateInfo.receipts.length > 0 ? ["another receipt already in the inbox"] : []),
+  ];
+  return (
+    <Alert tone="critical" style={{ marginBottom: 12 }}>
+      <strong>Possible duplicate</strong> — matches {parts.join(", ")}. Review before creating a work order from this one.
+    </Alert>
+  );
+}
+
+function ReceiptCard({ receipt, onCreate, onDismiss, signedUrl, duplicateInfo }) {
   const [dismissing, setDismissing] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,6 +64,7 @@ function ReceiptCard({ receipt, onCreate, onDismiss, signedUrl }) {
   return (
     <Card style={{ marginBottom: 14 }}>
       {error && <Alert tone="critical" style={{ marginBottom: 12 }}>{error}</Alert>}
+      <DuplicateBanner duplicateInfo={duplicateInfo} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
@@ -125,6 +140,46 @@ export default function ReceiptInboxView() {
   const { receipts, loading, error, dismiss, markCreated, signedUrl } = useInboundReceipts();
   const [creatingFor, setCreatingFor] = useState(null);
   const [unitQuery, setUnitQuery] = useState("");
+  const [duplicatesByReceiptId, setDuplicatesByReceiptId] = useState({});
+
+  // Surfaces a duplicate warning right on the inbox card, before anyone
+  // clicks in -- the in-form check (NewWorkOrderForm) still runs too and is
+  // the one that actually blocks Save, but a dispatcher scanning the list
+  // shouldn't have to open every receipt just to spot one that's already
+  // been logged (or forwarded twice). Only checks receipts with a usable
+  // extraction -- nothing to compare for one that failed to scan. A
+  // duplicate against another PENDING receipt only shows once both copies
+  // have been scanned; against a real work order, only once the first copy
+  // has actually been converted -- there's nothing to match before that.
+  useEffect(() => {
+    let cancelled = false;
+    const extracted = receipts.filter((r) => r.extracted);
+    if (extracted.length === 0) {
+      setDuplicatesByReceiptId({});
+      return;
+    }
+    (async () => {
+      const entries = await Promise.all(extracted.map(async (r) => {
+        const e = r.extracted;
+        const totalCost = (e.lineItems || []).reduce((s, li) => s + (Number(li.cost) || 0), 0);
+        try {
+          const result = await findDuplicateWorkOrders({
+            unitNumber: e.unitNumberGuess || "",
+            vendorName: e.vendor || "",
+            invoiceRef: e.invoiceRef || "",
+            dateOpened: e.date || "",
+            totalCost,
+            excludeReceiptId: r.id,
+          });
+          return [r.id, result];
+        } catch {
+          return [r.id, { workOrders: [], receipts: [] }];
+        }
+      }));
+      if (!cancelled) setDuplicatesByReceiptId(Object.fromEntries(entries));
+    })();
+    return () => { cancelled = true; };
+  }, [receipts]);
 
   const filteredReceipts = unitQuery.trim()
     ? receipts.filter((r) => (r.extracted?.unitNumberGuess || "").toLowerCase().includes(unitQuery.trim().toLowerCase()))
@@ -206,7 +261,7 @@ export default function ReceiptInboxView() {
         </div>
       ) : (
         filteredReceipts.map((r) => (
-          <ReceiptCard key={r.id} receipt={r} onCreate={openCreate} onDismiss={dismiss} signedUrl={signedUrl} />
+          <ReceiptCard key={r.id} receipt={r} onCreate={openCreate} onDismiss={dismiss} signedUrl={signedUrl} duplicateInfo={duplicatesByReceiptId[r.id]} />
         ))
       )}
     </div>
