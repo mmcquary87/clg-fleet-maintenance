@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Loader2, Mail, ExternalLink, FilePlus2, X } from "lucide-react";
-import { Card, Button, Input, Alert, Eyebrow } from "../../ds";
+import { Loader2, Mail, ExternalLink, FilePlus2, CheckCircle2, X } from "lucide-react";
+import { Card, Button, Input, Alert, Eyebrow, Badge } from "../../ds";
 import { useInboundReceipts } from "../../hooks/useInboundReceipts";
 import { CATEGORIES } from "../../lib/categories";
 import { findDuplicateWorkOrders } from "../../lib/workOrderDuplicates";
+import { findOpenEstimateWorkOrder } from "../../lib/workOrderEstimates";
 import NewWorkOrderForm from "../NewWorkOrderForm";
+import WorkOrderDetailModal from "./WorkOrderDetailModal";
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -27,7 +29,18 @@ function DuplicateBanner({ duplicateInfo }) {
   );
 }
 
-function ReceiptCard({ receipt, onCreate, onDismiss, signedUrl, duplicateInfo }) {
+function EstimateMatchBanner({ estimateMatch }) {
+  if (!estimateMatch) return null;
+  return (
+    <Alert tone="info" style={{ marginBottom: 12 }}>
+      This looks like it could be the final invoice for <strong>WO #{estimateMatch.wo_number}</strong>
+      {estimateMatch.estimated_cost != null ? ` (estimated ${money(estimateMatch.estimated_cost)}, ${estimateMatch.date_opened})` : ""} —
+      use "Finalize" below instead of creating a new work order.
+    </Alert>
+  );
+}
+
+function ReceiptCard({ receipt, onCreate, onDismiss, onFinalize, signedUrl, duplicateInfo, estimateMatch }) {
   const [dismissing, setDismissing] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,11 +78,15 @@ function ReceiptCard({ receipt, onCreate, onDismiss, signedUrl, duplicateInfo })
     <Card style={{ marginBottom: 14 }}>
       {error && <Alert tone="critical" style={{ marginBottom: 12 }}>{error}</Alert>}
       <DuplicateBanner duplicateInfo={duplicateInfo} />
+      <EstimateMatchBanner estimateMatch={estimateMatch} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)" }}>
-            {receipt.subject || "(no subject)"}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 15, color: "var(--clg-navy)" }}>
+              {receipt.subject || "(no subject)"}
+            </div>
+            {extracted?.documentType === "estimate" && <Badge tone="outline">Estimate</Badge>}
           </div>
           <div style={{ fontSize: 12, color: "var(--clg-text-muted)", marginTop: 2 }}>
             From {receipt.from_email || "unknown sender"} · {new Date(receipt.received_at).toLocaleString()}
@@ -119,7 +136,12 @@ function ReceiptCard({ receipt, onCreate, onDismiss, signedUrl, duplicateInfo })
         </div>
       ) : (
         <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
-          <Button size="sm" iconLeft={<FilePlus2 size={14} />} onClick={() => onCreate(receipt)}>
+          {estimateMatch && (
+            <Button size="sm" iconLeft={<CheckCircle2 size={14} />} onClick={() => onFinalize(receipt, estimateMatch)}>
+              Finalize WO #{estimateMatch.wo_number}
+            </Button>
+          )}
+          <Button size="sm" variant={estimateMatch ? "outline" : "primary"} iconLeft={<FilePlus2 size={14} />} onClick={() => onCreate(receipt)}>
             Create work order
           </Button>
           <Button size="sm" variant="quiet" iconLeft={<X size={14} />} onClick={() => setDismissing(true)}>
@@ -139,8 +161,10 @@ function ReceiptCard({ receipt, onCreate, onDismiss, signedUrl, duplicateInfo })
 export default function ReceiptInboxView() {
   const { receipts, loading, error, dismiss, markCreated, signedUrl } = useInboundReceipts();
   const [creatingFor, setCreatingFor] = useState(null);
+  const [finalizingFor, setFinalizingFor] = useState(null);
   const [unitQuery, setUnitQuery] = useState("");
   const [duplicatesByReceiptId, setDuplicatesByReceiptId] = useState({});
+  const [estimateMatchByReceiptId, setEstimateMatchByReceiptId] = useState({});
 
   // Surfaces a duplicate warning right on the inbox card, before anyone
   // clicks in -- the in-form check (NewWorkOrderForm) still runs too and is
@@ -181,11 +205,57 @@ export default function ReceiptInboxView() {
     return () => { cancelled = true; };
   }, [receipts]);
 
+  // Looks for an open estimate work order this receipt could be the final
+  // invoice for -- skips receipts scan-invoice itself flagged as an
+  // estimate (an estimate can't finalize another estimate). Separate from
+  // the duplicate check above: that one requires matching cost, which is
+  // exactly what won't match here (the final invoice's whole point is a
+  // different, real number).
+  useEffect(() => {
+    let cancelled = false;
+    const candidates = receipts.filter((r) => r.extracted && r.extracted.documentType !== "estimate");
+    if (candidates.length === 0) {
+      setEstimateMatchByReceiptId({});
+      return;
+    }
+    (async () => {
+      const entries = await Promise.all(candidates.map(async (r) => {
+        try {
+          const match = await findOpenEstimateWorkOrder({
+            unitNumber: r.extracted.unitNumberGuess || "",
+            vendorName: r.extracted.vendor || "",
+          });
+          return [r.id, match];
+        } catch {
+          return [r.id, null];
+        }
+      }));
+      if (!cancelled) setEstimateMatchByReceiptId(Object.fromEntries(entries));
+    })();
+    return () => { cancelled = true; };
+  }, [receipts]);
+
   const filteredReceipts = unitQuery.trim()
     ? receipts.filter((r) => (r.extracted?.unitNumberGuess || "").toLowerCase().includes(unitQuery.trim().toLowerCase()))
     : receipts;
 
   const openCreate = (receipt) => setCreatingFor(receipt);
+  const openFinalize = (receipt, workOrder) => setFinalizingFor({ receipt, workOrder });
+
+  // Reuses the exact same "receipt converted" bookkeeping as creating a
+  // brand-new work order -- the receipt's content ended up reflected in a
+  // real work order either way, just an existing one instead of a new one.
+  const handleFinalized = async (workOrderId) => {
+    const receipt = finalizingFor?.receipt;
+    setFinalizingFor(null);
+    if (receipt && workOrderId) {
+      try {
+        await markCreated(receipt.id, workOrderId);
+      } catch {
+        // Same cosmetic-miss reasoning as handleSaved below.
+      }
+    }
+  };
 
   const handleSaved = async (workOrderId) => {
     const receipt = creatingFor;
@@ -201,6 +271,25 @@ export default function ReceiptInboxView() {
     }
   };
 
+  // Shape for WorkOrderDetailModal's "Close work order" form, pre-filled
+  // from this receipt's own extraction + file -- so finalizing an estimate
+  // doesn't mean re-downloading the file from the inbox just to re-upload
+  // it into the work order by hand.
+  const closePrefillFor = (receipt) => {
+    const e = receipt.extracted || {};
+    return {
+      invoiceRef: e.invoiceRef || "",
+      dateClosed: e.date || "",
+      lineItems: (e.lineItems || []).map((li) => ({
+        category: CATEGORIES.includes(li.category) ? li.category : CATEGORIES[0],
+        description: li.description,
+        cost: li.cost,
+      })),
+      storagePath: receipt.storage_path || null,
+      fileName: receipt.file_name || null,
+    };
+  };
+
   const initialFor = (receipt) => {
     const e = receipt.extracted;
     if (!e) return undefined;
@@ -209,6 +298,7 @@ export default function ReceiptInboxView() {
       vendorName: e.vendor || "",
       invoiceRef: e.invoiceRef || "",
       date: e.date || "",
+      isEstimate: e.documentType === "estimate",
       lineItems: (e.lineItems || []).map((li) => ({
         category: CATEGORIES.includes(li.category) ? li.category : CATEGORIES[0],
         description: li.description,
@@ -246,6 +336,15 @@ export default function ReceiptInboxView() {
         />
       )}
 
+      {finalizingFor && (
+        <WorkOrderDetailModal
+          workOrderId={finalizingFor.workOrder.id}
+          initialCloseFromReceipt={closePrefillFor(finalizingFor.receipt)}
+          onClose={() => setFinalizingFor(null)}
+          onReceiptFinalized={handleFinalized}
+        />
+      )}
+
       {error && <Alert tone="critical" title="Couldn't load the receipt inbox" style={{ marginBottom: 16 }}>{error}</Alert>}
 
       {loading ? (
@@ -261,7 +360,10 @@ export default function ReceiptInboxView() {
         </div>
       ) : (
         filteredReceipts.map((r) => (
-          <ReceiptCard key={r.id} receipt={r} onCreate={openCreate} onDismiss={dismiss} signedUrl={signedUrl} duplicateInfo={duplicatesByReceiptId[r.id]} />
+          <ReceiptCard
+            key={r.id} receipt={r} onCreate={openCreate} onDismiss={dismiss} onFinalize={openFinalize} signedUrl={signedUrl}
+            duplicateInfo={duplicatesByReceiptId[r.id]} estimateMatch={estimateMatchByReceiptId[r.id]}
+          />
         ))
       )}
     </div>

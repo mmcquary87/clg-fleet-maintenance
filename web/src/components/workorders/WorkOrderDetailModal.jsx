@@ -175,7 +175,7 @@ function emptyDetailsForm() {
   };
 }
 
-export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }) {
+export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged, initialCloseFromReceipt, onReceiptFinalized }) {
   const { order, loading, error, reload } = useWorkOrder(workOrderId);
   const { vendors } = useVendors();
   const { session } = useAuth();
@@ -209,6 +209,12 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
   const [closeFile, setCloseFile] = useState(null);
   const [closeScanning, setCloseScanning] = useState(false);
   const [closeScanApplied, setCloseScanApplied] = useState(false);
+  // A file already sitting in storage from a Receipt Inbox finalize
+  // (initialCloseFromReceipt), reused as-is unless replaced via the
+  // dropzone below -- same "fresh upload wins, else reuse" precedence as
+  // NewWorkOrderForm's existingReceipt.
+  const [closeReceiptFile, setCloseReceiptFile] = useState(null);
+  const [appliedReceiptPrefill, setAppliedReceiptPrefill] = useState(false);
 
   const [editingDetails, setEditingDetails] = useState(false);
   const [detailsForm, setDetailsForm] = useState(emptyDetailsForm());
@@ -237,6 +243,30 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     supabase.from("app_settings").select("shop_labor_rate").single()
       .then(({ data }) => setLaborRate(Number(data?.shop_labor_rate) || 0));
   }, []);
+
+  // Pre-fills and auto-opens the Close form from a Receipt Inbox "Finalize"
+  // action (ReceiptInboxView.jsx) -- the receipt's own extraction + already-
+  // uploaded file become the closing invoice instead of someone re-finding
+  // and re-uploading the same file by hand. Applied once per modal instance
+  // (appliedReceiptPrefill guards against re-running on every reload()).
+  useEffect(() => {
+    if (!order || !initialCloseFromReceipt || appliedReceiptPrefill) return;
+    setAppliedReceiptPrefill(true);
+    setCloseForm({
+      invoiceRef: initialCloseFromReceipt.invoiceRef || order.invoice_ref || "",
+      poNumber: order.po_number || "",
+      dateClosed: initialCloseFromReceipt.dateClosed || todayIso(),
+    });
+    setCloseLineItems(
+      initialCloseFromReceipt.lineItems?.length > 0
+        ? initialCloseFromReceipt.lineItems.map((li) => emptyCloseLineItem({ category: sanitizeCategory(li.category), description: li.description, cost: li.cost }))
+        : [emptyCloseLineItem({ category: order.category })],
+    );
+    if (initialCloseFromReceipt.storagePath) {
+      setCloseReceiptFile({ storagePath: initialCloseFromReceipt.storagePath, fileName: initialCloseFromReceipt.fileName });
+    }
+    setClosing(true);
+  }, [order, initialCloseFromReceipt, appliedReceiptPrefill]);
 
   const partsCost = (order?.parts ?? []).reduce((s, p) => s + (Number(p.quantity) || 0) * (Number(p.unit_cost) || 0), 0);
   const laborCost = (Number(order?.labor_hours) || 0) * laborRate;
@@ -497,6 +527,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       emptyCloseLineItem({ category: order.category, description: order.description || order.complaint || "", cost: prefillCost }),
     ]);
     setCloseFile(null);
+    setCloseReceiptFile(null);
     setCloseScanApplied(false);
     setClosing(true);
   };
@@ -601,20 +632,40 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
     setStatusError(null);
     try {
       const dateClosed = closeForm.dateClosed || todayIso();
-      const receiptPath = closeFile ? await uploadReceipt(closeFile) : order.receipt_path || null;
+      // A fresh upload always wins; otherwise reuse the file already
+      // sitting in storage from a Receipt Inbox finalize (closeReceiptFile),
+      // same precedence as NewWorkOrderForm's existingReceipt.
+      const receiptPath = closeFile ? await uploadReceipt(closeFile) : (closeReceiptFile?.storagePath || order.receipt_path || null);
+      const receiptFileName = closeFile ? closeFile.name : (closeReceiptFile?.fileName || null);
       const [first, ...extra] = closeLineItems;
       const multiItem = extra.length > 0;
       const closeTotal = closeLineItems.reduce((s, li) => s + (Number(li.cost) || 0), 0);
+      const finalCost = multiItem ? closeTotal : (Number(first.cost) || 0);
+
+      // Closing a work order that started as a vendor estimate (Receipt
+      // Inbox "This is a vendor estimate" / NewWorkOrderForm) finalizes it:
+      // keeps estimated_cost as the historical quote, and routes it to the
+      // existing approval queue (approval_status) whenever the real cost
+      // doesn't match what was quoted -- any difference, not just a large
+      // one (CLG direction, 2026-10-29), rather than inventing a second,
+      // separate review mechanism just for estimate variance.
+      const wasEstimate = order.is_estimate;
+      const variance = wasEstimate ? finalCost - (Number(order.estimated_cost) || 0) : 0;
+      const varianceIsZero = Math.abs(variance) < 0.01;
 
       const { error: updateErr } = await supabase.from("work_orders").update({
         status: "Closed",
         category: first.category,
         description: first.description || order.description,
-        cost: multiItem ? closeTotal : (Number(first.cost) || 0),
+        cost: finalCost,
         invoice_ref: closeForm.invoiceRef || null,
         po_number: closeForm.poNumber || null,
         date_closed: dateClosed,
-        ...(closeFile ? { receipt_path: receiptPath } : {}),
+        ...(closeFile || closeReceiptFile ? { receipt_path: receiptPath } : {}),
+        ...(wasEstimate ? {
+          is_estimate: false,
+          approval_status: varianceIsZero ? order.approval_status : "needs_approval",
+        } : {}),
       }).eq("id", order.id);
       if (updateErr) throw updateErr;
 
@@ -636,17 +687,21 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
 
       logWorkOrderActivity({
         workOrderId: order.id, woNumber: order.wo_number, action: "closed",
-        detail: `${money(closeTotal)}${multiItem ? ` · ${closeLineItems.length} line items` : ""}`,
+        detail: `${money(closeTotal)}${multiItem ? ` · ${closeLineItems.length} line items` : ""}`
+          + (wasEstimate ? ` · estimate was ${money(order.estimated_cost)} (${variance >= 0 ? "+" : ""}${money(variance)})` : ""),
       });
 
-      // A file uploaded at close time also becomes a real
-      // work_order_documents row (not just the legacy receipt_path column
-      // above) so it shows up immediately in the multi-document list, same
-      // as attaching one manually via WorkOrderDocumentsPanel.
-      if (closeFile) {
+      // A file uploaded (or reused from a Receipt Inbox finalize) at close
+      // time also becomes a real work_order_documents row (not just the
+      // legacy receipt_path column above) so it shows up immediately in the
+      // multi-document list, same as attaching one manually via
+      // WorkOrderDocumentsPanel.
+      if (closeFile || closeReceiptFile) {
         const { data: { user } } = await supabase.auth.getUser();
         const { error: docErr } = await supabase.from("work_order_documents").insert({
-          work_order_id: order.id, storage_path: receiptPath, file_name: closeFile.name, uploaded_by: user?.id ?? null,
+          work_order_id: order.id, storage_path: receiptPath, file_name: receiptFileName,
+          uploaded_by: user?.id ?? null,
+          note: wasEstimate ? "Final invoice" : null,
         });
         if (docErr) throw docErr;
       }
@@ -675,6 +730,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
       setClosing(false);
       await reload();
       onChanged?.();
+      onReceiptFinalized?.(order.id);
     } catch (err) {
       setStatusError(err.message);
     } finally {
@@ -823,6 +879,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 </div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                   {order.voided && <Badge tone="neutral">Voided</Badge>}
+                  {order.is_estimate && <Badge tone="outline">Estimate — cost not final</Badge>}
                   {order.severity && <Badge tone={severityTone(order.severity)}>{order.severity}</Badge>}
                   {order.approval_status === "needs_approval" ? (
                     <Badge tone="critical">Needs approval</Badge>
@@ -1427,6 +1484,7 @@ export default function WorkOrderDetailModal({ workOrderId, onClose, onChanged }
                 <Field label="WO #" value={order.wo_number} />
                 <Field label="Vendor" value={order.vendor?.name} />
                 <Field label="Cost" value={money(order.cost)} />
+                <Field label="Estimated cost" value={order.estimated_cost != null ? money(order.estimated_cost) : null} />
                 <Field label="System / component" value={order.system_component} />
                 <Field label="Date opened" value={order.date_opened} />
                 <Field label="Date closed" value={order.date_closed} />

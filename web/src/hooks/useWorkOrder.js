@@ -7,7 +7,7 @@ const FULL_SELECT = `
   po_number, intake_source, assigned_bay, assigned_tech, waiting_on_parts, parts_eta,
   promised_back, warranty_recovery_amount, receipt_path, source, samsara_reference_id,
   alvys_maintenance_id, created_at, updated_at, is_chargeback, chargeback_driver_name, chargeback_deducted_at,
-  voided, voided_at, voided_reason, labor_hours,
+  voided, voided_at, voided_reason, labor_hours, is_estimate, estimated_cost,
   payment_status, payment_method, payment_reference, paid_at, exported_to_intacct_at,
   unit:units(id, number, type, vin, driver_name, current_location, odometer),
   vendor:vendors(id, name, contact_name, contact_email),

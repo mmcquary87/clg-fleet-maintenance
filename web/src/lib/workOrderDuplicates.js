@@ -9,7 +9,7 @@ const COST_TOLERANCE = 0.01;
 // punctuation). Exact-string comparison on raw extraction output was too
 // brittle: two scans of literally the same receipt aren't guaranteed to come
 // back byte-identical.
-function norm(s) {
+export function norm(s) {
   return (s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/[.,]+$/, "");
 }
 

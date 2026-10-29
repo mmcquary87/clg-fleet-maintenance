@@ -2,10 +2,17 @@
 //
 // Deno Edge Function. Receives a base64-encoded receipt image/PDF, sends it
 // to the Claude API for structured extraction, and returns
-// {vendor, date, invoiceRef, unitNumberGuess, lineItems: [{category, description, cost}]}
+// {vendor, date, invoiceRef, unitNumberGuess, documentType, lineItems: [{category, description, cost}]}
 // so the frontend can pre-fill a work order form for the user to review
 // (and recategorize/adjust line items) before saving. Never returns
 // anything that writes to the database directly — extraction only.
+//
+// documentType ("estimate" | "final" | "unclear") lets the Receipt Inbox
+// tell a vendor's pre-repair quote apart from a completed invoice -- an
+// estimate becomes a work order flagged is_estimate (see
+// 20261030000000_estimate_tracking.sql) instead of being treated as a
+// confirmed final cost. Always human-correctable before saving, same as
+// every other extracted field.
 //
 // lineItems is an array rather than a single category because one shop
 // visit commonly covers more than one type of work (e.g. tires + brakes on
@@ -42,6 +49,15 @@ const EXTRACT_TOOL = {
       date: { type: ["string", "null"], description: "Service or invoice date in YYYY-MM-DD format, or null if not legible" },
       invoiceRef: { type: ["string", "null"], description: "Invoice number or work order number printed on the document (not a PO number)" },
       unitNumberGuess: { type: ["string", "null"], description: "Truck/trailer unit number if visible on the document, else null" },
+      documentType: {
+        type: "string",
+        enum: ["estimate", "final", "unclear"],
+        description:
+          "'estimate' if the document is labeled Estimate/Quote, explicitly says it isn't a final bill, or reads " +
+          "as a proposed repair awaiting approval. 'final' if it's labeled Invoice/Receipt, shows a paid/amount-due " +
+          "balance, or otherwise reads as a completed, billable transaction. 'unclear' only if the document gives " +
+          "no real signal either way.",
+      },
       lineItems: {
         type: "array",
         description:
@@ -62,7 +78,7 @@ const EXTRACT_TOOL = {
         minItems: 1,
       },
     },
-    required: ["vendor", "date", "invoiceRef", "unitNumberGuess", "lineItems"],
+    required: ["vendor", "date", "invoiceRef", "unitNumberGuess", "documentType", "lineItems"],
     additionalProperties: false,
   },
 } as const;

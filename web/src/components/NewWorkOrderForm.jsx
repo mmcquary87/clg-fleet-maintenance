@@ -12,7 +12,7 @@ import { findDuplicateWorkOrders } from "../lib/workOrderDuplicates";
 import FileDropzone from "./shared/FileDropzone";
 import ChargebackDriverPicker from "./shared/ChargebackDriverPicker";
 
-const STATUSES = ["Open", "In Progress", "Closed"];
+const STATUSES = ["Open-Proposed", "Open", "In Progress", "Closed"];
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -58,10 +58,19 @@ async function findOrCreateVendor(name, category) {
 export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingReceipt, sourceReceiptId }) {
   const [f, setF] = useState({
     unitNumber: initial?.unitNumber || "", vendorName: initial?.vendorName || "",
-    status: "Closed", dateOpened: initial?.date || new Date().toISOString().slice(0, 10),
+    status: initial?.isEstimate ? "Open-Proposed" : "Closed",
+    dateOpened: initial?.date || new Date().toISOString().slice(0, 10),
     dateClosed: initial?.date || new Date().toISOString().slice(0, 10),
     invoiceRef: initial?.invoiceRef || "", poNumber: "",
   });
+  // An estimate from a vendor, not a confirmed final cost -- cost and
+  // estimated_cost both get the quoted total, and the work order stays
+  // flagged until someone later closes it with the real final invoice
+  // (WorkOrderDetailModal's "Close work order" then checks it against
+  // estimated_cost and routes it to approval if the two don't match).
+  // Pre-checked when scan-invoice's documentType said "estimate", but
+  // always a plain toggle a person can correct either way.
+  const [isEstimate, setIsEstimate] = useState(Boolean(initial?.isEstimate));
   const [lineItems, setLineItems] = useState(
     initial?.lineItems?.length > 0
       ? initial.lineItems.map((li) => ({ ...emptyLineItem(), category: sanitizeCategory(li.category), description: li.description, cost: li.cost }))
@@ -206,6 +215,8 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
         description: first.description || null,
         source: "manual",
         receipt_path: receiptPath,
+        is_estimate: isEstimate,
+        estimated_cost: isEstimate ? (multiItem ? totalCost : (Number(first.cost) || 0)) : null,
         // Chargeback stays at the work-order level only for the common
         // single-item case -- a multi-item invoice's chargeback-eligible
         // line(s) are flagged on their own work_order_line_items row
@@ -350,6 +361,18 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
           </Field>
           <Field label="Status">
             <Select value={f.status} onChange={set("status")} options={STATUSES} />
+          </Field>
+          <Field label="Cost">
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--clg-text-body)", cursor: "pointer", height: "100%" }}>
+              <input
+                type="checkbox" checked={isEstimate}
+                onChange={(e) => {
+                  setIsEstimate(e.target.checked);
+                  if (e.target.checked && f.status === "Closed") setF((prev) => ({ ...prev, status: "Open-Proposed" }));
+                }}
+              />
+              This is a vendor estimate, not a final invoice
+            </label>
           </Field>
           <Field label="Vendor invoice #">
             <Input value={f.invoiceRef} onChange={set("invoiceRef")} placeholder="e.g. INV-48213" />
