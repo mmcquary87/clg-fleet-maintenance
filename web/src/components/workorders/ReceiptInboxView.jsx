@@ -185,6 +185,7 @@ export default function ReceiptInboxView() {
         <NewWorkOrderForm
           initial={initialFor(creatingFor)}
           existingReceipt={creatingFor.storage_path ? { storagePath: creatingFor.storage_path, fileName: creatingFor.file_name } : undefined}
+          sourceReceiptId={creatingFor.id}
           onCancel={() => setCreatingFor(null)}
           onSaved={handleSaved}
         />

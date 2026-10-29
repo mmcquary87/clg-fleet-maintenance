@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Loader2, Plus, Trash2, Sparkles } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert, Eyebrow } from "../ds";
 import { supabase } from "../lib/supabaseClient";
@@ -8,6 +8,7 @@ import { uploadReceipt, fileToBase64 } from "../lib/invoiceFiles";
 import { PAYMENT_METHODS } from "../lib/paymentMethods";
 import { describeFunctionError } from "../lib/functionError";
 import { updateUnitMaintenanceFields } from "../hooks/useUnits";
+import { findDuplicateWorkOrders } from "../lib/workOrderDuplicates";
 import FileDropzone from "./shared/FileDropzone";
 import ChargebackDriverPicker from "./shared/ChargebackDriverPicker";
 
@@ -15,6 +16,10 @@ const STATUSES = ["Open", "In Progress", "Closed"];
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function money(n) {
+  return `$${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 }
 
 function emptyLineItem() {
@@ -50,7 +55,7 @@ async function findOrCreateVendor(name, category) {
 // scan already ran server-side when the email came in. `existingReceipt`
 // ({ storagePath, fileName }) points at a file already sitting in the
 // `invoices` bucket, so onSubmit reuses it instead of re-uploading.
-export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingReceipt }) {
+export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingReceipt, sourceReceiptId }) {
   const [f, setF] = useState({
     unitNumber: initial?.unitNumber || "", vendorName: initial?.vendorName || "",
     status: "Closed", dateOpened: initial?.date || new Date().toISOString().slice(0, 10),
@@ -74,8 +79,49 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
   const [markPaid, setMarkPaid] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
   const [paymentReference, setPaymentReference] = useState("");
+  const [duplicates, setDuplicates] = useState({ workOrders: [], receipts: [] });
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
+  const totalCost = lineItems.reduce((s, li) => s + (Number(li.cost) || 0), 0);
+
+  // Catches the same invoice getting logged twice -- a receipt forwarded by
+  // email more than once (still sitting in the Receipt Inbox) or the same
+  // repair re-keyed by hand. Runs automatically (debounced) as the
+  // identifying fields settle, including right when this form opens
+  // pre-filled from a receipt -- not just on submit -- so the warning is
+  // visible before anyone finishes filling out the rest of the form.
+  // Re-flags (clears the acknowledgment) whenever one of those fields
+  // changes, so editing after an "anyway" doesn't silently carry it forward
+  // to a now-different combination.
+  useEffect(() => {
+    setDuplicateAcknowledged(false);
+    if (!f.unitNumber.trim() || !f.vendorName.trim()) {
+      setDuplicates({ workOrders: [], receipts: [] });
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const result = await findDuplicateWorkOrders({
+          unitNumber: f.unitNumber,
+          vendorName: f.vendorName,
+          invoiceRef: f.invoiceRef,
+          dateOpened: f.dateOpened,
+          totalCost,
+          excludeReceiptId: sourceReceiptId,
+        });
+        setDuplicates(result);
+      } catch {
+        // A safety-net check, not a required step -- a failed lookup
+        // (network blip, etc.) shouldn't block logging a real invoice.
+        setDuplicates({ workOrders: [], receipts: [] });
+      }
+    }, 600);
+    return () => clearTimeout(handle);
+  }, [f.unitNumber, f.vendorName, f.invoiceRef, f.dateOpened, totalCost, sourceReceiptId]);
+
+  const hasDuplicates = duplicates.workOrders.length > 0 || duplicates.receipts.length > 0;
 
   const onScan = async () => {
     if (!file) return;
@@ -120,10 +166,12 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
   const addLineItem = () => setLineItems([...lineItems, emptyLineItem()]);
   const removeLineItem = (id) => setLineItems(lineItems.filter((li) => li.id !== id));
 
-  const totalCost = lineItems.reduce((s, li) => s + (Number(li.cost) || 0), 0);
-
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (hasDuplicates && !duplicateAcknowledged) {
+      setError("This looks like a duplicate -- review the warning above and check the box to confirm before saving.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -263,6 +311,35 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
 
       {error && <Alert tone="critical" style={{ marginBottom: 16 }}>{error}</Alert>}
 
+      {hasDuplicates && (
+        <Alert tone="critical" title="Possible duplicate" style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8 }}>
+            This unit, vendor{f.invoiceRef.trim() ? ", and invoice #" : ""} already matches{" "}
+            {duplicates.workOrders.length > 0 && "an existing work order"}
+            {duplicates.workOrders.length > 0 && duplicates.receipts.length > 0 && " and "}
+            {duplicates.receipts.length > 0 && "another receipt already in the inbox"}:
+          </div>
+          <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
+            {duplicates.workOrders.map((wo) => (
+              <li key={wo.id}>
+                WO #{wo.wo_number} — {wo.date_opened} — {money(wo.cost)} — {wo.status}
+                {wo.invoice_ref ? ` — invoice ${wo.invoice_ref}` : ""}
+              </li>
+            ))}
+            {duplicates.receipts.map((r) => (
+              <li key={r.id}>
+                "{r.subject || "(no subject)"}" received {new Date(r.received_at).toLocaleDateString()}
+                {r.status === "created" ? " — already converted to a work order" : " — still pending in the Receipt Inbox"}
+              </li>
+            ))}
+          </ul>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, cursor: "pointer" }}>
+            <input type="checkbox" checked={duplicateAcknowledged} onChange={(e) => setDuplicateAcknowledged(e.target.checked)} />
+            This isn't a duplicate — create it anyway
+          </label>
+        </Alert>
+      )}
+
       <form onSubmit={onSubmit}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
           <Field label="Unit number" required>
@@ -396,7 +473,12 @@ export default function NewWorkOrderForm({ onSaved, onCancel, initial, existingR
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" size="sm" disabled={submitting} iconLeft={submitting ? <Loader2 size={14} className="spin" /> : null}>
+          <Button
+            type="submit" size="sm"
+            disabled={submitting || (hasDuplicates && !duplicateAcknowledged)}
+            title={hasDuplicates && !duplicateAcknowledged ? "Review the possible-duplicate warning above first" : undefined}
+            iconLeft={submitting ? <Loader2 size={14} className="spin" /> : null}
+          >
             Save{lineItems.length > 1 ? ` (${lineItems.length} services)` : ""}
           </Button>
         </div>
