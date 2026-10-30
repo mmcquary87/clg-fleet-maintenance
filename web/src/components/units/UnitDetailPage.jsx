@@ -149,7 +149,7 @@ export default function UnitDetailPage({ unitId, onBack, canViewAssetLifecycle }
         <h2 style={{ fontSize: "var(--clg-size-h4)", fontWeight: 700, color: "var(--clg-navy)", margin: 0 }}>Unit {unit.number}</h2>
         <Badge tone={OWNERSHIP_TONE[unit.ownership] || "neutral"}>{OWNERSHIP_LABEL[unit.ownership] || "CLG-owned"}</Badge>
         {!unit.is_active && <Badge tone="critical">Inactive</Badge>}
-        {unit.plate_number && <Badge tone="neutral">Plate {unit.plate_number}</Badge>}
+        {unit.plate_number && <Badge tone="neutral">Plate {unit.plate_state ? `${unit.plate_state} ` : ""}{unit.plate_number}</Badge>}
         {unit.type === "Truck" && (
           <button
             onClick={() => handleSave({ owner_operator_assigned: !unit.owner_operator_assigned })}

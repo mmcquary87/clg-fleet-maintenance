@@ -11,7 +11,7 @@ const UNIT_SELECT =
   "last_differential_oil_odometer, differential_oil_interval_miles, " +
   "last_fuel_filter_date, fuel_filter_interval_days, last_fuel_filter_odometer, fuel_filter_interval_miles, " +
   "last_grease_fifth_wheel_date, grease_fifth_wheel_interval_days, last_grease_chassis_date, grease_chassis_interval_days, " +
-  "ownership, owner_operator_assigned, plate_number, plate_expires_at, lease_reference, lease_status_note, in_service_date, " +
+  "ownership, owner_operator_assigned, plate_number, plate_state, plate_country, plate_expires_at, lease_reference, lease_status_note, in_service_date, " +
   "current_market_value, current_market_value_date, market_value_mom_depreciation_pct, " +
   "can_move_load, issue_tag, issue_tag_note";
 

@@ -41,6 +41,18 @@
 // field says 2027-09-09). alvys-sync-dot-inspections is superseded by
 // this and no longer scheduled (see the migration that unschedules it).
 //
+// Also captures plate/registration data -- LicenseNum, LicenseState,
+// LicenseCountry, LicenseExpirationDate -- directly off this same
+// trucks/trailers search response. Confirmed via alvys-explore-plate-
+// registration (2026-10-30) to be real structured fields, not just an
+// uploaded document; units.plate_number/plate_expires_at previously
+// existed but were manual-entry-only with nothing syncing them. Written
+// straight onto the units row like vin/make/model (not into
+// unit_maintenance_due -- these are unit attributes, not a due-date
+// tracker). Trailers in the sampled fleet didn't carry
+// LicenseExpirationDate -- left null (?? null) rather than assumed absent
+// for every trailer going forward.
+//
 // Also captures Preventive Maintenance (oil change) and Mid-Trip due data
 // off each unit's `References` array -- custom per-account fields shown
 // on Alvys's own "Edit Truck/Trailer" screen, discovered + confirmed
@@ -158,6 +170,8 @@ Deno.serve(async (req) => {
         number: t.TruckNum, type: "Truck", vin: t.VinNumber ?? null, alvys_asset_id: t.Id,
         year: t.Year ?? null, make: t.Make ?? null, model: t.Model ?? null, fuel_type: t.FuelType ?? null,
         is_active: true, inspection_due_date: t.InspectionExpirationDate ?? null,
+        plate_number: t.LicenseNum ?? null, plate_state: t.LicenseState ?? null,
+        plate_country: t.LicenseCountry ?? null, plate_expires_at: t.LicenseExpirationDate ?? null,
         last_pm_odometer: parseOdometer(refValue(t.References, TRUCK_REF_IDS.lastPmOdometer)),
         next_pm_odometer_due: parseOdometer(refValue(t.References, TRUCK_REF_IDS.nextPmOdometerDue)),
         next_midtrip_due: refValue(t.References, TRUCK_REF_IDS.nextMidtripDue),
@@ -166,6 +180,8 @@ Deno.serve(async (req) => {
         number: t.TrailerNum, type: "Trailer", vin: t.VinNum ?? null, alvys_asset_id: t.Id,
         year: t.Year ?? null, make: t.Make ?? null, model: t.EquipmentType ?? null, fuel_type: null,
         is_active: true, inspection_due_date: t.InspectionExpiresAt ?? null,
+        plate_number: t.LicenseNum ?? null, plate_state: t.LicenseState ?? null,
+        plate_country: t.LicenseCountry ?? null, plate_expires_at: t.LicenseExpirationDate ?? null,
         last_pm_odometer: null, next_pm_odometer_due: null,
         next_midtrip_due: refValue(t.References, TRAILER_REF_IDS.nextMidtripDue),
       })),
@@ -275,6 +291,7 @@ Deno.serve(async (req) => {
       inspectionDatesSynced: dueRows.length,
       pmRecordsSynced: pmRows.length,
       midtripDueDatesSynced: midtripRows.length,
+      plateDataSynced: alvysUnits.filter((u) => u.plate_number).length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err instanceof Error ? err.message : err) }), {
