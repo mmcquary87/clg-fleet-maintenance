@@ -221,8 +221,16 @@ Deno.serve(async (req) => {
           description: categoryText || r.Comments || null,
           cost: r.Amount?.Amount ?? 0,
           status: "Closed",
-          date_opened: (r.CreatedAt || new Date().toISOString()).slice(0, 10),
-          date_closed: (r.CreatedAt || new Date().toISOString()).slice(0, 10),
+          // r.Date is the real service date -- confirmed via a live probe
+          // (alvys-explore-maintenance-dates, 2026-10-30) to track the
+          // vendor's actual invoice date within a day, every time. r.CreatedAt
+          // (used here previously) is just when the record was typed into
+          // Alvys, which can lag the real service date by weeks if someone
+          // batches their data entry -- confirmed on a real invoice (230017,
+          // serviced 07/14, invoiced 07/15, not entered into Alvys until
+          // 08/07). Falls back to CreatedAt only if Date is ever missing.
+          date_opened: (r.Date || r.CreatedAt || new Date().toISOString()).slice(0, 10),
+          date_closed: (r.Date || r.CreatedAt || new Date().toISOString()).slice(0, 10),
           invoice_ref: r.Reference || null,
           po_number: r.PO || null,
           source: "manual",
