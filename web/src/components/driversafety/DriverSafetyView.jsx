@@ -171,6 +171,16 @@ function sortRows(rows, sortBy, sortDir) {
   });
 }
 
+// range is null only for the explicit "official 90-day window" view --
+// every normal page load now carries a range object (Rolling 60 days by
+// default), so this can't just assume "no range" is the common case.
+function rangeSpanLabel(range) {
+  if (!range) return "trailing 90 days";
+  if (!range.start || !range.end) return "selected window";
+  const days = Math.round((new Date(range.end) - new Date(range.start)) / 86400000) + 1;
+  return `${days}-day window`;
+}
+
 function RankingsTable({ ranked, range }) {
   const [bandFilter, setBandFilter] = useState("all");
   const [showAll, setShowAll] = useState(false);
@@ -229,7 +239,7 @@ function RankingsTable({ ranked, range }) {
       </div>
       <Table columns={COLUMNS} rows={visible} sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
       <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 4px", fontSize: 12, color: "var(--clg-text-muted)" }}>
-        <span>Showing {visible.length} of {filtered.length} scored drivers · trailing 90 days</span>
+        <span>Showing {visible.length} of {filtered.length} scored drivers · {rangeSpanLabel(range)}</span>
         {filtered.length > TABLE_PAGE_SIZE && (
           <button
             onClick={() => setShowAll((v) => !v)}
@@ -381,11 +391,15 @@ const TABS = [
   { id: "grace", label: "Grace & scoring" },
 ];
 
-// Matches accountability_infractions.rollover_days (60) -- lets Safety view
-// the Scorecard over the same span an Accountability Center infraction
-// stays active for, side by side with the Scorecard's own default 90-day
-// window. Page-specific (DateRangeFilter's extraPresets), not a global
-// preset -- meaningless on the other pages reusing that same component.
+// The page's own default view (CLG direction, 2026-11-03) -- also matches
+// accountability_infractions.rollover_days (60), so what Safety sees on
+// load lines up with the span an Accountability Center infraction stays
+// active for. This only changes what the page SHOWS by default; the
+// "official" trailing-90-day driver_safety_scorecard view (fine
+// eligibility, fleet_score_snapshots) is unchanged and still reachable via
+// "View official 90-day window" below. Page-specific (DateRangeFilter's
+// extraPresets + defaultPresetId), not a global preset -- meaningless on
+// the other pages reusing that same component.
 const ROLLING_60_PRESET = {
   id: "rolling60",
   label: "Rolling 60 days",
@@ -443,7 +457,7 @@ export default function DriverSafetyView() {
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
-        <DateRangeFilter onChange={setRange} disableAllTime extraPresets={[ROLLING_60_PRESET]} />
+        <DateRangeFilter onChange={setRange} disableAllTime extraPresets={[ROLLING_60_PRESET]} defaultPresetId="rolling60" />
         {loading && (
           <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--clg-text-muted)" }}>
             <Loader2 size={13} className="spin" /> Updating…
@@ -454,13 +468,13 @@ export default function DriverSafetyView() {
             onClick={() => setRange(null)}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-link)", fontSize: 12, fontWeight: 600 }}
           >
-            Reset to default (trailing 90 days)
+            View official 90-day window
           </button>
         )}
       </div>
       <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 6 }}>
         {range
-          ? "Showing a custom window -- speeding/safety/HOS counts are exact for this range, but miles driven (and events-per-1k-miles) still reflect Samsara's trailing-90-day snapshot, not this specific range."
+          ? "Speeding/safety/HOS counts are exact for this window, but miles driven (and events-per-1k-miles) still reflect Samsara's trailing-90-day snapshot, not this specific range."
           : "Showing the official trailing-90-day window -- same data Accountability's fine eligibility uses."}
       </div>
 

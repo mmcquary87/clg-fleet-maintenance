@@ -44,10 +44,17 @@ const CUSTOM_PRESET = { id: "custom", label: "Custom", range: null };
 // "do not use free-floating pills for these — the choice is one-of-N, and
 // pill radii are reserved for small status chips"), not individually
 // bordered/pill-shaped buttons.
-export default function DateRangeFilter({ onChange, disableAllTime = false, extraPresets = [] }) {
+export default function DateRangeFilter({ onChange, disableAllTime = false, extraPresets = [], defaultPresetId }) {
   const basePresets = disableAllTime ? ALL_PRESETS.filter((p) => p.id !== "all") : ALL_PRESETS;
   const PRESETS = [...basePresets, ...extraPresets, CUSTOM_PRESET];
-  const initialPresetId = disableAllTime ? "month" : "all";
+  // defaultPresetId lets a page override which preset is active (and fired)
+  // on mount -- e.g. the Driver Safety Scorecard defaulting to its own
+  // "Rolling 60 days" extraPreset instead of the generic disableAllTime
+  // fallback. Must name a real preset id or it silently falls through to
+  // that same fallback.
+  const initialPresetId = defaultPresetId && PRESETS.some((p) => p.id === defaultPresetId)
+    ? defaultPresetId
+    : disableAllTime ? "month" : "all";
   const [active, setActive] = useState(initialPresetId);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
