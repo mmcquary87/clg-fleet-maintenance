@@ -75,6 +75,29 @@ const FUEL_ENERGY_WINDOW_DAYS = 90; // matches driver_safety_scorecard's scoring
 const DRIVER_BATCH_SIZE = 25;
 const VEHICLE_BATCH_SIZE = 50; // speeding-intervals/stream's documented assetIds cap
 
+// HOS Violations reconciliation window -- confirmed 2026-11-03: "unsubmittedLogs"
+// (Missing Driver Certification) is reported by Samsara based on whether that
+// day's log is certified AS OF THE MOMENT OF THE POLL, not a final settled
+// fact. A driver who certifies at the end of their shift -- completely normal
+// -- gets caught "not yet certified" by at least one of this sync's 15-minute
+// polls on nearly every working day, since the poll runs all day long. The old
+// code only ever upserted whatever Samsara returned for the 1-day default
+// window and never re-checked a day once written, so that transient,
+// already-resolved-by-evening state became a PERMANENT scored violation.
+// Real-data audit (2026-11-03): of 30 drivers showing a 22-42 day unbroken
+// "Missing Driver Certification" streak, Samsara's own official HOS
+// Violations export showed real violations for only 2 of them (chronic
+// non-certifiers); the other ~28 had zero or near-zero real occurrences.
+//
+// Fix: re-fetch and reconcile a trailing window on every run, not just
+// whatever windowDays the caller asked for -- any previously-stored row
+// whose day is within this window and NO LONGER reported by Samsara gets
+// deleted instead of left stale forever. 7 days gives a driver's normal
+// same-day-or-next-morning certification time to land before we'd ever
+// treat it as real, while still catching genuinely chronic non-certifiers
+// (who keep reappearing every single reconciliation).
+const HOS_VIOLATIONS_RECONCILE_DAYS = 7;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -327,18 +350,32 @@ Deno.serve(async (req) => {
     // (same failure mode confirmed on /speeding-intervals/stream below,
     // 2026-10-28) -- caught per-batch so one stale id can't take down every
     // other driver's HOS sync for the run.
+    //
+    // Reconciliation (2026-11-03): queries a trailing HOS_VIOLATIONS_RECONCILE_DAYS
+    // window regardless of the run's normal windowDays/backfill range (skipped
+    // during an explicit historical backfill -- that's a deliberate, scoped,
+    // one-off seed, not the ongoing cron this bug lives in), and deletes any
+    // previously-stored row in that window that Samsara no longer reports,
+    // instead of only ever adding rows.
+    const violationQueryStart = isBackfill
+      ? startTime
+      : new Date(Math.min(start.getTime(), end.getTime() - HOS_VIOLATIONS_RECONCILE_DAYS * 24 * 3600 * 1000)).toISOString();
+    const violationQueryEnd = endTime;
+
     const violationBatchErrors: string[] = [];
     const violationRows: any[] = [];
+    let staleViolationsDeleted = 0;
     for (const batch of chunk(samsaraDrivers.map((d: any) => d.id), DRIVER_BATCH_SIZE)) {
       let results: any[];
       try {
         results = await fetchAllPaginated("/fleet/hos/violations", {
-          driverIds: batch.join(","), startTime, endTime, limit: "200",
+          driverIds: batch.join(","), startTime: violationQueryStart, endTime: violationQueryEnd, limit: "200",
         });
       } catch (err) {
         violationBatchErrors.push(err instanceof Error ? err.message : String(err));
         continue;
       }
+      const batchRows: any[] = [];
       for (const entry of results) {
         for (const v of entry.violations ?? []) {
           const samsaraDriverId = v.driver?.id ?? entry.driver?.id ?? null;
@@ -355,7 +392,7 @@ Deno.serve(async (req) => {
           // Missed Rest Break) -- see 20261029020000's cleanup migration for
           // the one-time dedup of rows already synced under the old key.
           const dedupKey = v.day?.startTime ?? v.violationStartTime;
-          violationRows.push({
+          batchRows.push({
             id: `${samsaraDriverId}:${dedupKey}:${v.type ?? ""}`,
             samsara_driver_id: samsaraDriverId,
             driver_id: driverIdBySamsaraId.get(samsaraDriverId) ?? null,
@@ -367,6 +404,24 @@ Deno.serve(async (req) => {
             duration_ms: v.durationMs ?? null,
             synced_at: new Date().toISOString(),
           });
+        }
+      }
+      violationRows.push(...batchRows);
+
+      if (!isBackfill) {
+        const freshIds = batchRows.map((r) => r.id);
+        let deleteQuery = supabase
+          .from("driver_hos_violations")
+          .delete({ count: "exact" })
+          .in("samsara_driver_id", batch)
+          .gte("day_start", violationQueryStart)
+          .lte("day_start", violationQueryEnd);
+        if (freshIds.length > 0) deleteQuery = deleteQuery.not("id", "in", `(${freshIds.map((id) => `"${id}"`).join(",")})`);
+        const { error: delErr, count } = await deleteQuery;
+        if (delErr) {
+          violationBatchErrors.push(`reconcile delete: ${delErr.message}`);
+        } else {
+          staleViolationsDeleted += count ?? 0;
         }
       }
     }
@@ -498,6 +553,8 @@ Deno.serve(async (req) => {
       assignmentBatchErrors,
       safetyEventsUpserted,
       violationsUpserted,
+      violationQueryWindow: isBackfill ? null : { start: violationQueryStart, end: violationQueryEnd },
+      staleViolationsDeleted,
       violationBatchErrors,
       speedingIntervalsUpserted: speedingUpserted,
       speedingIntervalsAttributed: speedingRows.filter((r: any) => r.driver_id).length,
