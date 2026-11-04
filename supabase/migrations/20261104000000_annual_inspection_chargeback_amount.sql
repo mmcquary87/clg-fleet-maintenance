@@ -1,0 +1,13 @@
+-- Fleet Maintenance System — flat Annual (DOT) Inspection chargeback fee
+-- (2026-11-04, CLG direction: $60 per inspection, same mechanism as
+-- midtrip_chargeback_amount's $30 flat mid-trip fee, 20260918020000)
+--
+-- Recorded as its own Closed work order every time an annual inspection
+-- is filed (AnnualInspectionForm.jsx), optionally billed back to a driver
+-- via the existing is_chargeback/chargeback_driver_id mechanism so it
+-- shows up in the existing Deductions report and Spend/Intacct export for
+-- free, same reasoning as the mid-trip fee. Category reuses the existing
+-- "DOT Inspection" wo_category value (already in categories.js and the
+-- enum, 20260826120000) rather than adding a new one -- an annual
+-- inspection IS a DOT inspection.
+alter table app_settings add column if not exists annual_inspection_chargeback_amount numeric(10, 2) not null default 60.00;

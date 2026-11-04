@@ -190,6 +190,60 @@ function MidTripChargebackPanel() {
   );
 }
 
+// Flat fee for an Annual (DOT) Inspection filed in-house (CLG, 2026-11-04),
+// same mechanism as MidTripChargebackPanel's own flat mid-trip fee above --
+// applied the same way regardless of who it's charged back to.
+function AnnualInspectionChargebackPanel() {
+  const [amount, setAmount] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    supabase.from("app_settings").select("annual_inspection_chargeback_amount").single().then(({ data }) => {
+      setAmount(data?.annual_inspection_chargeback_amount != null ? String(data.annual_inspection_chargeback_amount) : "");
+      setLoaded(true);
+    });
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    const { error: err } = await supabase.from("app_settings")
+      .update({ annual_inspection_chargeback_amount: amount.trim() === "" ? null : Number(amount) })
+      .eq("id", true);
+    setSaving(false);
+    if (err) setError(err.message);
+    else setSaved(true);
+  };
+
+  return (
+    <Card>
+      <h3 style={{ fontSize: "var(--clg-size-h5)", fontWeight: 700, marginBottom: 4 }}>Annual (DOT) inspection fee</h3>
+      <p style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 16 }}>
+        Flat fee charged for an annual DOT inspection filed in-house, applied the same way regardless of who it's
+        charged back to — a company driver or an owner-operator.
+      </p>
+      {error && <Alert tone="critical" title="Couldn't save" style={{ marginBottom: 16 }}>{error}</Alert>}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
+        <Field label="Amount ($)" style={{ maxWidth: 180 }}>
+          <Input
+            type="number" min="0" step="0.01" disabled={!loaded} placeholder="Not configured"
+            value={amount}
+            onChange={(e) => { setAmount(e.target.value); setSaved(false); }}
+          />
+        </Field>
+        <Button size="sm" onClick={save} disabled={saving || !loaded} iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {saved && <span style={{ fontSize: 12.5, color: "var(--clg-royal)", fontWeight: 600 }}>Saved</span>}
+      </div>
+    </Card>
+  );
+}
+
 // Asset_Lifecycle_Disposal_Spec.md §2: the target exit band and reliability
 // triggers are "a configurable input, not a fixed rule" -- edited here,
 // same singleton-row app_settings pattern as ShopLaborRatePanel above.
@@ -701,6 +755,10 @@ export default function SettingsView() {
 
       <div style={{ marginTop: 32 }}>
         <MidTripChargebackPanel />
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        <AnnualInspectionChargebackPanel />
       </div>
 
       <div style={{ marginTop: 32 }}>

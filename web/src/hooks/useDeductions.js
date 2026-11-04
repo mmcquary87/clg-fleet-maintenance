@@ -17,21 +17,21 @@ import { supabase } from "../lib/supabaseClient";
 // it's looking at; _source tracks which table setDeducted should write to.
 const WO_CHARGEBACK_SELECT =
   "id, chargeback_driver_name, chargeback_driver_id, chargeback_deducted_at, category, description, complaint, cost, date_opened, date_closed, " +
-  "invoice_ref, po_number, mid_trip_inspection_id, unit:units(number), vendor:vendors(name), driver:drivers(driver_type)";
+  "invoice_ref, po_number, mid_trip_inspection_id, annual_inspection_id, unit:units(number), vendor:vendors(name), driver:drivers(driver_type)";
 
 const LINE_ITEM_CHARGEBACK_SELECT =
   "id, chargeback_driver_name, chargeback_driver_id, chargeback_deducted_at, category, description, cost, " +
-  "work_order:work_orders!inner(id, wo_number, date_opened, date_closed, invoice_ref, po_number, voided, mid_trip_inspection_id, unit:units(number), vendor:vendors(name)), " +
+  "work_order:work_orders!inner(id, wo_number, date_opened, date_closed, invoice_ref, po_number, voided, mid_trip_inspection_id, annual_inspection_id, unit:units(number), vendor:vendors(name)), " +
   "driver:drivers(driver_type)";
 
 function billedAmountFor(r, flatAmount) {
   const isOwnerOperator = r.driver?.driver_type === "OWNER_OPERATOR";
-  // The mid-trip inspection fee is a flat rate applied uniformly regardless
-  // of who's being charged (CLG, 2026-09-18) -- its own cost IS that flat
-  // rate already, so it must never be swapped out for the owner-operator-
-  // specific rate below.
-  const isMidTripFee = r.mid_trip_inspection_id != null;
-  const flatRateApplied = !isMidTripFee && isOwnerOperator && flatAmount != null;
+  // The mid-trip and annual-inspection fees are flat rates applied uniformly
+  // regardless of who's being charged (CLG, 2026-09-18 / 2026-11-04) -- each
+  // one's cost IS that flat rate already, so neither must be swapped out for
+  // the owner-operator-specific rate below.
+  const isFlatInspectionFee = r.mid_trip_inspection_id != null || r.annual_inspection_id != null;
+  const flatRateApplied = !isFlatInspectionFee && isOwnerOperator && flatAmount != null;
   const billedAmount = flatRateApplied ? Number(flatAmount) : Number(r.cost) || 0;
   return { isOwnerOperator, flatRateApplied, billedAmount };
 }
@@ -89,6 +89,7 @@ export function useDeductions(range) {
         invoice_ref: li.work_order?.invoice_ref,
         po_number: li.work_order?.po_number,
         mid_trip_inspection_id: li.work_order?.mid_trip_inspection_id,
+        annual_inspection_id: li.work_order?.annual_inspection_id,
         unit: li.work_order?.unit,
         vendor: li.work_order?.vendor,
         wo_number: li.work_order?.wo_number,

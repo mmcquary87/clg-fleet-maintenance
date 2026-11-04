@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { Card, Field, Input, Select, Button, Alert } from "../../ds";
 import { supabase } from "../../lib/supabaseClient";
@@ -9,9 +9,14 @@ import { itemsForUnitType, needsAttention as computeNeedsAttention } from "../..
 import { nextDueDate } from "../../lib/maintenanceSchedule";
 import PhotoCapture from "../shared/PhotoCapture";
 import SignaturePad from "../shared/SignaturePad";
+import ChargebackDriverPicker from "../shared/ChargebackDriverPicker";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function moneyFmt(n) {
+  return n == null ? "—" : `$${Number(n).toFixed(2)}`;
 }
 
 function pillStyle(active, tone) {
@@ -70,6 +75,16 @@ export default function AnnualInspectionForm({ onCancel, onFiled }) {
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [isChargeback, setIsChargeback] = useState(false);
+  const [chargebackDriver, setChargebackDriver] = useState("");
+  const [chargebackDriverId, setChargebackDriverId] = useState(null);
+  const [feeAmount, setFeeAmount] = useState(null);
+
+  useEffect(() => {
+    supabase.from("app_settings").select("annual_inspection_chargeback_amount").single().then(({ data }) => {
+      setFeeAmount(data?.annual_inspection_chargeback_amount ?? null);
+    });
+  }, []);
 
   const items = itemsForUnitType(unitType);
   const setItem = (key) => (value) => setItemResults((r) => ({ ...r, [key]: value }));
@@ -77,6 +92,7 @@ export default function AnnualInspectionForm({ onCancel, onFiled }) {
   const uncheckedCount = items.length - items.filter((i) => itemResults[i.key] != null).length;
   const projectedNextDue = nextDueDate(inspectedAt, 364);
   const canFile = unitId && certified && inspectorName.trim() && signatureData;
+  const missingChargebackDriver = isChargeback && !chargebackDriver.trim();
 
   const lookupUnit = async () => {
     const number = unitNumber.trim();
@@ -92,6 +108,7 @@ export default function AnnualInspectionForm({ onCancel, onFiled }) {
 
   const save = async (status) => {
     if (!unitId) { setError("Look up a real unit number first."); return; }
+    if (status === "filed" && missingChargebackDriver) { setError("Enter who the annual inspection fee is billed to."); return; }
     setSaving(true);
     setError(null);
     try {
@@ -149,6 +166,28 @@ export default function AnnualInspectionForm({ onCancel, onFiled }) {
         }
         const { error: unitErr } = await supabase.from("units").update({ last_annual_inspection_date: inspectedAt }).eq("id", unitId);
         if (unitErr) throw unitErr;
+
+        // Flat annual-inspection fee, same mechanism as MidTripInspectionForm's
+        // mid-trip fee: always recorded as its own Closed work order (Spend/
+        // Cost-per-mile reporting), optionally billed back to a driver via the
+        // existing is_chargeback/chargeback_driver_id fields rather than a
+        // parallel ledger. No vendor -- it's an in-house fee, not a repair.
+        const { error: feeErr } = await supabase.from("work_orders").insert({
+          unit_id: unitId,
+          category: "DOT Inspection",
+          description: "Annual (DOT) inspection fee",
+          cost: feeAmount ?? 0,
+          status: "Closed",
+          date_opened: inspectedAt,
+          date_closed: inspectedAt,
+          intake_source: "manual",
+          source: "manual",
+          is_chargeback: isChargeback,
+          chargeback_driver_name: isChargeback ? (chargebackDriver.trim() || null) : null,
+          chargeback_driver_id: isChargeback ? chargebackDriverId : null,
+          annual_inspection_id: inspection.id,
+        });
+        if (feeErr) throw feeErr;
       }
 
       onFiled(inspection.id, raisedCount);
@@ -232,6 +271,30 @@ export default function AnnualInspectionForm({ onCancel, onFiled }) {
             <PhotoCapture photos={photos} onChange={setPhotos} />
           </Card>
 
+          {unitId && (
+            <Card style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-brand)", marginBottom: 10 }}>
+                Annual inspection fee
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 12 }}>
+                A flat {moneyFmt(feeAmount)} fee is recorded against this unit's cost for every annual inspection
+                filed — truck or trailer, no vendor. Optionally bill it back to a driver below.
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--clg-text-body)", cursor: "pointer", marginBottom: isChargeback ? 12 : 0 }}>
+                <input type="checkbox" checked={isChargeback} onChange={(e) => setIsChargeback(e.target.checked)} />
+                Charge back to driver
+              </label>
+              {isChargeback && (
+                <Field label="Billed to" required>
+                  <ChargebackDriverPicker
+                    name={chargebackDriver}
+                    onChange={(name, driverId) => { setChargebackDriver(name); setChargebackDriverId(driverId); }}
+                  />
+                </Field>
+              )}
+            </Card>
+          )}
+
           <Card>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--clg-text-brand)", marginBottom: 10 }}>
               Inspector certification
@@ -284,12 +347,19 @@ export default function AnnualInspectionForm({ onCancel, onFiled }) {
             <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 4 }}>
               Next due if filed today: {projectedNextDue}
             </div>
-            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 14 }}>
+            <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 4 }}>
               {canFile ? "Ready to file" : "Certification, inspector name & signature required to file"}
             </div>
+            {unitId && (
+              <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginBottom: 14 }}>
+                {isChargeback
+                  ? (missingChargebackDriver ? "Billed-to driver required" : `Bills ${moneyFmt(feeAmount)} to ${chargebackDriver}`)
+                  : `Fee: ${moneyFmt(feeAmount)} to unit cost`}
+              </div>
+            )}
             <Button
               onClick={() => save("filed")}
-              disabled={saving || !canFile}
+              disabled={saving || !canFile || missingChargebackDriver}
               iconLeft={saving ? <Loader2 size={14} className="spin" /> : null}
               style={{ width: "100%", marginBottom: 8 }}
             >
