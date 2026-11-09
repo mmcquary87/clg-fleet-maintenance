@@ -345,7 +345,7 @@ Deno.serve(async (req) => {
       ? startTime
       : new Date(Math.min(start.getTime(), end.getTime() - SAFETY_EVENTS_RECONCILE_DAYS * 24 * 3600 * 1000)).toISOString();
     const safetyEvents = await fetchAllPaginated("/fleet/safety-events", { startTime: safetyEventsQueryStart, endTime, limit: "200" });
-    const safetyEventRows = safetyEvents.map((e: any) => ({
+    const safetyEventRowsRaw = safetyEvents.map((e: any) => ({
       id: e.id,
       samsara_driver_id: e.driver?.id ?? null,
       driver_id: e.driver?.id ? (driverIdBySamsaraId.get(e.driver.id) ?? null) : null,
@@ -360,6 +360,14 @@ Deno.serve(async (req) => {
       longitude: e.location?.longitude ?? null,
       synced_at: new Date().toISOString(),
     })).filter((r: any) => r.id && r.event_time);
+    // Dedup by id (last one wins) -- a single Postgres upsert statement
+    // errors with "ON CONFLICT DO UPDATE command cannot affect row a second
+    // time" if the same id appears twice in one batch. Only surfaced once
+    // the reconciliation window above widened to 90 days (2026-11-09);
+    // never an issue with the old 1-day window's much smaller page count.
+    const safetyEventRows = Array.from(
+      new Map(safetyEventRowsRaw.map((r: any) => [r.id, r])).values(),
+    );
 
     let safetyEventsUpserted = 0;
     for (const batch of chunk(safetyEventRows, 500)) {
