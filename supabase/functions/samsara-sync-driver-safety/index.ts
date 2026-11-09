@@ -457,8 +457,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Dedup by id (last one wins) -- same "ON CONFLICT DO UPDATE command
+    // cannot affect row a second time" risk as safety events above, if
+    // Samsara's pagination ever returns the same violation twice within one
+    // driver batch's results.
+    const dedupedViolationRows = Array.from(
+      new Map(violationRows.map((r: any) => [r.id, r])).values(),
+    );
+
     let violationsUpserted = 0;
-    for (const batch of chunk(violationRows, 500)) {
+    for (const batch of chunk(dedupedViolationRows, 500)) {
       const { error } = await supabase.from("driver_hos_violations").upsert(batch, { onConflict: "id" });
       if (error) throw error;
       violationsUpserted += batch.length;
@@ -514,8 +522,13 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Dedup by id (last one wins) -- same duplicate-batch risk as above.
+    const dedupedSpeedingRows = Array.from(
+      new Map(speedingRows.map((r: any) => [r.id, r])).values(),
+    );
+
     let speedingUpserted = 0;
-    for (const batch of chunk(speedingRows, 500)) {
+    for (const batch of chunk(dedupedSpeedingRows, 500)) {
       const { error } = await supabase.from("driver_speeding_intervals").upsert(batch, { onConflict: "id" });
       if (error) throw error;
       speedingUpserted += batch.length;
@@ -557,15 +570,20 @@ Deno.serve(async (req) => {
         est_fuel_energy_cost_usd: r.estFuelEnergyCost?.amount ?? null,
         synced_at: new Date().toISOString(),
       })).filter((r: any) => r.samsara_driver_id);
+      // Dedup by samsara_driver_id (its own conflict key here, last one
+      // wins) -- same duplicate-batch risk as above.
+      const dedupedFuelEnergyRows = Array.from(
+        new Map(fuelEnergyRows.map((r: any) => [r.samsara_driver_id, r])).values(),
+      );
 
-      const seenDriverIds = fuelEnergyRows.map((r: any) => r.samsara_driver_id);
+      const seenDriverIds = dedupedFuelEnergyRows.map((r: any) => r.samsara_driver_id);
       if (seenDriverIds.length > 0) {
         const { error: delErr } = await supabase.from("driver_fuel_energy").delete().not("samsara_driver_id", "in", `(${seenDriverIds.join(",")})`);
         if (delErr) throw delErr;
       }
 
       fuelEnergyUpserted = 0;
-      for (const batch of chunk(fuelEnergyRows, 500)) {
+      for (const batch of chunk(dedupedFuelEnergyRows, 500)) {
         const { error } = await supabase.from("driver_fuel_energy").upsert(batch, { onConflict: "samsara_driver_id" });
         if (error) throw error;
         fuelEnergyUpserted += batch.length;
@@ -600,7 +618,14 @@ Deno.serve(async (req) => {
       : (err && typeof err === "object" && "message" in err)
         ? String((err as { message: unknown }).message)
         : JSON.stringify(err);
-    return new Response(JSON.stringify({ error: message }), {
+    // Surface Postgrest's details/hint/code too (present on a Supabase
+    // query error) -- the bare message alone doesn't say which table/
+    // constraint failed, which made a prior duplicate-id bug slow to track
+    // down across four separate upsert calls.
+    const extra = (err && typeof err === "object")
+      ? { details: (err as any).details ?? null, hint: (err as any).hint ?? null, code: (err as any).code ?? null }
+      : {};
+    return new Response(JSON.stringify({ error: message, ...extra }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
