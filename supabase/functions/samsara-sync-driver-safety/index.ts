@@ -98,6 +98,23 @@ const VEHICLE_BATCH_SIZE = 50; // speeding-intervals/stream's documented assetId
 // (who keep reappearing every single reconciliation).
 const HOS_VIOLATIONS_RECONCILE_DAYS = 7;
 
+// Safety-events reconciliation window (2026-11-09): coaching_state
+// (dismissed/coached/pending) is mutable on Samsara's side long after an
+// event's own time -- a dispatcher can dismiss a false-flagged event
+// (e.g. a hard dock bump logged as "Crash") weeks later, same as the HOS
+// violations bug above. The old code only ever fetched the trailing
+// windowDays (1 day by default), so an event older than that never got
+// re-fetched and its coaching_state stayed stuck at whatever it was the
+// day it was first synced -- a later dismissal silently never reached
+// driver_safety_events, leaving it counted against the driver's score
+// forever. Unlike HOS violations, no delete reconciliation is needed here
+// (events don't disappear, only coaching_state changes), so re-fetching a
+// wider window and upserting by id (already keyed this way) is enough.
+// Matches driver_safety_scorecard's full 90-day scoring window, not just
+// HOS's 7 days, since a dismissal should count for as long as the event
+// itself still affects the score.
+const SAFETY_EVENTS_RECONCILE_DAYS = 90;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -321,7 +338,13 @@ Deno.serve(async (req) => {
     }
 
     // --- Safety Events (driverIds filter is silently ignored — pull all) ---
-    const safetyEvents = await fetchAllPaginated("/fleet/safety-events", { startTime, endTime, limit: "200" });
+    // See SAFETY_EVENTS_RECONCILE_DAYS above: queries a trailing window wide
+    // enough to catch a coaching_state change (dismissal) on an older event,
+    // skipped during an explicit historical backfill same as HOS violations.
+    const safetyEventsQueryStart = isBackfill
+      ? startTime
+      : new Date(Math.min(start.getTime(), end.getTime() - SAFETY_EVENTS_RECONCILE_DAYS * 24 * 3600 * 1000)).toISOString();
+    const safetyEvents = await fetchAllPaginated("/fleet/safety-events", { startTime: safetyEventsQueryStart, endTime, limit: "200" });
     const safetyEventRows = safetyEvents.map((e: any) => ({
       id: e.id,
       samsara_driver_id: e.driver?.id ?? null,
@@ -552,6 +575,7 @@ Deno.serve(async (req) => {
       driverVehicleAssignmentsFetched: assignmentRecordsFetched,
       assignmentBatchErrors,
       safetyEventsUpserted,
+      safetyEventsQueryWindow: isBackfill ? null : { start: safetyEventsQueryStart, end: endTime },
       violationsUpserted,
       violationQueryWindow: isBackfill ? null : { start: violationQueryStart, end: violationQueryEnd },
       staleViolationsDeleted,
