@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAccountabilityInfractions } from "./useAccountabilityInfractions";
-import { buildScoringIndex } from "../lib/accountabilityScoring";
+import { buildScoringIndex, speedingSeverityFromSpeeds } from "../lib/accountabilityScoring";
 
 const WINDOW_DAYS = 90; // matches driver_safety_scorecard's scoring window
 
@@ -38,7 +38,7 @@ export function useIncidentMapEvents() {
     const [speedingRes, safetyRes] = await Promise.all([
       supabase
         .from("driver_speeding_intervals")
-        .select("id, start_time, severity_level, latitude, longitude, driver:drivers(name)")
+        .select("id, start_time, max_speed_kmh, posted_speed_limit_kmh, latitude, longitude, driver:drivers(name)")
         .gte("start_time", since)
         .not("latitude", "is", null)
         .eq("is_dismissed", false),
@@ -58,7 +58,8 @@ export function useIncidentMapEvents() {
     }
 
     const speedingEvents = (speedingRes.data ?? []).map((r) => {
-      const weight = index.matchSpeedingSeverity(r.severity_level)?.weight ?? 0;
+      const severity = speedingSeverityFromSpeeds(r.max_speed_kmh, r.posted_speed_limit_kmh);
+      const weight = index.matchSpeedingSeverity(severity)?.weight ?? 0;
       return {
         id: `speeding:${r.id}`,
         type: "speeding",
@@ -66,7 +67,7 @@ export function useIncidentMapEvents() {
         lat: r.latitude,
         lng: r.longitude,
         driverName: r.driver?.name ?? "Unassigned",
-        label: `${r.severity_level} speeding`,
+        label: severity ? `${severity} speeding` : "speeding",
         weight,
         tier: severityTier(weight),
       };

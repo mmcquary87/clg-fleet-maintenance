@@ -14,12 +14,15 @@
 // history accumulates in Postgres across runs, this never tries to
 // backfill months of data in one synchronous call. The first real test
 // run confirmed why: /speeding-intervals/stream returns every individual
-// interval (including "light" severity, which fires almost continuously
-// on any highway driving and carries ZERO weight in the scoring formula —
-// filtered out below before upsert) with no server-side aggregation, so a
-// 90-day fleet-wide pull blew straight through the Edge Function's
-// execution limit (repeated boot/shutdown in the function logs, no error
-// response at all).
+// interval with no server-side aggregation, so a 90-day fleet-wide pull
+// blew straight through the Edge Function's execution limit (repeated
+// boot/shutdown in the function logs, no error response at all). "Light"
+// severity (by far the dominant volume on any highway trip) was originally
+// skipped entirely for this reason and because it carried zero weight
+// under the old Samsara-label-based scoring -- now stored like every other
+// tier since 2026-11-10's mph-over-limit rework needs it for the new 1-5-
+// mph-over scored tier. Keep an eye on run time if this ever approaches the
+// backfill-only failure mode above.
 //
 // Pass {"windowDays": N} in the request body for a one-off manual backfill
 // of a trailing window ending now (keep N small — 2-3 days at a time —
@@ -496,10 +499,20 @@ Deno.serve(async (req) => {
         const vehicleId = trip.asset?.id;
         if (!vehicleId) continue;
         for (const iv of trip.intervals ?? []) {
-          // "light" severity carries zero weight in the scoring formula
-          // (only moderate/heavy/severe count) and is by far the
-          // dominant volume on any highway trip — skip storing it.
-          if (!iv.startTime || iv.severityLevel === "light") continue;
+          // "light" severity used to be skipped entirely (zero weight under
+          // the old Samsara-label-based scoring, and by far the dominant
+          // volume on any highway trip). Now stored like every other tier:
+          // CLG's 2026-11-10 direction replaced Samsara's severityLevel
+          // labels with CLGOS's own mph-over-posted-limit buckets (1-5/6-9/
+          // 10+, see 20261110000000's scoring migration), including a
+          // genuinely-scored 1-5-mph-over tier that Samsara's own "light"
+          // label was the only source of -- dropping it here would leave
+          // that tier permanently empty. Higher row volume is expected and
+          // accepted; watch the first few live runs for execution time if
+          // this ever approaches the Edge Function's limit (hit before only
+          // on a full 90-day backfill in one call, not this day-at-a-time
+          // cron -- see this function's own header).
+          if (!iv.startTime) continue;
           const assignedSamsaraDriverId = findDriverAtTime(vehicleId, new Date(iv.startTime).getTime());
           speedingRows.push({
             id: `${vehicleId}:${iv.startTime}`,

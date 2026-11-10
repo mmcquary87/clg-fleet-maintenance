@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAccountabilityInfractions } from "./useAccountabilityInfractions";
-import { buildScoringIndex } from "../lib/accountabilityScoring";
+import { buildScoringIndex, speedingSeverityFromSpeeds } from "../lib/accountabilityScoring";
 
 // Mirrors driver_safety_scorecard_view.sql's weighting exactly, but built
 // from accountability_infractions (via buildScoringIndex) instead of a
@@ -52,7 +52,7 @@ export function useDriverPointBreakdown(driverId, range = null) {
 
     const [speedingRes, safetyRes, hosRes, manualHosRes] = await Promise.all([
       supabase.from("driver_speeding_intervals")
-        .select("severity_level, max_speed_kmh, start_time")
+        .select("max_speed_kmh, posted_speed_limit_kmh, start_time")
         .eq("driver_id", driverId).eq("is_dismissed", false)
         .gte("start_time", windowStart).lte("start_time", windowEnd),
       supabase.from("driver_safety_events")
@@ -82,7 +82,7 @@ export function useDriverPointBreakdown(driverId, range = null) {
     // Speeding: only intervals at/under 85mph score, same filter as the view.
     const speedingRows = speedingRes.data ?? [];
     const eligible = speedingRows.filter((r) => (r.max_speed_kmh ?? 0) * 0.621371 <= 85);
-    const bySeverity = bucketize(eligible, (r) => r.severity_level, index.matchSpeedingSeverity).rows;
+    const bySeverity = bucketize(eligible, (r) => speedingSeverityFromSpeeds(r.max_speed_kmh, r.posted_speed_limit_kmh), index.matchSpeedingSeverity).rows;
 
     // Safety: dismissed events are excluded entirely before labels are summed.
     const allSafetyEvents = safetyRes.data ?? [];

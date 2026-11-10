@@ -13,6 +13,21 @@
 // `accountability_infraction_patterns` array (fetch via
 // `.select("*, accountability_infraction_patterns(match_type, match_value)")`).
 
+// Mirrors driver_safety_scorecard_view.sql's speeding severity CASE exactly
+// (2026-11-10 CLG direction): CLGOS's own mph-over-posted-limit tiers, not
+// Samsara's severityLevel label. Both callers need the raw speed columns,
+// not just severity_level, to reproduce this.
+const KMH_TO_MPH = 0.621371;
+
+export function speedingSeverityFromSpeeds(maxSpeedKmh, postedSpeedLimitKmh) {
+  if (maxSpeedKmh == null || postedSpeedLimitKmh == null) return null;
+  const mphOver = (maxSpeedKmh - postedSpeedLimitKmh) * KMH_TO_MPH;
+  if (mphOver >= 10) return "severe";
+  if (mphOver >= 6) return "heavy";
+  if (mphOver >= 1) return "moderate";
+  return null;
+}
+
 function prefixTest(pattern) {
   // Patterns are ILIKE 'foo%' prefixes (matching the SQL side exactly) --
   // never a full regex, so a literal-prefix test is all that's needed.
