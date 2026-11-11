@@ -17,12 +17,14 @@
 // interval with no server-side aggregation, so a 90-day fleet-wide pull
 // blew straight through the Edge Function's execution limit (repeated
 // boot/shutdown in the function logs, no error response at all). "Light"
-// severity (by far the dominant volume on any highway trip) was originally
-// skipped entirely for this reason and because it carried zero weight
-// under the old Samsara-label-based scoring -- now stored like every other
-// tier since 2026-11-10's mph-over-limit rework needs it for the new 1-5-
-// mph-over scored tier. Keep an eye on run time if this ever approaches the
-// backfill-only failure mode above.
+// intervals (by far the dominant volume on any highway trip: measured
+// 2026-11-04, 2,846 of 3,057 intervals in one day) were originally skipped
+// entirely, which also silently dropped Samsara-"light" intervals up to ~6.8
+// mph over that CLGOS scores as Moderate. Now: intervals at 6+ mph over are
+// stored one row each (driver_speeding_intervals); intervals 1 to <6 mph
+// over are TALLIED per driver per UTC day (driver_light_speeding_daily) so
+// light speeding is tracked (legal requirement) without a ~12x table. See
+// SCORED_EVENT_MIN_MPH below and the light-tally section further down.
 //
 // Pass {"windowDays": N} in the request body for a one-off manual backfill
 // of a trailing window ending now (keep N small — 2-3 days at a time —
@@ -77,6 +79,18 @@ const DEFAULT_WINDOW_DAYS = 1;
 const FUEL_ENERGY_WINDOW_DAYS = 90; // matches driver_safety_scorecard's scoring window
 const DRIVER_BATCH_SIZE = 25;
 const VEHICLE_BATCH_SIZE = 50; // speeding-intervals/stream's documented assetIds cap
+
+// Speeding tiers are by mph over the posted limit (CLGOS's own buckets, not
+// Samsara's severityLevel word). Intervals at/above SCORED_EVENT_MIN_MPH are
+// stored one row each in driver_speeding_intervals (scored per event).
+// Intervals from LIGHT_MIN_MPH up to (not incl.) SCORED_EVENT_MIN_MPH are
+// "light": ~93% of all intervals Samsara returns, so they are TALLIED per
+// driver per UTC day into driver_light_speeding_daily instead of stored per
+// event (legal requirement: track light speeding; see that table's
+// migration). Under LIGHT_MIN_MPH is ignored.
+const KMH_TO_MPH = 0.621371;
+const LIGHT_MIN_MPH = 1;
+const SCORED_EVENT_MIN_MPH = 6;
 
 // HOS Violations reconciliation window -- confirmed 2026-11-03: "unsubmittedLogs"
 // (Missing Driver Certification) is reported by Samsara based on whether that
@@ -234,6 +248,13 @@ Deno.serve(async (req) => {
     const startTime = start.toISOString();
     const endTime = end.toISOString();
 
+    // The light-speeding tally is recomputed in full for every UTC day this
+    // run touches, so the speeding fetch (and the assignment lookup that
+    // attributes it) starts at 00:00 UTC of the first day, not mid-day --
+    // otherwise a partial first day would overwrite that day's full total.
+    const speedingStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+    const speedingStartTime = speedingStart.toISOString();
+
     // --- Driver identity linkage (Samsara id <-> our drivers.id, by name) ---
     const samsaraDrivers = await fetchAllPaginated("/fleet/drivers", { limit: "200" });
     const samsaraNameById = new Map<string, string>(samsaraDrivers.map((d: any) => [d.id, d.name]));
@@ -294,7 +315,7 @@ Deno.serve(async (req) => {
     // Same per-batch resilience as HOS violations/Speeding below: one bad
     // vehicle id shouldn't take down every other vehicle's assignment data.
     const ASSIGNMENT_PAD_MS = 2 * 24 * 3600 * 1000;
-    const assignmentFetchStart = new Date(start.getTime() - ASSIGNMENT_PAD_MS).toISOString();
+    const assignmentFetchStart = new Date(speedingStart.getTime() - ASSIGNMENT_PAD_MS).toISOString();
     const assignmentBatchErrors: string[] = [];
     const assignmentsByVehicle = new Map<string, Array<{ start: number; end: number | null; driverId: string }>>();
     let assignmentRecordsFetched = 0;
@@ -485,11 +506,15 @@ Deno.serve(async (req) => {
     // vehicles; surfaced in the response so it's visible, not swallowed.
     const speedingBatchErrors: string[] = [];
     const speedingRows: any[] = [];
+    const lightTally = new Map<string, {
+      id: string; day: string; samsara_driver_id: string | null; driver_id: string | null;
+      event_count: number; total_seconds: number; sum_mph_over: number; max_mph_over: number;
+    }>();
     for (const batch of chunk(vehicleIds, VEHICLE_BATCH_SIZE)) {
       let trips: any[];
       try {
         trips = await fetchAllPaginated("/speeding-intervals/stream", {
-          assetIds: batch.join(","), startTime, endTime,
+          assetIds: batch.join(","), startTime: speedingStartTime, endTime,
         });
       } catch (err) {
         speedingBatchErrors.push(err instanceof Error ? err.message : String(err));
@@ -499,21 +524,38 @@ Deno.serve(async (req) => {
         const vehicleId = trip.asset?.id;
         if (!vehicleId) continue;
         for (const iv of trip.intervals ?? []) {
-          // "light" severity used to be skipped entirely (zero weight under
-          // the old Samsara-label-based scoring, and by far the dominant
-          // volume on any highway trip). Now stored like every other tier:
-          // CLG's 2026-11-10 direction replaced Samsara's severityLevel
-          // labels with CLGOS's own mph-over-posted-limit buckets (1-5/6-9/
-          // 10+, see 20261110000000's scoring migration), including a
-          // genuinely-scored 1-5-mph-over tier that Samsara's own "light"
-          // label was the only source of -- dropping it here would leave
-          // that tier permanently empty. Higher row volume is expected and
-          // accepted; watch the first few live runs for execution time if
-          // this ever approaches the Edge Function's limit (hit before only
-          // on a full 90-day backfill in one call, not this day-at-a-time
-          // cron -- see this function's own header).
+          // Tiering is by mph over the posted limit, not Samsara's label.
+          // (This used to skip severityLevel === "light" outright; that
+          // dropped every light event AND Samsara-"light" events up to ~6.8
+          // mph over, which CLGOS scores as Moderate.) Measured 2026-11-04:
+          // 93% of intervals are Samsara-"light", so intervals under
+          // SCORED_EVENT_MIN_MPH are tallied per driver/day, not stored.
           if (!iv.startTime) continue;
           const assignedSamsaraDriverId = findDriverAtTime(vehicleId, new Date(iv.startTime).getTime());
+          const maxKmh = iv.maxSpeedKilometersPerHour;
+          const limitKmh = iv.postedSpeedLimitKilometersPerHour;
+          if (maxKmh != null && limitKmh != null) {
+            const mphOver = (maxKmh - limitKmh) * KMH_TO_MPH;
+            if (mphOver < SCORED_EVENT_MIN_MPH) {
+              if (mphOver >= LIGHT_MIN_MPH && !iv.isDismissed) {
+                const day = new Date(iv.startTime).toISOString().slice(0, 10);
+                const key = `${day}:${assignedSamsaraDriverId ?? "unattributed"}`;
+                const t = lightTally.get(key) ?? {
+                  id: key,
+                  day,
+                  samsara_driver_id: assignedSamsaraDriverId,
+                  driver_id: assignedSamsaraDriverId ? (driverIdBySamsaraId.get(assignedSamsaraDriverId) ?? null) : null,
+                  event_count: 0, total_seconds: 0, sum_mph_over: 0, max_mph_over: 0,
+                };
+                t.event_count += 1;
+                t.total_seconds += iv.endTime ? Math.max(0, (new Date(iv.endTime).getTime() - new Date(iv.startTime).getTime()) / 1000) : 0;
+                t.sum_mph_over += mphOver;
+                t.max_mph_over = Math.max(t.max_mph_over, mphOver);
+                lightTally.set(key, t);
+              }
+              continue;
+            }
+          }
           speedingRows.push({
             id: `${vehicleId}:${iv.startTime}`,
             samsara_vehicle_id: vehicleId,
@@ -545,6 +587,58 @@ Deno.serve(async (req) => {
       const { error } = await supabase.from("driver_speeding_intervals").upsert(batch, { onConflict: "id" });
       if (error) throw error;
       speedingUpserted += batch.length;
+    }
+
+    // --- Light speeding daily tally (driver_light_speeding_daily) ---
+    // Every UTC day from speedingStart through the last COMPLETE day of this
+    // run's window was recomputed in full above, so its rows are replaced:
+    // upsert the fresh rows first, then delete any row for those days that
+    // is no longer produced (e.g. events that moved from the "unattributed"
+    // row to a driver once an assignment record appeared) -- never delete
+    // first, so a failure mid-way can't leave a day empty. Live runs include
+    // today (complete from 00:00 UTC to now); an explicit backfill excludes
+    // the day containing endDate, which may be partial. Skipped entirely if
+    // any speeding batch errored: the counts would be undercounts and must
+    // not overwrite good totals.
+    const lightFirstDay = speedingStartTime.slice(0, 10);
+    const lightLastDay = isBackfill
+      ? new Date(new Date(endTime.slice(0, 10) + "T00:00:00Z").getTime() - 24 * 3600 * 1000).toISOString().slice(0, 10)
+      : endTime.slice(0, 10);
+    let lightRowsWritten: number | null = null;
+    let lightStaleDeleted = 0;
+    let lightSkippedReason: string | null = null;
+    if (speedingBatchErrors.length > 0) {
+      lightSkippedReason = "speeding batch errors; tally not written";
+    } else if (lightFirstDay > lightLastDay) {
+      lightSkippedReason = "no complete UTC day in window";
+    } else {
+      const freshRows = Array.from(lightTally.values())
+        .filter((t) => t.day >= lightFirstDay && t.day <= lightLastDay)
+        .map((t) => ({
+          ...t,
+          total_seconds: Math.round(t.total_seconds),
+          sum_mph_over: Math.round(t.sum_mph_over * 100) / 100,
+          max_mph_over: Math.round(t.max_mph_over * 100) / 100,
+          synced_at: new Date().toISOString(),
+        }));
+      lightRowsWritten = 0;
+      for (const batch of chunk(freshRows, 500)) {
+        const { error } = await supabase.from("driver_light_speeding_daily").upsert(batch, { onConflict: "id" });
+        if (error) throw error;
+        lightRowsWritten += batch.length;
+      }
+      const freshIds = new Set(freshRows.map((r) => r.id));
+      for (let d = new Date(lightFirstDay + "T00:00:00Z"); d.toISOString().slice(0, 10) <= lightLastDay; d = new Date(d.getTime() + 24 * 3600 * 1000)) {
+        const day = d.toISOString().slice(0, 10);
+        const { data: existing, error: selErr } = await supabase.from("driver_light_speeding_daily").select("id").eq("day", day);
+        if (selErr) throw selErr;
+        const staleIds = (existing ?? []).map((r: any) => r.id).filter((id: string) => !freshIds.has(id));
+        for (const staleBatch of chunk(staleIds, 100)) {
+          const { error: delErr } = await supabase.from("driver_light_speeding_daily").delete().in("id", staleBatch);
+          if (delErr) throw delErr;
+          lightStaleDeleted += staleBatch.length;
+        }
+      }
     }
 
     // --- Fuel/Energy (full-replace snapshot, like unit_hos_status — but on
@@ -623,6 +717,14 @@ Deno.serve(async (req) => {
       speedingIntervalsAttributed: speedingRows.filter((r: any) => r.driver_id).length,
       speedingIntervalsUnattributed: speedingRows.filter((r: any) => !r.driver_id).length,
       speedingBatchErrors,
+      speedingFetchStart: speedingStartTime,
+      lightTally: {
+        intervalsTallied: Array.from(lightTally.values()).reduce((s, t) => s + t.event_count, 0),
+        daysReplaced: lightSkippedReason ? null : { first: lightFirstDay, last: lightLastDay },
+        rowsWritten: lightRowsWritten,
+        staleRowsDeleted: lightStaleDeleted,
+        skippedReason: lightSkippedReason,
+      },
       fuelEnergyRowsUpserted: fuelEnergyUpserted,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {

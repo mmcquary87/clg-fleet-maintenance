@@ -84,7 +84,12 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
                 subtitle="Intervals at or under 85mph, by severity (100 × e^(−points/700))"
                 rows={data.speeding.bySeverity}
                 emptyNote="No scored speeding intervals in the window."
-                footnote={data.speeding.excludedOver85 > 0 ? `${data.speeding.excludedOver85} interval(s) over 85mph excluded from scoring.` : null}
+                footnote={[
+                  data.speeding.light
+                    ? `Light speeding (1–5 mph over): ${data.speeding.light.events.toLocaleString()} events, ${data.speeding.light.minutes.toLocaleString()} min over the limit, on ${data.speeding.light.days} day(s) — tracked, not yet scored.`
+                    : null,
+                  data.speeding.excludedOver85 > 0 ? `${data.speeding.excludedOver85} interval(s) over 85mph excluded from scoring.` : null,
+                ].filter(Boolean).join(" ") || null}
               />
               <Section
                 title={`Safety — score ${round1(row.safety_score)}`}
