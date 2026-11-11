@@ -1,0 +1,25 @@
+-- Fleet Maintenance System — freight-planning agent team: service role
+--
+-- First piece of wiring an externally-run freight-planning agent team
+-- (load/route planning, HOS/equipment monitoring, rate analysis, etc. —
+-- see the architecture discussion this session) into CLGOS without
+-- merging its codebase or its deploy pipeline into this repo. The agent
+-- team runs wherever is convenient and talks to CLGOS only through:
+--   - a handful of narrow, explicitly-column-scoped read views
+--     (20261111010000_planning_agent_data_views.sql), and
+--   - one insert-only table it reports recommendations into
+--     (20261111020000_planning_recommendations.sql), which a human
+--     (dispatcher/operations/admin) triages in-app — the agent team
+--     never writes anywhere else in this database.
+--
+-- A real login for the agent team's service account still needs to be
+-- created the same way every other account is (invite-user + Settings,
+-- or directly via Supabase Auth admin) with this role — that's a manual
+-- step for the account owner, not something this migration does.
+--
+-- Standalone: ALTER TYPE ... ADD VALUE can't share a transaction with
+-- anything that uses the new value (same reason as
+-- 20260927030000_crm_roles.sql) — the views/table that reference
+-- 'planning_agent' are deliberately split into later migrations.
+
+alter type user_role add value if not exists 'planning_agent';

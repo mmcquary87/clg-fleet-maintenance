@@ -15,6 +15,7 @@ import RosterView from "./components/roster/RosterView";
 import HomeTimeView from "./components/roster/HomeTimeView";
 import DriverSafetyView from "./components/driversafety/DriverSafetyView";
 import AccountabilityView from "./components/accountability/AccountabilityView";
+import PlanningRecommendations from "./components/planning/PlanningRecommendations";
 import TrackingView from "./components/tracking/TrackingView";
 import ReloadsView from "./components/reloads/ReloadsView";
 import MechanicView from "./components/mechanic/MechanicView";
@@ -55,6 +56,7 @@ const PAGE_META = {
   myHomeTime: { group: "Home time", page: "Request home time" },
   driverSafety: { group: "Drivers", page: "Safety Scorecard" },
   accountability: { group: "Drivers", page: "Accountability" },
+  planningRecommendations: { group: "Planning", page: "Recommendations" },
   mechanic: { group: "Shop", page: "Mechanic queue" },
   recruitingHome: { group: "Recruiting", page: "Home" },
   recruitingLeads: { group: "Recruiting", page: "Leads" },
@@ -207,6 +209,7 @@ export default function Dashboard({ session }) {
           {effectiveTab === "hometime" && <HomeTimeView session={session} />}
           {effectiveTab === "driverSafety" && <DriverSafetyView />}
           {effectiveTab === "accountability" && <AccountabilityView session={session} />}
+          {effectiveTab === "planningRecommendations" && !isMechanic && <PlanningRecommendations />}
           {effectiveTab === "mechanic" && canUseMechanicQueue && <MechanicView />}
           {effectiveTab === "myHomeTime" && isDriver && <DriverHomeTimeView driverId={profile?.driver_id} />}
           {effectiveTab === "recruitingHome" && (isRecruiter || isAdmin) && (

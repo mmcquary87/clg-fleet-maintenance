@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   LayoutGrid, MapPin, RefreshCw, BarChart3, ClipboardList, CircleDollarSign, Truck, Briefcase, User, Wrench,
   Settings, LogOut, ChevronsLeft, ChevronsRight, Shield, ShieldAlert, ClipboardCheck, UserPlus, FileCheck2, Home, Megaphone, ListChecks,
-  Building2, Contact, Gavel, CalendarClock, Mail,
+  Building2, Contact, Gavel, CalendarClock, Mail, Route,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -54,6 +54,16 @@ const NAV_GROUPS = [
       { id: "hometime", label: "Home time", Icon: CalendarClock },
       { id: "driverSafety", label: "Safety Scorecard", Icon: ShieldAlert },
       { id: "accountability", label: "Accountability", Icon: Gavel },
+    ],
+  },
+  // Recommendations from the externally-run freight-planning agent team
+  // (2026-11-11) -- land here for a human to accept/dismiss, never acted
+  // on directly. Not a mechanic's day-to-day view, same line CLG drew for
+  // Insurance/Receipt Inbox -- filtered out below alongside those.
+  {
+    id: "planning", label: "Planning",
+    items: [
+      { id: "planningRecommendations", label: "Recommendations", Icon: Route },
     ],
   },
 ];
@@ -120,7 +130,7 @@ export default function Sidebar({ tab, onNavigate, canUseMechanicQueue, isAdmin,
   // the page content, so the nav link itself doesn't lead to a blank page.
   // The Receipt Inbox (billing/AP review) gets the same treatment.
   const baseGroups = isMechanic
-    ? NAV_GROUPS.map((g) => {
+    ? NAV_GROUPS.filter((g) => g.id !== "planning").map((g) => {
         if (g.id === "fleet") return { ...g, items: g.items.filter((i) => i.id !== "insurance") };
         if (g.id === "work") return { ...g, items: g.items.filter((i) => i.id !== "receiptInbox") };
         return g;
