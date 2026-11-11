@@ -5,6 +5,7 @@ import { useDriverSafety } from "../../hooks/useDriverSafety";
 import { useFleetScoreHistory } from "../../hooks/useFleetScoreHistory";
 import IncidentMap from "./IncidentMap";
 import Dvir from "./Dvir";
+import MissingDvirs from "./MissingDvirs";
 import DriverPointBreakdown from "./DriverPointBreakdown";
 import DateRangeFilter from "../DateRangeFilter";
 
@@ -386,6 +387,7 @@ const TABS = [
   { id: "map", label: "Incident map" },
   { id: "trends", label: "Trends" },
   { id: "dvir", label: "DVIR" },
+  { id: "missingDvir", label: "Missing DVIRs" },
   { id: "grace", label: "Grace & scoring" },
 ];
 
@@ -441,6 +443,7 @@ export default function DriverSafetyView() {
     map: "speeding & safety events",
     trends: trendSummary,
     dvir: "vehicle & trailer defects",
+    missingDvir: "pre-trip not submitted",
     grace: `${totals.graceCount} ${plural(totals.graceCount, "driver")} in grace`,
   };
 
@@ -537,6 +540,7 @@ export default function DriverSafetyView() {
           />
         )}
         {tab === "dvir" && <Dvir />}
+        {tab === "missingDvir" && <MissingDvirs />}
         {tab === "grace" && <GraceAndScoring graceDrivers={graceDrivers} />}
       </div>
 
