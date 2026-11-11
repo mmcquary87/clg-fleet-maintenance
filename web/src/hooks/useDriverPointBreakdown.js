@@ -50,7 +50,7 @@ export function useDriverPointBreakdown(driverId, range = null) {
     const index = buildScoringIndex(infractions);
     const infractionById = new Map(infractions.map((i) => [i.id, i]));
 
-    const [speedingRes, safetyRes, hosRes, manualHosRes] = await Promise.all([
+    const [speedingRes, safetyRes, hosRes, manualHosRes, lightRes] = await Promise.all([
       supabase.from("driver_speeding_intervals")
         .select("max_speed_kmh, posted_speed_limit_kmh, start_time")
         .eq("driver_id", driverId).eq("is_dismissed", false)
@@ -69,6 +69,13 @@ export function useDriverPointBreakdown(driverId, range = null) {
       supabase.from("driver_incidents")
         .select("event_date, infraction_id")
         .eq("driver_id", driverId),
+      // Light speeding (1 to <6 mph over the limit) is tallied per driver per
+      // UTC day by samsara-sync-driver-safety, not stored per event. Tracked
+      // for the compliance record; not part of the score yet.
+      supabase.from("driver_light_speeding_daily")
+        .select("event_count, total_seconds, day")
+        .eq("driver_id", driverId)
+        .gte("day", windowStart.slice(0, 10)).lte("day", windowEnd.slice(0, 10)),
     ]);
 
     const err = speedingRes.error || safetyRes.error || hosRes.error || manualHosRes.error;
@@ -82,11 +89,24 @@ export function useDriverPointBreakdown(driverId, range = null) {
     // Speeding: only intervals at/under 85mph score, same filter as the view.
     const speedingRows = speedingRes.data ?? [];
     const eligible = speedingRows.filter((r) => (r.max_speed_kmh ?? 0) * 0.621371 <= 85);
-    const bySeverity = bucketize(eligible, (r) => speedingSeverityFromSpeeds(r.max_speed_kmh, r.posted_speed_limit_kmh), index.matchSpeedingSeverity).rows;
+    const bucketedSeverity = bucketize(eligible, (r) => speedingSeverityFromSpeeds(r.max_speed_kmh, r.posted_speed_limit_kmh), index.matchSpeedingSeverity).rows;
+    // Always list all four tiers (light/moderate/heavy/severe), with a 0
+    // count where there are no events, so a tier with no data reads as 0
+    // instead of silently missing. The Light row stays 0 on purpose: events
+    // under 6 mph over are no longer stored per event; they are tallied per
+    // day in driver_light_speeding_daily and shown in the footnote as
+    // "tracked, not yet scored" (scoring rule for light is pending).
+    const bySeverity = ["light", "moderate", "heavy", "severe"].flatMap((tier) => {
+      const hit = index.matchSpeedingSeverity(tier);
+      if (!hit) return [];
+      return [bucketedSeverity.find((r) => r.label === hit.label) ?? { label: hit.label, weight: hit.weight, count: 0, points: 0 }];
+    });
 
     // Safety: dismissed events are excluded entirely before labels are summed.
     const allSafetyEvents = safetyRes.data ?? [];
-    const countedSafetyEvents = allSafetyEvents.filter((e) => (e.coaching_state ?? "") !== "Dismissed");
+    // Samsara returns coaching_state lowercase ("dismissed"); compare
+    // case-insensitively, same as the SQL scorecard.
+    const countedSafetyEvents = allSafetyEvents.filter((e) => (e.coaching_state ?? "").toLowerCase() !== "dismissed");
     const safetyLabels = countedSafetyEvents.flatMap((e) => (Array.isArray(e.behavior_labels) ? e.behavior_labels : []));
     const safety = bucketize(safetyLabels, (l) => l?.name, index.matchSafetyLabel);
 
@@ -127,6 +147,13 @@ export function useDriverPointBreakdown(driverId, range = null) {
     setData({
       windowStart,
       speeding: {
+        // null (not zero) if the tally couldn't be read, so the screen says
+        // nothing instead of claiming "0 light events".
+        light: lightRes.error ? null : {
+          events: (lightRes.data ?? []).reduce((s, r) => s + (r.event_count ?? 0), 0),
+          minutes: Math.round((lightRes.data ?? []).reduce((s, r) => s + Number(r.total_seconds ?? 0), 0) / 60),
+          days: (lightRes.data ?? []).length,
+        },
         bySeverity,
         penaltyPoints: bySeverity.reduce((s, r) => s + r.points, 0),
         excludedOver85: speedingRows.length - eligible.length,

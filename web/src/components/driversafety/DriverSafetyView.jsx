@@ -540,7 +540,7 @@ export default function DriverSafetyView() {
           />
         )}
         {tab === "dvir" && <Dvir />}
-        {tab === "missingDvir" && <MissingDvirs />}
+        {tab === "missingDvir" && <MissingDvirs range={range} />}
         {tab === "grace" && <GraceAndScoring graceDrivers={graceDrivers} />}
       </div>
 
