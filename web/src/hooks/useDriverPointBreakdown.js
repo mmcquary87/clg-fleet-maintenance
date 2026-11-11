@@ -85,9 +85,10 @@ export function useDriverPointBreakdown(driverId, range = null) {
     const bucketedSeverity = bucketize(eligible, (r) => speedingSeverityFromSpeeds(r.max_speed_kmh, r.posted_speed_limit_kmh), index.matchSpeedingSeverity).rows;
     // Always list all four tiers (light/moderate/heavy/severe), with a 0
     // count where there are no events, so a tier with no data reads as 0
-    // instead of silently missing. (Samsara's speeding stream currently
-    // sends nothing under ~6.7 mph over the limit, so Light is 0 until that
-    // is changed on the Samsara side.)
+    // instead of silently missing. (Light shows 0 while the deployed
+    // samsara-sync-driver-safety function still skips Samsara's "light"
+    // intervals -- see supabase/functions/samsara-sync-driver-safety; the
+    // repo copy keeps them, the deployed copy did not as of 2026-11-11.)
     const bySeverity = ["light", "moderate", "heavy", "severe"].flatMap((tier) => {
       const hit = index.matchSpeedingSeverity(tier);
       if (!hit) return [];
