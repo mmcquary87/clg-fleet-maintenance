@@ -74,7 +74,7 @@ export function useIncidentMapEvents() {
     });
 
     const safetyEvents = (safetyRes.data ?? [])
-      .filter((r) => (r.coaching_state ?? "") !== "Dismissed")
+      .filter((r) => (r.coaching_state ?? "").toLowerCase() !== "dismissed")
       .map((r) => {
         const weight = safetyEventWeight(index, r.behavior_labels);
         const labelNames = (r.behavior_labels ?? []).map((l) => l?.name).filter(Boolean).join(", ") || "Safety event";

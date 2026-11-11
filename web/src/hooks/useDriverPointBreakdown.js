@@ -82,11 +82,23 @@ export function useDriverPointBreakdown(driverId, range = null) {
     // Speeding: only intervals at/under 85mph score, same filter as the view.
     const speedingRows = speedingRes.data ?? [];
     const eligible = speedingRows.filter((r) => (r.max_speed_kmh ?? 0) * 0.621371 <= 85);
-    const bySeverity = bucketize(eligible, (r) => speedingSeverityFromSpeeds(r.max_speed_kmh, r.posted_speed_limit_kmh), index.matchSpeedingSeverity).rows;
+    const bucketedSeverity = bucketize(eligible, (r) => speedingSeverityFromSpeeds(r.max_speed_kmh, r.posted_speed_limit_kmh), index.matchSpeedingSeverity).rows;
+    // Always list all four tiers (light/moderate/heavy/severe), with a 0
+    // count where there are no events, so a tier with no data reads as 0
+    // instead of silently missing. (Samsara's speeding stream currently
+    // sends nothing under ~6.7 mph over the limit, so Light is 0 until that
+    // is changed on the Samsara side.)
+    const bySeverity = ["light", "moderate", "heavy", "severe"].flatMap((tier) => {
+      const hit = index.matchSpeedingSeverity(tier);
+      if (!hit) return [];
+      return [bucketedSeverity.find((r) => r.label === hit.label) ?? { label: hit.label, weight: hit.weight, count: 0, points: 0 }];
+    });
 
     // Safety: dismissed events are excluded entirely before labels are summed.
     const allSafetyEvents = safetyRes.data ?? [];
-    const countedSafetyEvents = allSafetyEvents.filter((e) => (e.coaching_state ?? "") !== "Dismissed");
+    // Samsara returns coaching_state lowercase ("dismissed"); compare
+    // case-insensitively, same as the SQL scorecard.
+    const countedSafetyEvents = allSafetyEvents.filter((e) => (e.coaching_state ?? "").toLowerCase() !== "dismissed");
     const safetyLabels = countedSafetyEvents.flatMap((e) => (Array.isArray(e.behavior_labels) ? e.behavior_labels : []));
     const safety = bucketize(safetyLabels, (l) => l?.name, index.matchSafetyLabel);
 
