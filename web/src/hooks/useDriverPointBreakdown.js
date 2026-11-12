@@ -2,16 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useAccountabilityInfractions } from "./useAccountabilityInfractions";
 import { buildScoringIndex } from "../lib/accountabilityScoring";
-import { buildSpeedingEpisodes, episodePoints, lightSpeedingPenalty, parseScoringParameters } from "../lib/speedingEpisodes";
+import { buildSpeedingEpisodes, episodePoints, lightSpeedingBucket, parseScoringParameters } from "../lib/speedingEpisodes";
 
 // Mirrors driver_safety_scorecard_view.sql's weighting exactly, but built
 // from accountability_infractions (via buildScoringIndex) instead of a
 // second hand-written copy of the weight tables -- see
 // 20261029000000_accountability_single_source_of_truth.sql. Per-category
 // instead of pre-summed, so a given driver's score can be drilled into
-// instead of taken on faith. Speeding is scored per episode, with light
-// speeding as a rate-based penalty: see lib/speedingEpisodes.js and
-// 20261111110000_episode_speeding_and_light_scoring.sql.
+// instead of taken on faith. Speeding is scored per episode; light speeding is
+// bucketed (1/2/3 points off the overall score): see lib/speedingEpisodes.js,
+// 20261111110000_episode_speeding_and_light_scoring.sql and
+// 20261112020000_light_speeding_buckets.sql.
 const WINDOW_DAYS = 90;
 const KMH_TO_MPH = 0.621371;
 const PAGE_SIZE = 1000; // PostgREST returns at most this many rows per request
@@ -65,7 +66,7 @@ export function useDriverPointBreakdown(driverId, range = null) {
       : new Date(Date.now() - WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
     const windowEnd = range?.end ? `${range.end}T23:59:59.999` : new Date().toISOString();
     // Official view = exactly 90 days; a custom range scales miles and the
-    // light penalty by days / 90 (same as driver_safety_scorecard_range).
+    // the light-speeding rate's miles by days / 90 (same as driver_safety_scorecard_range).
     const windowDays = range?.start || range?.end
       ? Math.max((new Date(windowEnd).getTime() - new Date(windowStart).getTime()) / 86400000, 1)
       : WINDOW_DAYS;
@@ -137,25 +138,18 @@ export function useDriverPointBreakdown(driverId, range = null) {
     const lightMinutes = lightDays.reduce((s, r) => s + Number(r.total_seconds ?? 0), 0) / 60;
     const lightEvents = lightDays.reduce((s, r) => s + (r.event_count ?? 0), 0);
     const miles = Number(milesRes.data?.distance_traveled_meters ?? 0) * 0.000621371;
-    const lightPenalty = lightSpeedingPenalty({ minutes: lightMinutes, miles, windowDays }, params);
+    const lightBucket = lightSpeedingBucket({ events: lightEvents, miles, windowDays }, params);
+    // Light speeding is bucketed (events per 1,000 miles) and takes points off
+    // the OVERALL score, not the speeding component.
     const light = lightRes.error ? null : {
       events: lightEvents,
       minutes: Math.round(lightMinutes),
       days: lightDays.length,
-      ratePer1k: lightPenalty.ratePer1k,
-      points: lightPenalty.points,
-      scored: lightPenalty.scored,
+      ratePer1k: lightBucket.ratePer1k,
+      bucket: lightBucket.bucket,
+      points: lightBucket.points,
+      scored: lightBucket.scored,
     };
-    const speedingRowsOut = [
-      ...tierRows,
-      ...(light ? [{
-        label: "Light speeding (1–5 mph over)",
-        detail: light.scored ? `${Math.round(light.ratePer1k)} min per 1,000 mi` : `under ${params.lightMinMiles.toLocaleString()} mi, not scored`,
-        count: light.events,
-        weight: null,
-        points: light.points,
-      }] : []),
-    ];
 
     // Safety: dismissed events are excluded entirely before labels are summed.
     const allSafetyEvents = safetyRes.data ?? [];
@@ -201,14 +195,14 @@ export function useDriverPointBreakdown(driverId, range = null) {
     setData({
       windowStart,
       speeding: {
-        rows: speedingRowsOut,
+        rows: tierRows,
         episodes: episodes.length,
         intervals: speedingRows.length - excludedOver85,
         params,
-        light,
-        penaltyPoints: speedingRowsOut.reduce((s, r) => s + r.points, 0),
+        penaltyPoints: tierRows.reduce((s, r) => s + r.points, 0),
         excludedOver85,
       },
+      light,
       safety: {
         rows: safety.rows,
         otherCount: safety.otherCount,

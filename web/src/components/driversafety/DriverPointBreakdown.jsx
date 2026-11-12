@@ -6,6 +6,8 @@ function round1(n) {
   return n === null || n === undefined ? null : Math.round(n * 10) / 10;
 }
 
+const LIGHT_BUCKET_LABEL = { low: "Low", mid: "Middle", high: "High" };
+
 function Section({ title, subtitle, rows, emptyNote, footnote }) {
   return (
     <div style={{ marginBottom: 20 }}>
@@ -81,21 +83,30 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
             <>
               <Section
                 title={`Speeding — score ${round1(row.speeding_score)}`}
-                subtitle="Speeding episodes by highest tier reached, plus light speeding (100 × e^(−points/700))"
+                subtitle="Speeding episodes by highest tier reached (100 × e^(−points/700))"
                 rows={data.speeding.rows}
                 emptyNote="No scored speeding in the window."
                 footnote={[
                   `${data.speeding.episodes.toLocaleString()} episode(s) from ${data.speeding.intervals.toLocaleString()} speeding interval(s): stretches within ${data.speeding.params.gapMinutes} min are one episode, scored at its highest tier × 1–${1 + data.speeding.params.durMaxExtra}× for time over the limit.`,
-                  data.speeding.light
-                    ? `Light speeding: ${data.speeding.light.events.toLocaleString()} events, ${data.speeding.light.minutes.toLocaleString()} min over the limit on ${data.speeding.light.days} day(s)${
-                      data.speeding.light.scored
-                        ? (data.speeding.params.lightAllowance > 0
-                          ? `; the first ${data.speeding.params.lightAllowance} min per 1,000 miles are free, capped at ${data.speeding.params.lightCap} points.`
-                          : `; every minute counts, capped at ${data.speeding.params.lightCap} points.`)
-                        : `; not scored for drivers under ${data.speeding.params.lightMinMiles.toLocaleString()} miles.`}`
-                    : null,
                   data.speeding.excludedOver85 > 0 ? `${data.speeding.excludedOver85} interval(s) over 85mph excluded from scoring.` : null,
                 ].filter(Boolean).join(" ")}
+              />
+              <Section
+                title={`Light speeding (1–5 mph over) — ${data.light && data.light.points > 0 ? `−${data.light.points} off overall` : "no deduction"}`}
+                subtitle="Bucketed by events per 1,000 miles; points come off the overall score after the curve"
+                rows={data.light && data.light.bucket ? [{
+                  label: `${LIGHT_BUCKET_LABEL[data.light.bucket]} volume`,
+                  detail: `${data.light.events.toLocaleString()} events · ${Math.round(data.light.ratePer1k)} per 1,000 mi`,
+                  points: data.light.points,
+                }] : []}
+                emptyNote={!data.light
+                  ? "Light speeding couldn't be loaded."
+                  : !data.light.scored
+                    ? `Not scored for drivers under ${data.speeding.params.lightMinMiles.toLocaleString()} miles.`
+                    : "No light speeding recorded in the window."}
+                footnote={data.light
+                  ? `${data.light.events.toLocaleString()} events, ${data.light.minutes.toLocaleString()} min over the limit on ${data.light.days} day(s). Under ${data.speeding.params.lightBucketLow} per 1,000 mi: −${data.speeding.params.lightPointsLow}; up to ${data.speeding.params.lightBucketHigh}: −${data.speeding.params.lightPointsMid}; above: −${data.speeding.params.lightPointsHigh}.`
+                  : null}
               />
               <Section
                 title={`Safety — score ${round1(row.safety_score)}`}
@@ -117,7 +128,7 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
                   : null}
               />
               <div style={{ fontSize: 11, color: "var(--clg-text-muted)", borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 10 }}>
-                Overall = 100 × (average of the three / 100)^1.7, capped at 100.
+                Overall = 100 × (average of the three / 100)^1.7, minus the light-speeding points, capped at 100.
               </div>
             </>
           )}
