@@ -89,7 +89,9 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
                   data.speeding.light
                     ? `Light speeding: ${data.speeding.light.events.toLocaleString()} events, ${data.speeding.light.minutes.toLocaleString()} min over the limit on ${data.speeding.light.days} day(s)${
                       data.speeding.light.scored
-                        ? `; the first ${data.speeding.params.lightAllowance} min per 1,000 miles are free, capped at ${data.speeding.params.lightCap} points.`
+                        ? (data.speeding.params.lightAllowance > 0
+                          ? `; the first ${data.speeding.params.lightAllowance} min per 1,000 miles are free, capped at ${data.speeding.params.lightCap} points.`
+                          : `; every minute counts, capped at ${data.speeding.params.lightCap} points.`)
                         : `; not scored for drivers under ${data.speeding.params.lightMinMiles.toLocaleString()} miles.`}`
                     : null,
                   data.speeding.excludedOver85 > 0 ? `${data.speeding.excludedOver85} interval(s) over 85mph excluded from scoring.` : null,
