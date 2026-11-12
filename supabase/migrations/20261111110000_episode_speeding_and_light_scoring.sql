@@ -34,9 +34,7 @@ create table if not exists scoring_parameters (
   description text
 );
 alter table scoring_parameters enable row level security;
-drop policy if exists "scoring_parameters_select_all" on scoring_parameters;
 create policy "scoring_parameters_select_all" on scoring_parameters for select using (auth.role() = 'authenticated');
-drop policy if exists planning_agent_deny on scoring_parameters;
 create policy planning_agent_deny on scoring_parameters as restrictive for all to authenticated
   using (not is_planning_agent()) with check (not is_planning_agent());
 
