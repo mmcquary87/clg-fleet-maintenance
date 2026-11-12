@@ -8,9 +8,10 @@
 //    whose gap from the latest end time seen so far is <= gapMinutes.
 // 2. An episode scores the weight of the highest tier it reached, multiplied by
 //    1 + min(durMaxExtra, minutesOverLimit / durStepMinutes).
-// 3. Light speeding (1 to <6 mph over, tallied per day) adds a rate-based
-//    penalty with a free allowance and a ceiling.
-// All numbers come from scoring_parameters (see lightSpeedingPenalty).
+// 3. Light speeding (1 to <6 mph over, tallied per day) is NOT part of the
+//    speeding score: it is bucketed by events per 1,000 miles (low/middle/high)
+//    and takes 1/2/3 points off the overall score (see lightSpeedingBucket).
+// All numbers come from scoring_parameters.
 
 const KMH_TO_MPH = 0.621371;
 const TIER_RANK = { moderate: 1, heavy: 2, severe: 3 };
@@ -75,15 +76,18 @@ export function episodePoints(episode, { durStepMinutes, durMaxExtra }) {
   return episode.weight * (1 + Math.min(durMaxExtra, episode.overMinutes / durStepMinutes));
 }
 
-// minutes: light-speeding minutes in the window; miles: the driver's 90-day
+// events: light-speeding events in the window; miles: the driver's 90-day
 // snapshot miles; windowDays: 90 for the official view, the range length for a
-// custom range (miles and the penalty scale with days / 90, as in the SQL).
-export function lightSpeedingPenalty({ minutes, miles, windowDays }, p) {
-  if (!(miles >= p.lightMinMiles)) return { points: 0, ratePer1k: null, scored: false };
+// custom range (miles scale with days / 90, as in the SQL). Returns the bucket
+// and the points taken off the overall score.
+export function lightSpeedingBucket({ events, miles, windowDays }, p) {
+  if (!(miles >= p.lightMinMiles)) return { points: 0, bucket: null, ratePer1k: null, scored: false };
+  if (!(events > 0)) return { points: 0, bucket: null, ratePer1k: null, scored: true };
   const days = Math.max(windowDays, 1);
-  const ratePer1k = minutes / ((miles * days / 90) / 1000);
-  const points = p.lightCap * (1 - Math.exp(-Math.max(0, ratePer1k - p.lightAllowance) / p.lightK)) * days / 90;
-  return { points, ratePer1k, scored: true };
+  const ratePer1k = events / ((miles * days / 90) / 1000);
+  if (ratePer1k < p.lightBucketLow) return { points: p.lightPointsLow, bucket: "low", ratePer1k, scored: true };
+  if (ratePer1k <= p.lightBucketHigh) return { points: p.lightPointsMid, bucket: "mid", ratePer1k, scored: true };
+  return { points: p.lightPointsHigh, bucket: "high", ratePer1k, scored: true };
 }
 
 // scoring_parameters rows ([{name, value}]) -> the named numbers above.
@@ -95,9 +99,11 @@ export function parseScoringParameters(rows) {
     durStepMinutes: get("speeding_episode_duration_step_minutes"),
     durMaxExtra: get("speeding_episode_duration_max_extra"),
     lightMinMiles: get("light_min_miles"),
-    lightAllowance: get("light_allowance_min_per_1k_miles"),
-    lightCap: get("light_cap_points"),
-    lightK: get("light_k_min_per_1k_miles"),
+    lightBucketLow: get("light_bucket_low_per_1k"),
+    lightBucketHigh: get("light_bucket_high_per_1k"),
+    lightPointsLow: get("light_points_low"),
+    lightPointsMid: get("light_points_mid"),
+    lightPointsHigh: get("light_points_high"),
   };
   return Object.values(p).some((v) => v === null || Number.isNaN(v)) ? null : p;
 }
