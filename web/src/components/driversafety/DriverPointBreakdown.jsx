@@ -19,7 +19,7 @@ function Section({ title, subtitle, rows, emptyNote, footnote }) {
             {rows.map((r) => (
               <tr key={r.label} style={{ borderBottom: "1px solid var(--clg-border-subtle)" }}>
                 <td style={{ padding: "6px 4px", color: "var(--clg-text-body)" }}>{r.label}</td>
-                <td style={{ padding: "6px 4px", textAlign: "right", color: "var(--clg-text-muted)", whiteSpace: "nowrap" }}>{r.count} × {r.weight}</td>
+                <td style={{ padding: "6px 4px", textAlign: "right", color: "var(--clg-text-muted)", whiteSpace: "nowrap" }}>{r.detail ?? `${r.count} × ${r.weight}`}</td>
                 <td style={{ padding: "6px 4px", textAlign: "right", fontWeight: 700, color: "var(--clg-scarlet, #B3243A)", whiteSpace: "nowrap" }}>
                   −{round1(r.points)}
                 </td>
@@ -81,15 +81,21 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
             <>
               <Section
                 title={`Speeding — score ${round1(row.speeding_score)}`}
-                subtitle="Intervals at or under 85mph, by severity (100 × e^(−points/700))"
-                rows={data.speeding.bySeverity}
-                emptyNote="No scored speeding intervals in the window."
+                subtitle="Speeding episodes by highest tier reached, plus light speeding (100 × e^(−points/700))"
+                rows={data.speeding.rows}
+                emptyNote="No scored speeding in the window."
                 footnote={[
+                  `${data.speeding.episodes.toLocaleString()} episode(s) from ${data.speeding.intervals.toLocaleString()} speeding interval(s): stretches within ${data.speeding.params.gapMinutes} min are one episode, scored at its highest tier × 1–${1 + data.speeding.params.durMaxExtra}× for time over the limit.`,
                   data.speeding.light
-                    ? `Light speeding (1–5 mph over): ${data.speeding.light.events.toLocaleString()} events, ${data.speeding.light.minutes.toLocaleString()} min over the limit, on ${data.speeding.light.days} day(s) — tracked, not yet scored.`
+                    ? `Light speeding: ${data.speeding.light.events.toLocaleString()} events, ${data.speeding.light.minutes.toLocaleString()} min over the limit on ${data.speeding.light.days} day(s)${
+                      data.speeding.light.scored
+                        ? (data.speeding.params.lightAllowance > 0
+                          ? `; the first ${data.speeding.params.lightAllowance} min per 1,000 miles are free, capped at ${data.speeding.params.lightCap} points.`
+                          : `; every minute counts, capped at ${data.speeding.params.lightCap} points.`)
+                        : `; not scored for drivers under ${data.speeding.params.lightMinMiles.toLocaleString()} miles.`}`
                     : null,
                   data.speeding.excludedOver85 > 0 ? `${data.speeding.excludedOver85} interval(s) over 85mph excluded from scoring.` : null,
-                ].filter(Boolean).join(" ") || null}
+                ].filter(Boolean).join(" ")}
               />
               <Section
                 title={`Safety — score ${round1(row.safety_score)}`}
@@ -107,7 +113,7 @@ export default function DriverPointBreakdown({ row, range = null, onClose }) {
                 rows={data.hos.rows}
                 emptyNote="No scored HOS violations in the window."
                 footnote={data.hos.otherCount > 0
-                  ? `${data.hos.otherCount} administrative/paperwork flag(s) (e.g. missing certification, shipping ID, or trailer name) excluded -- these are logbook/documentation gaps, not real hours-of-service clock violations, and never affect this score.`
+                  ? `${data.hos.otherCount} violation(s) with no scoring rule aren't shown.`
                   : null}
               />
               <div style={{ fontSize: 11, color: "var(--clg-text-muted)", borderTop: "1px solid var(--clg-border-subtle)", paddingTop: 10 }}>
