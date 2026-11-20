@@ -291,6 +291,28 @@ Deno.serve(async (req) => {
     }
     await Promise.all(nameLinkUpdates);
 
+    // Departed drivers (2026-11-20): /fleet/drivers returns ACTIVE drivers only,
+    // but driver-vehicle assignments and safety events keep referencing a
+    // driver's id after Samsara deactivates them. Without this, re-syncing any
+    // period in which a since-deactivated driver was driving (the 15-minute
+    // cron re-fetches 90 days of safety events every run; a backfill re-fetches
+    // speeding) wrote driver_id = null over their history -- erasing who was
+    // driving. Found when a backfill de-attributed a former driver's whole
+    // history (Matthew Jines, 1,000+ intervals). Used ONLY for attributing
+    // speeding intervals, the light-speeding tally and safety events: HOS
+    // queries, the miles snapshot, and the drivers.samsara_driver_id link stay
+    // on the active list, so a departed driver can't start showing up in
+    // rankings or get a link written for them.
+    const departedDriverIdBySamsaraId = new Map<string, string>();
+    const deactivatedDrivers = await fetchAllPaginated("/fleet/drivers", { limit: "200", driverActivationStatus: "deactivated" });
+    for (const d of deactivatedDrivers) {
+      if (driverIdBySamsaraId.has(d.id)) continue;
+      const ourId = resolveOurId(d.name);
+      if (ourId) departedDriverIdBySamsaraId.set(d.id, ourId);
+    }
+    const attributedDriverId = (samsaraId: string | null | undefined): string | null =>
+      samsaraId ? (driverIdBySamsaraId.get(samsaraId) ?? departedDriverIdBySamsaraId.get(samsaraId) ?? null) : null;
+
     // Diagnostic only (not stored) — surfaces the exact Samsara-side name
     // string for every Samsara driver that still didn't resolve to one of
     // our drivers (even after the suffix/middle-name fallback tiers), so a
@@ -372,7 +394,7 @@ Deno.serve(async (req) => {
     const safetyEventRowsRaw = safetyEvents.map((e: any) => ({
       id: e.id,
       samsara_driver_id: e.driver?.id ?? null,
-      driver_id: e.driver?.id ? (driverIdBySamsaraId.get(e.driver.id) ?? null) : null,
+      driver_id: attributedDriverId(e.driver?.id),
       samsara_vehicle_id: e.vehicle?.id ?? null,
       unit_id: e.vehicle?.id ? (unitIdByVehicleId.get(e.vehicle.id) ?? null) : null,
       event_time: e.time,
@@ -544,7 +566,7 @@ Deno.serve(async (req) => {
                   id: key,
                   day,
                   samsara_driver_id: assignedSamsaraDriverId,
-                  driver_id: assignedSamsaraDriverId ? (driverIdBySamsaraId.get(assignedSamsaraDriverId) ?? null) : null,
+                  driver_id: attributedDriverId(assignedSamsaraDriverId),
                   event_count: 0, total_seconds: 0, sum_mph_over: 0, max_mph_over: 0,
                 };
                 t.event_count += 1;
@@ -561,7 +583,7 @@ Deno.serve(async (req) => {
             samsara_vehicle_id: vehicleId,
             unit_id: unitIdByVehicleId.get(vehicleId) ?? null,
             samsara_driver_id: assignedSamsaraDriverId,
-            driver_id: assignedSamsaraDriverId ? (driverIdBySamsaraId.get(assignedSamsaraDriverId) ?? null) : null,
+            driver_id: attributedDriverId(assignedSamsaraDriverId),
             trip_start_time: trip.tripStartTime ?? null,
             start_time: iv.startTime,
             end_time: iv.endTime ?? null,
@@ -704,6 +726,7 @@ Deno.serve(async (req) => {
       windowDays: isBackfill ? null : windowDays,
       samsaraDriversFound: samsaraDrivers.length,
       driversLinkedByName: driverIdBySamsaraId.size,
+      departedDriversMapped: departedDriverIdBySamsaraId.size,
       unmatchedSamsaraDrivers,
       driverVehicleAssignmentsFetched: assignmentRecordsFetched,
       assignmentBatchErrors,
