@@ -70,21 +70,114 @@ function MonthlyTrendChart({ monthly }) {
   );
 }
 
-function TopDriversTable({ drivers }) {
+const STAGE_TONE = (stage) => {
+  const i = COACHING_STAGES.indexOf(stage);
+  return i >= 3 ? "red" : i === 2 ? "yellow" : "neutral";
+};
+
+// One row per driver: all-time records next to what is still counting now
+// (active points, current stage), what they repeat, and where they stand on score.
+// Clicking a name filters the incident list below to that driver.
+function DriversOverview({ drivers, onSelectDriver }) {
+  const [sortBy, setSortBy] = useState("records");
+  const [sortDir, setSortDir] = useState("desc");
+  const [showAll, setShowAll] = useState(false);
+
+  const onSort = (key) => {
+    if (key === sortBy) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortBy(key); setSortDir(key === "driver_name" || key === "topFamily" ? "asc" : "desc"); }
+  };
+
+  const sorted = [...drivers].sort((a, b) => {
+    const av = a[sortBy], bv = b[sortBy];
+    // Missing values sort last either way.
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+    return (sortDir === "asc" ? cmp : -cmp) || b.records - a.records;
+  });
+  const visible = showAll ? sorted : sorted.slice(0, 10);
+
+  const rows = visible.map((d, i) => ({
+    rank: i + 1,
+    driver_name: (
+      <button
+        type="button"
+        onClick={() => onSelectDriver(d.driver_name)}
+        title="Show this driver's incidents below"
+        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--clg-royal)", fontWeight: 600, fontSize: "inherit", fontFamily: "inherit", textAlign: "left", whiteSpace: "nowrap", textDecoration: "underline", textDecorationColor: "var(--clg-border-default)" }}
+      >
+        {d.driver_name}
+      </button>
+    ),
+    records: (
+      <span>
+        <strong>{d.records}</strong>
+        <span style={{ color: "var(--clg-text-muted)", fontSize: 11.5 }}> · {d.last60} in 60d</span>
+      </span>
+    ),
+    activePoints: d.activePoints > 0 ? d.activePoints : <span style={{ color: "var(--clg-text-muted)" }}>0</span>,
+    stageRank: d.currentStage
+      ? <StatusPill tone={STAGE_TONE(d.currentStage)}>{d.currentStage}</StatusPill>
+      : <span style={{ color: "var(--clg-text-muted)" }} title="Everything has rolled off">—</span>,
+    topFamily: d.topFamily ? `${d.topFamily} (${d.topFamilyCount})` : "—",
+    lastDate: d.lastDate
+      ? <span>{fmtDate(d.lastDate)}<div style={{ fontSize: 11.5, color: "var(--clg-text-muted)" }}>{d.lastInfraction}</div></span>
+      : "—",
+    score: d.score != null
+      ? (
+        <span style={{ color: d.fleetAvg != null && d.score < d.fleetAvg ? "var(--clg-ruby)" : undefined, fontWeight: 600 }}>
+          {d.score.toFixed(1)}
+          {d.fleetAvg != null && <span style={{ color: "var(--clg-text-muted)", fontWeight: 400, fontSize: 11.5 }}> · avg {d.fleetAvg.toFixed(1)}</span>}
+        </span>
+      )
+      : <span style={{ color: "var(--clg-text-muted)" }}>No score</span>,
+    flags: (d.fineEligible > 0 || d.pendingAppeals > 0)
+      ? (
+        <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+          {d.fineEligible > 0 && <StatusPill tone="red">{d.fineEligible} fine eligible</StatusPill>}
+          {d.pendingAppeals > 0 && <StatusPill tone="yellow">{d.pendingAppeals} appeal pending</StatusPill>}
+        </span>
+      )
+      : "",
+  }));
+
   return (
     <div style={PANEL_STYLE}>
-      <Eyebrow style={{ marginBottom: 8 }}>Most records</Eyebrow>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>
+        <Eyebrow>Drivers</Eyebrow>
+        {drivers.length > 10 && (
+          <Button size="sm" variant="outline" onClick={() => setShowAll((v) => !v)}>
+            {showAll ? "Show top 10" : `Show all ${drivers.length}`}
+          </Button>
+        )}
+      </div>
       {drivers.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--clg-text-muted)" }}>No incidents logged yet.</div>
       ) : (
-        <Table
-          columns={[
-            { key: "rank", label: "Rank", align: "right" },
-            { key: "driver_name", label: "Driver" },
-            { key: "count", label: "Records", align: "right" },
-          ]}
-          rows={drivers}
-        />
+        <>
+          <Table
+            columns={[
+              { key: "rank", label: "#", align: "right", sortable: false },
+              { key: "driver_name", label: "Driver" },
+              { key: "records", label: "Records", align: "right" },
+              { key: "activePoints", label: "Active points", align: "right" },
+              { key: "stageRank", label: "Current stage" },
+              { key: "topFamily", label: "Main category" },
+              { key: "lastDate", label: "Last incident" },
+              { key: "score", label: "Score" },
+              { key: "flags", label: "Flags", sortable: false },
+            ]}
+            rows={rows}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+          <div style={{ fontSize: 11.5, color: "var(--clg-text-muted)", marginTop: 8 }}>
+            Active points and current stage count only incidents still inside their rollover window (60 days for most). Click a driver to filter the list below.
+          </div>
+        </>
       )}
     </div>
   );
@@ -298,10 +391,16 @@ export default function AccountabilityView({ session }) {
         <MonthlyTrendChart monthly={totals.monthlyTrend} />
       </div>
       <div style={{ marginTop: 14 }}>
-        <TopDriversTable drivers={totals.topDrivers} />
+        <DriversOverview
+          drivers={totals.driverSummaries}
+          onSelectDriver={(name) => {
+            setFilters({ ...EMPTY_FILTERS, driver: name });
+            requestAnimationFrame(() => document.getElementById("incident-list")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+          }}
+        />
       </div>
 
-      <div style={{ marginTop: 20 }}>
+      <div id="incident-list" style={{ marginTop: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6, fontSize: 12.5, color: "var(--clg-text-muted)" }}>
           <span>{filtersActive ? `Showing ${filtered.length} of ${incidents.length} incidents` : `${incidents.length} incident${incidents.length === 1 ? "" : "s"}`}</span>
           {filtersActive && <Button size="sm" variant="outline" onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</Button>}
