@@ -4,6 +4,7 @@ import { Button, Eyebrow, StatBlock, StatusPill, Table } from "../../ds";
 import { useDriverIncidents } from "../../hooks/useDriverIncidents";
 import { useDriverNames } from "../../hooks/useDriverNames";
 import LogIncidentForm from "./LogIncidentForm";
+import SpeedingCoachingSuggestions from "./SpeedingCoachingSuggestions";
 
 const SEVERITY_TONE = { Minor: "neutral", Moderate: "yellow", Heavy: "red", Severe: "red" };
 const FINE_TONE = { Yes: "red", No: "neutral", Review: "yellow" };
@@ -120,7 +121,10 @@ export default function AccountabilityView({ session }) {
     }
   };
 
-  if (loading) {
+  // Only the very first load replaces the page with a spinner: a reload after
+  // logging an incident must not unmount the page (it collapsed the speeding
+  // suggestions panel and lost the reviewer's place after every confirm).
+  if (loading && incidents.length === 0) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "60px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
         <Loader2 size={16} className="spin" /> Loading accountability records…
@@ -170,6 +174,8 @@ export default function AccountabilityView({ session }) {
           />
         </div>
       )}
+
+      <SpeedingCoachingSuggestions session={session} onLogged={reload} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginTop: 20 }}>
         <div style={PANEL_STYLE}>
