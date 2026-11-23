@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { Button, Eyebrow, Input, Select, StatBlock, StatusPill, Table } from "../../ds";
 import { useDriverIncidents } from "../../hooks/useDriverIncidents";
 import { useDriverNames } from "../../hooks/useDriverNames";
 import LogIncidentForm from "./LogIncidentForm";
+import EditIncidentForm from "./EditIncidentForm";
 import SpeedingCoachingSuggestions from "./SpeedingCoachingSuggestions";
 import { APPEAL_STATUSES, COACHING_STAGES, SEVERITIES } from "../../lib/accountabilityEnums";
 
@@ -225,6 +226,7 @@ export default function AccountabilityView({ session }) {
   const [showForm, setShowForm] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
+  const [editing, setEditing] = useState(null); // { id, driver_name }
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
 
@@ -305,6 +307,19 @@ export default function AccountabilityView({ session }) {
     severityCell: <StatusPill tone={SEVERITY_TONE[i.severity] || "neutral"}>{i.severity}</StatusPill>,
     fineCell: <StatusPill tone={FINE_TONE[i.fine_eligibility] || "neutral"}>{i.fine_eligibility}</StatusPill>,
     actionsCell: (
+      <span style={{ display: "inline-flex", gap: 2, alignItems: "center" }}>
+      <button
+        onClick={() => {
+          setShowForm(false);
+          setEditing({ id: i.id, driver_name: i.driver_name });
+          setTimeout(() => document.getElementById("edit-incident")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+        }}
+        title="Edit incident"
+        aria-label={`Edit ${i.infraction_name} for ${i.driver_name}`}
+        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--clg-royal)", padding: 4 }}
+      >
+        <Pencil size={15} />
+      </button>
       <button
         onClick={() => onDelete(i)}
         disabled={deletingId === i.id}
@@ -313,6 +328,7 @@ export default function AccountabilityView({ session }) {
       >
         {deletingId === i.id ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />}
       </button>
+      </span>
     ),
   }));
 
@@ -325,11 +341,23 @@ export default function AccountabilityView({ session }) {
             {totals.totalIncidents} logged incident{totals.totalIncidents === 1 ? "" : "s"}
           </h2>
         </div>
-        {!showForm && <Button onClick={() => setShowForm(true)}>Log incident</Button>}
+        {!showForm && <Button onClick={() => { setEditing(null); setShowForm(true); }}>Log incident</Button>}
       </div>
 
       {(error || deleteError) && (
         <div style={{ padding: 16, background: "#FBEAEB", color: "var(--clg-ruby)", fontSize: 13, marginTop: 16 }}>{error || deleteError}</div>
+      )}
+
+      {editing && (
+        <div id="edit-incident" style={{ marginTop: 20 }}>
+          <EditIncidentForm
+            key={editing.id}
+            incidentId={editing.id}
+            driverName={editing.driver_name}
+            onCancel={() => setEditing(null)}
+            onSaved={() => { setEditing(null); reload(); }}
+          />
+        </div>
       )}
 
       {showForm && (
