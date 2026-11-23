@@ -20,18 +20,23 @@ export function useWorkOrderStats(range) {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    let query = supabase.from("work_orders").select("status, voided, approval_status, cost");
-    if (range?.start) query = query.gte("date_opened", range.start);
-    if (range?.end) query = query.lte("date_opened", range.end);
-
-    const { data, error: err } = await query;
-    if (err) {
-      setError(err.message);
-      setLoading(false);
-      return;
+    // Paginated: a single select is silently capped at the API's max rows
+    // (1,000), which undercounted every tab once work orders passed that.
+    const rows = [];
+    for (let from = 0; ; from += 1000) {
+      let query = supabase.from("work_orders").select("status, voided, approval_status, cost").order("id").range(from, from + 999);
+      if (range?.start) query = query.gte("date_opened", range.start);
+      if (range?.end) query = query.lte("date_opened", range.end);
+      const { data, error: err } = await query;
+      if (err) {
+        setError(err.message);
+        setLoading(false);
+        return;
+      }
+      rows.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
     }
 
-    const rows = data ?? [];
     setStats({
       total: rows.length,
       needsApproval: rows.filter((o) => !o.voided && o.approval_status === "needs_approval").length,
