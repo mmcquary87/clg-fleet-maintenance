@@ -93,7 +93,7 @@ function TopDriversTable({ drivers }) {
 const COLUMNS = [
   { key: "event_date", label: "Date" },
   { key: "driver_name", label: "Driver" },
-  { key: "infraction_name", label: "Infraction" },
+  { key: "infractionCell", label: "Infraction" },
   { key: "severityCell", label: "Severity" },
   { key: "coaching_stage", label: "Stage" },
   { key: "fineCell", label: "Fine eligible" },
@@ -175,7 +175,7 @@ export default function AccountabilityView({ session }) {
         ) };
       case "driver_name":
         return { ...c, filter: <Input type="search" aria-label="Filter by Driver" placeholder="Search…" value={filters.driver} onChange={setFilter("driver")} style={FILTER_CTRL} /> };
-      case "infraction_name": return { ...c, filter: selectFilter("infraction", "Infraction", distinct(incidents, "infraction_name")) };
+      case "infractionCell": return { ...c, filter: selectFilter("infraction", "Infraction", distinct(incidents, "infraction_name")) };
       case "severityCell": return { ...c, filter: selectFilter("severity", "Severity", SEVERITIES) };
       case "coaching_stage": return { ...c, filter: selectFilter("stage", "Stage", COACHING_STAGES) };
       case "fineCell": return { ...c, filter: selectFilter("fine", "Fine eligible", Object.keys(FINE_TONE)) };
@@ -185,8 +185,29 @@ export default function AccountabilityView({ session }) {
     }
   });
 
-  const rows = filtered.map((i) => ({
+  // Incidents saved from one coaching call share coaching_call_id: keep them
+  // together in the list and tag them so the bundling is visible.
+  const callSize = new Map();
+  incidents.forEach((i) => { if (i.coaching_call_id) callSize.set(i.coaching_call_id, (callSize.get(i.coaching_call_id) ?? 0) + 1); });
+  const ordered = [...filtered].sort((a, b) =>
+    (b.event_date ?? "").localeCompare(a.event_date ?? "") ||
+    (a.coaching_call_id ?? a.id).localeCompare(b.coaching_call_id ?? b.id));
+
+  const rows = ordered.map((i) => ({
     ...i,
+    infractionCell: (
+      <span>
+        {i.infraction_name}
+        {callSize.get(i.coaching_call_id) > 1 && (
+          <span
+            title={`Covered on one coaching call with ${callSize.get(i.coaching_call_id) - 1} other infraction${callSize.get(i.coaching_call_id) === 2 ? "" : "s"}. Same-category infractions on a call count as one step.`}
+            style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 700, color: "var(--clg-royal)", background: "var(--clg-surface-subtle)", border: "1px solid var(--clg-border-default)", borderRadius: 999, padding: "1px 7px", whiteSpace: "nowrap" }}
+          >
+            Call · {callSize.get(i.coaching_call_id)} together
+          </span>
+        )}
+      </span>
+    ),
     event_date: fmtDate(i.event_date),
     severityCell: <StatusPill tone={SEVERITY_TONE[i.severity] || "neutral"}>{i.severity}</StatusPill>,
     fineCell: <StatusPill tone={FINE_TONE[i.fine_eligibility] || "neutral"}>{i.fine_eligibility}</StatusPill>,
