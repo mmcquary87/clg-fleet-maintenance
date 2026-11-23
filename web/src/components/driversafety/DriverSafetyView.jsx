@@ -7,6 +7,7 @@ import IncidentMap from "./IncidentMap";
 import Dvir from "./Dvir";
 import MissingDvirs from "./MissingDvirs";
 import DriverPointBreakdown from "./DriverPointBreakdown";
+import CoverageIssuesBanner from "./CoverageIssuesBanner";
 import DateRangeFilter from "../DateRangeFilter";
 
 // Same hues as StatusPill's TONES (not a new categorical palette) -- bars
@@ -456,6 +457,8 @@ export default function DriverSafetyView() {
       {ledeSentence(totals) && (
         <div style={{ fontSize: 13, color: "var(--clg-text-muted)", marginTop: 4, maxWidth: 640 }}>{ledeSentence(totals)}</div>
       )}
+
+      <CoverageIssuesBanner />
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
         <DateRangeFilter onChange={setRange} disableAllTime extraPresets={[ROLLING_60_PRESET]} defaultPresetId="rolling60" />
