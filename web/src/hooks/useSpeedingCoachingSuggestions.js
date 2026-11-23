@@ -65,6 +65,8 @@ export function useSpeedingCoachingSuggestions() {
         ". Confirmed by a person in CLGOS.",
       issued_by: s.coach_name || `Samsara coach ${s.coach_id ?? "(unknown)"}`,
       samsara_event_id: s.suggestion_key,
+      // Episodes matched to one Samsara coaching session are one conversation: one ladder step.
+      coaching_call_id: s.coaching_call_id ?? null,
     });
     if (err) return err;
     await load();
