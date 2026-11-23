@@ -1,6 +1,8 @@
 /** Dense operational table: uppercase head, hairline rows, tabular numerals.
  * Pass sortBy/sortDir + onSort(key) to make columns with a `.key` clickable
  * for sorting (columns without a key, or with sortable: false, stay static).
+ * A column may carry a `filter` node (an input/select); if any column does, a
+ * second header row renders those controls under the labels.
  */
 export default function Table({ columns = [], rows = [], zebra = true, style, sortBy, sortDir, onSort, ...rest }) {
   return (
@@ -28,6 +30,15 @@ export default function Table({ columns = [], rows = [], zebra = true, style, so
             );
           })}
         </tr>
+        {columns.some((c) => c && c.filter) && (
+          <tr>
+            {columns.map((c) => (
+              <th key={"f-" + (c.key || c)} style={{ padding: "0 12px 8px", textAlign: "left", fontWeight: 400, verticalAlign: "top", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                {c.filter ?? null}
+              </th>
+            ))}
+          </tr>
+        )}
       </thead>
       <tbody>
         {rows.map((r, i) => (

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
-import { Button, Eyebrow, StatBlock, StatusPill, Table } from "../../ds";
+import { Button, Eyebrow, Input, Select, StatBlock, StatusPill, Table } from "../../ds";
 import { useDriverIncidents } from "../../hooks/useDriverIncidents";
 import { useDriverNames } from "../../hooks/useDriverNames";
 import LogIncidentForm from "./LogIncidentForm";
 import SpeedingCoachingSuggestions from "./SpeedingCoachingSuggestions";
+import { APPEAL_STATUSES, COACHING_STAGES, SEVERITIES } from "../../lib/accountabilityEnums";
 
 const SEVERITY_TONE = { Minor: "neutral", Moderate: "yellow", Heavy: "red", Severe: "red" };
 const FINE_TONE = { Yes: "red", No: "neutral", Review: "yellow" };
@@ -101,12 +102,38 @@ const COLUMNS = [
   { key: "actionsCell", label: "", align: "right" },
 ];
 
+const EMPTY_FILTERS = {
+  from: "", to: "", driver: "", infraction: "", severity: "", stage: "", fine: "", appeal: "", issuedBy: "",
+};
+const FILTER_CTRL = { padding: "6px 8px", fontSize: 12 };
+const FILTER_SELECT = { padding: "6px 24px 6px 8px", fontSize: 12 };
+
+function distinct(incidents, key) {
+  return Array.from(new Set(incidents.map((i) => i[key]).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+function applyFilters(incidents, f) {
+  const driver = f.driver.trim().toLowerCase();
+  return incidents.filter((i) =>
+    (!f.from || i.event_date >= f.from) &&
+    (!f.to || i.event_date <= f.to) &&
+    (!driver || (i.driver_name ?? "").toLowerCase().includes(driver)) &&
+    (!f.infraction || i.infraction_name === f.infraction) &&
+    (!f.severity || i.severity === f.severity) &&
+    (!f.stage || i.coaching_stage === f.stage) &&
+    (!f.fine || i.fine_eligibility === f.fine) &&
+    (!f.appeal || i.appeal_status === f.appeal) &&
+    (!f.issuedBy || i.issued_by === f.issuedBy));
+}
+
 export default function AccountabilityView({ session }) {
   const { incidents, totals, loading, error, reload, deleteIncident } = useDriverIncidents();
   const { options: activeDrivers } = useDriverNames({ activeOnly: true });
   const [showForm, setShowForm] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
 
   const onDelete = async (incident) => {
     if (!window.confirm(`Delete this ${incident.infraction_name} record for ${incident.driver_name}? This can't be undone.`)) return;
@@ -132,7 +159,33 @@ export default function AccountabilityView({ session }) {
     );
   }
 
-  const rows = incidents.map((i) => ({
+  const filtered = applyFilters(incidents, filters);
+  const filtersActive = Object.values(filters).some(Boolean);
+  const selectFilter = (key, label, options) => (
+    <Select aria-label={`Filter by ${label}`} value={filters[key]} onChange={setFilter(key)} placeholder="All" options={options} style={FILTER_SELECT} />
+  );
+  const columns = COLUMNS.map((c) => {
+    switch (c.key) {
+      case "event_date":
+        return { ...c, filter: (
+          <div style={{ display: "grid", gap: 4, minWidth: 130 }}>
+            <Input type="date" aria-label="Date from" title="From" value={filters.from} max={filters.to || undefined} onChange={setFilter("from")} style={FILTER_CTRL} />
+            <Input type="date" aria-label="Date to" title="To" value={filters.to} min={filters.from || undefined} onChange={setFilter("to")} style={FILTER_CTRL} />
+          </div>
+        ) };
+      case "driver_name":
+        return { ...c, filter: <Input type="search" aria-label="Filter by Driver" placeholder="Search…" value={filters.driver} onChange={setFilter("driver")} style={FILTER_CTRL} /> };
+      case "infraction_name": return { ...c, filter: selectFilter("infraction", "Infraction", distinct(incidents, "infraction_name")) };
+      case "severityCell": return { ...c, filter: selectFilter("severity", "Severity", SEVERITIES) };
+      case "coaching_stage": return { ...c, filter: selectFilter("stage", "Stage", COACHING_STAGES) };
+      case "fineCell": return { ...c, filter: selectFilter("fine", "Fine eligible", Object.keys(FINE_TONE)) };
+      case "appeal_status": return { ...c, filter: selectFilter("appeal", "Appeal", APPEAL_STATUSES) };
+      case "issued_by": return { ...c, filter: selectFilter("issuedBy", "Issued by", distinct(incidents, "issued_by")) };
+      default: return c;
+    }
+  });
+
+  const rows = filtered.map((i) => ({
     ...i,
     event_date: fmtDate(i.event_date),
     severityCell: <StatusPill tone={SEVERITY_TONE[i.severity] || "neutral"}>{i.severity}</StatusPill>,
@@ -228,10 +281,18 @@ export default function AccountabilityView({ session }) {
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <Table columns={COLUMNS} rows={rows} />
-        {incidents.length === 0 && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6, fontSize: 12.5, color: "var(--clg-text-muted)" }}>
+          <span>{filtersActive ? `Showing ${filtered.length} of ${incidents.length} incidents` : `${incidents.length} incident${incidents.length === 1 ? "" : "s"}`}</span>
+          {filtersActive && <Button size="sm" variant="outline" onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</Button>}
+        </div>
+        <Table columns={columns} rows={rows} />
+        {incidents.length === 0 ? (
           <div style={{ padding: "24px 0", color: "var(--clg-text-muted)", fontSize: 13, textAlign: "center" }}>
             No incidents logged yet.
+          </div>
+        ) : filtered.length === 0 && (
+          <div style={{ padding: "24px 0", color: "var(--clg-text-muted)", fontSize: 13, textAlign: "center" }}>
+            No incidents match these filters.
           </div>
         )}
       </div>
