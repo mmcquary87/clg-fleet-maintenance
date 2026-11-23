@@ -208,12 +208,12 @@ function GroupedWorkOrderCard({ orders, expanded, onToggle, onOpen }) {
 
 export default function WorkOrdersView({ initialCategory, isAdmin }) {
   const [range, setRange] = useState(null);
-  const { orders, loading, loadingMore, hasMore, loadMore, error, reload } = useAllWorkOrders(range);
-  const { stats } = useWorkOrderStats(range);
   const [tab, setTab] = useState("All");
   const [category, setCategory] = useState(initialCategory || "All");
   const [unit, setUnit] = useState("All");
   const [query, setQuery] = useState("");
+  const { orders, loading, loadingMore, hasMore, loadMore, error, reload } = useAllWorkOrders(range, { voidedOnly: tab === "Voided", search: query });
+  const { stats } = useWorkOrderStats(range);
   const [openId, setOpenId] = useState(null);
   const [intacctExportOpen, setIntacctExportOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
