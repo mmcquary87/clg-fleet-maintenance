@@ -53,15 +53,43 @@ export function useDriverIncidents() {
     SEVERITIES.map((s) => [s, incidents.filter((i) => i.severity === s).length]),
   );
 
+  // One summary row per driver for the "drivers" overview on the Accountability
+  // screen. "Active" = still inside the infraction's own rollover window (the same
+  // rule the coaching-stage ladder uses), so active points / current stage show who
+  // needs attention now, while records is the all-time count.
+  const today = new Date();
+  const dayMs = 86400000;
   const byDriver = new Map();
   incidents.forEach((i) => {
-    byDriver.set(i.driver_name, (byDriver.get(i.driver_name) ?? 0) + 1);
+    const key = i.driver_id ?? i.driver_name;
+    const d = byDriver.get(key) ?? {
+      driver_id: i.driver_id, driver_name: i.driver_name, records: 0, last60: 0, activePoints: 0, stageRank: -1,
+      families: new Map(), lastDate: null, lastInfraction: null, score: null, fleetAvg: null, fineEligible: 0, pendingAppeals: 0,
+    };
+    d.records += 1;
+    const ageDays = i.event_date ? (today - new Date(i.event_date + "T00:00:00")) / dayMs : Infinity;
+    if (ageDays <= 60) d.last60 += 1;
+    if (ageDays <= (Number(i.rollover_days) || 60)) {
+      d.activePoints += Number(i.points) || 0;
+      d.stageRank = Math.max(d.stageRank, COACHING_STAGES.indexOf(i.coaching_stage));
+    }
+    if (i.violation_family) d.families.set(i.violation_family, (d.families.get(i.violation_family) ?? 0) + 1);
+    if (i.event_date && (!d.lastDate || i.event_date > d.lastDate)) { d.lastDate = i.event_date; d.lastInfraction = i.infraction_name; }
+    d.score = i.driver_score != null ? Number(i.driver_score) : d.score;
+    d.fleetAvg = i.fleet_average_score != null ? Number(i.fleet_average_score) : d.fleetAvg;
+    if (i.fine_eligibility === "Yes") d.fineEligible += 1;
+    if (i.appeal_status === "Pending") d.pendingAppeals += 1;
+    byDriver.set(key, d);
   });
-  const topDrivers = Array.from(byDriver.entries())
-    .map(([driver_name, count]) => ({ driver_name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
-    .map((d, i) => ({ ...d, rank: i + 1 }));
+  const driverSummaries = Array.from(byDriver.values()).map((d) => {
+    const [topFamily, topFamilyCount] = Array.from(d.families.entries()).sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
+    return {
+      ...d,
+      activePoints: Math.round(d.activePoints * 100) / 100,
+      currentStage: d.stageRank >= 0 ? COACHING_STAGES[d.stageRank] : null,
+      topFamily, topFamilyCount,
+    };
+  });
 
   const coachingStageCounts = Object.fromEntries(
     COACHING_STAGES.map((s) => [s, incidents.filter((i) => i.coaching_stage === s).length]),
@@ -95,7 +123,7 @@ export function useDriverIncidents() {
     fineEligibleCount: incidents.filter((i) => i.fine_eligibility === "Yes").length,
     reviewCount: incidents.filter((i) => i.fine_eligibility === "Review").length,
     pendingAppealsCount: incidents.filter((i) => i.appeal_status === "Pending").length,
-    topDrivers,
+    driverSummaries,
   };
 
   return { incidents, totals, loading, error, reload: load, deleteIncident };
