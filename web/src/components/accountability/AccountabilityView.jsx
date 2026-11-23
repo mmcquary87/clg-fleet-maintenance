@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
-import { Button, Eyebrow, StatBlock, StatusPill, Table } from "../../ds";
+import { Button, Eyebrow, Input, Select, StatBlock, StatusPill, Table } from "../../ds";
 import { useDriverIncidents } from "../../hooks/useDriverIncidents";
 import { useDriverNames } from "../../hooks/useDriverNames";
 import LogIncidentForm from "./LogIncidentForm";
+import SpeedingCoachingSuggestions from "./SpeedingCoachingSuggestions";
+import { APPEAL_STATUSES, COACHING_STAGES, SEVERITIES } from "../../lib/accountabilityEnums";
 
 const SEVERITY_TONE = { Minor: "neutral", Moderate: "yellow", Heavy: "red", Severe: "red" };
 const FINE_TONE = { Yes: "red", No: "neutral", Review: "yellow" };
@@ -91,7 +93,7 @@ function TopDriversTable({ drivers }) {
 const COLUMNS = [
   { key: "event_date", label: "Date" },
   { key: "driver_name", label: "Driver" },
-  { key: "infraction_name", label: "Infraction" },
+  { key: "infractionCell", label: "Infraction" },
   { key: "severityCell", label: "Severity" },
   { key: "coaching_stage", label: "Stage" },
   { key: "fineCell", label: "Fine eligible" },
@@ -100,12 +102,38 @@ const COLUMNS = [
   { key: "actionsCell", label: "", align: "right" },
 ];
 
+const EMPTY_FILTERS = {
+  from: "", to: "", driver: "", infraction: "", severity: "", stage: "", fine: "", appeal: "", issuedBy: "",
+};
+const FILTER_CTRL = { padding: "6px 8px", fontSize: 12 };
+const FILTER_SELECT = { padding: "6px 24px 6px 8px", fontSize: 12 };
+
+function distinct(incidents, key) {
+  return Array.from(new Set(incidents.map((i) => i[key]).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+function applyFilters(incidents, f) {
+  const driver = f.driver.trim().toLowerCase();
+  return incidents.filter((i) =>
+    (!f.from || i.event_date >= f.from) &&
+    (!f.to || i.event_date <= f.to) &&
+    (!driver || (i.driver_name ?? "").toLowerCase().includes(driver)) &&
+    (!f.infraction || i.infraction_name === f.infraction) &&
+    (!f.severity || i.severity === f.severity) &&
+    (!f.stage || i.coaching_stage === f.stage) &&
+    (!f.fine || i.fine_eligibility === f.fine) &&
+    (!f.appeal || i.appeal_status === f.appeal) &&
+    (!f.issuedBy || i.issued_by === f.issuedBy));
+}
+
 export default function AccountabilityView({ session }) {
   const { incidents, totals, loading, error, reload, deleteIncident } = useDriverIncidents();
   const { options: activeDrivers } = useDriverNames({ activeOnly: true });
   const [showForm, setShowForm] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
 
   const onDelete = async (incident) => {
     if (!window.confirm(`Delete this ${incident.infraction_name} record for ${incident.driver_name}? This can't be undone.`)) return;
@@ -120,7 +148,10 @@ export default function AccountabilityView({ session }) {
     }
   };
 
-  if (loading) {
+  // Only the very first load replaces the page with a spinner: a reload after
+  // logging an incident must not unmount the page (it collapsed the speeding
+  // suggestions panel and lost the reviewer's place after every confirm).
+  if (loading && incidents.length === 0) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "60px 0", justifyContent: "center", color: "var(--clg-cool)" }}>
         <Loader2 size={16} className="spin" /> Loading accountability records…
@@ -128,8 +159,55 @@ export default function AccountabilityView({ session }) {
     );
   }
 
-  const rows = incidents.map((i) => ({
+  const filtered = applyFilters(incidents, filters);
+  const filtersActive = Object.values(filters).some(Boolean);
+  const selectFilter = (key, label, options) => (
+    <Select aria-label={`Filter by ${label}`} value={filters[key]} onChange={setFilter(key)} placeholder="All" options={options} style={FILTER_SELECT} />
+  );
+  const columns = COLUMNS.map((c) => {
+    switch (c.key) {
+      case "event_date":
+        return { ...c, filter: (
+          <div style={{ display: "grid", gap: 4, minWidth: 130 }}>
+            <Input type="date" aria-label="Date from" title="From" value={filters.from} max={filters.to || undefined} onChange={setFilter("from")} style={FILTER_CTRL} />
+            <Input type="date" aria-label="Date to" title="To" value={filters.to} min={filters.from || undefined} onChange={setFilter("to")} style={FILTER_CTRL} />
+          </div>
+        ) };
+      case "driver_name":
+        return { ...c, filter: <Input type="search" aria-label="Filter by Driver" placeholder="Search…" value={filters.driver} onChange={setFilter("driver")} style={FILTER_CTRL} /> };
+      case "infractionCell": return { ...c, filter: selectFilter("infraction", "Infraction", distinct(incidents, "infraction_name")) };
+      case "severityCell": return { ...c, filter: selectFilter("severity", "Severity", SEVERITIES) };
+      case "coaching_stage": return { ...c, filter: selectFilter("stage", "Stage", COACHING_STAGES) };
+      case "fineCell": return { ...c, filter: selectFilter("fine", "Fine eligible", Object.keys(FINE_TONE)) };
+      case "appeal_status": return { ...c, filter: selectFilter("appeal", "Appeal", APPEAL_STATUSES) };
+      case "issued_by": return { ...c, filter: selectFilter("issuedBy", "Issued by", distinct(incidents, "issued_by")) };
+      default: return c;
+    }
+  });
+
+  // Incidents saved from one coaching call share coaching_call_id: keep them
+  // together in the list and tag them so the bundling is visible.
+  const callSize = new Map();
+  incidents.forEach((i) => { if (i.coaching_call_id) callSize.set(i.coaching_call_id, (callSize.get(i.coaching_call_id) ?? 0) + 1); });
+  const ordered = [...filtered].sort((a, b) =>
+    (b.event_date ?? "").localeCompare(a.event_date ?? "") ||
+    (a.coaching_call_id ?? a.id).localeCompare(b.coaching_call_id ?? b.id));
+
+  const rows = ordered.map((i) => ({
     ...i,
+    infractionCell: (
+      <span>
+        {i.infraction_name}
+        {callSize.get(i.coaching_call_id) > 1 && (
+          <span
+            title={`Covered on one coaching call with ${callSize.get(i.coaching_call_id) - 1} other infraction${callSize.get(i.coaching_call_id) === 2 ? "" : "s"}. Same-category infractions on a call count as one step.`}
+            style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 700, color: "var(--clg-royal)", background: "var(--clg-surface-subtle)", border: "1px solid var(--clg-border-default)", borderRadius: 999, padding: "1px 7px", whiteSpace: "nowrap" }}
+          >
+            Call · {callSize.get(i.coaching_call_id)} together
+          </span>
+        )}
+      </span>
+    ),
     event_date: fmtDate(i.event_date),
     severityCell: <StatusPill tone={SEVERITY_TONE[i.severity] || "neutral"}>{i.severity}</StatusPill>,
     fineCell: <StatusPill tone={FINE_TONE[i.fine_eligibility] || "neutral"}>{i.fine_eligibility}</StatusPill>,
@@ -170,6 +248,8 @@ export default function AccountabilityView({ session }) {
           />
         </div>
       )}
+
+      <SpeedingCoachingSuggestions session={session} onLogged={reload} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginTop: 20 }}>
         <div style={PANEL_STYLE}>
@@ -222,10 +302,18 @@ export default function AccountabilityView({ session }) {
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <Table columns={COLUMNS} rows={rows} />
-        {incidents.length === 0 && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6, fontSize: 12.5, color: "var(--clg-text-muted)" }}>
+          <span>{filtersActive ? `Showing ${filtered.length} of ${incidents.length} incidents` : `${incidents.length} incident${incidents.length === 1 ? "" : "s"}`}</span>
+          {filtersActive && <Button size="sm" variant="outline" onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</Button>}
+        </div>
+        <Table columns={columns} rows={rows} />
+        {incidents.length === 0 ? (
           <div style={{ padding: "24px 0", color: "var(--clg-text-muted)", fontSize: 13, textAlign: "center" }}>
             No incidents logged yet.
+          </div>
+        ) : filtered.length === 0 && (
+          <div style={{ padding: "24px 0", color: "var(--clg-text-muted)", fontSize: 13, textAlign: "center" }}>
+            No incidents match these filters.
           </div>
         )}
       </div>

@@ -20,9 +20,15 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
   const [driverName, setDriverName] = useState("");
   const [driverId, setDriverId] = useState(null);
   const [eventDate, setEventDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [infractionId, setInfractionId] = useState("");
-  const [coachingStage, setCoachingStage] = useState("First Infraction");
-  const [stageIsSuggested, setStageIsSuggested] = useState(false);
+  // One coaching call can cover several infractions. Each ticked infraction
+  // becomes its own driver_incidents row (so points, rollover and fines keep
+  // working per infraction); the date, notes, driver response, follow-up,
+  // training and appeal fields are shared by the call. The progressive stage is
+  // per violation FAMILY: infractions in the same family on one call are bundled
+  // into a single step (they share coaching_call_id, which the ladder counts once).
+  const [infractionIds, setInfractionIds] = useState([]);
+  const [suggestedStages, setSuggestedStages] = useState({}); // family -> stage from the ladder
+  const [manualStages, setManualStages] = useState({}); // family -> stage Safety picked by hand
   const [notes, setNotes] = useState("");
   const [driverResponse, setDriverResponse] = useState("");
   const [issuedBy, setIssuedBy] = useState(session?.user?.email ?? "");
@@ -35,31 +41,53 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  const selectedInfraction = infractions.find((i) => i.id === infractionId);
+  // Keep the ticked infractions in catalog order so the stage rows and the
+  // saved records read the same way every time.
+  const selectedInfractions = infractions.filter((i) => infractionIds.includes(i.id));
+  const totalPoints = selectedInfractions.reduce((sum, i) => sum + (Number(i.points) || 0), 0);
+
+  // Ticked infractions grouped by family, in catalog order.
+  const familyGroups = [];
+  selectedInfractions.forEach((inf) => {
+    const fam = inf.violation_family ?? "Other";
+    let g = familyGroups.find((x) => x.family === fam);
+    if (!g) { g = { family: fam, items: [] }; familyGroups.push(g); }
+    g.items.push(inf);
+  });
+  const stageFor = (inf) => {
+    const fam = inf.violation_family ?? "Other";
+    return manualStages[fam] ?? suggestedStages[fam] ?? COACHING_STAGES[0];
+  };
+
+  const toggleInfraction = (id) => {
+    setInfractionIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  };
 
   // Suggestion only, not automation (CLG direction, 2026-10-28) --
   // accountability_suggested_coaching_stage counts this driver's active
   // same-family infractions and proposes the next step in the 6-stage
   // ladder; Safety can still pick a different stage before saving (the
   // official doc's "may skip steps" provision). Re-suggests whenever the
-  // driver or the infraction's violation_family changes; a manual override
-  // sticks until then.
+  // driver or the ticked infractions change; a stage picked by hand sticks.
+  // Infractions in the same family on this call are one step, so the suggestion
+  // is per family (no per-infraction escalation). Re-suggests whenever the driver
+  // or the ticked families change; a stage picked by hand sticks.
+  const familyKey = familyGroups.map((g) => g.family).join("|");
   useEffect(() => {
-    if (!driverId || !selectedInfraction) {
-      setStageIsSuggested(false);
-      return;
-    }
+    if (!driverId || !familyKey) return undefined;
     let cancelled = false;
-    supabase.rpc("accountability_suggested_coaching_stage", {
-      p_driver_id: driverId,
-      p_violation_family: selectedInfraction.violation_family,
-    }).then(({ data, error: rpcError }) => {
-      if (cancelled || rpcError || !data) return;
-      setCoachingStage(data);
-      setStageIsSuggested(true);
+    const jobs = familyKey.split("|").map((family) =>
+      supabase.rpc("accountability_suggested_coaching_stage", {
+        p_driver_id: driverId,
+        p_violation_family: family,
+      }).then(({ data, error: rpcError }) => (rpcError || !data ? null : [family, data])),
+    );
+    Promise.all(jobs).then((pairs) => {
+      if (cancelled) return;
+      setSuggestedStages(Object.fromEntries(pairs.filter(Boolean)));
     });
     return () => { cancelled = true; };
-  }, [driverId, selectedInfraction?.violation_family]);
+  }, [driverId, familyKey]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -67,8 +95,8 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
       setError("Choose a driver from the list (use \"+ Add a new driver\" if they're not synced yet).");
       return;
     }
-    if (!infractionId) {
-      setError("Choose an infraction.");
+    if (selectedInfractions.length === 0) {
+      setError("Choose at least one infraction.");
       return;
     }
     if (!issuedBy.trim()) {
@@ -78,21 +106,27 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
 
     setSubmitting(true);
     setError(null);
-    const { error: err } = await supabase.from("driver_incidents").insert({
-      driver_id: driverId,
-      event_date: eventDate,
-      infraction_id: infractionId,
-      coaching_stage: coachingStage,
-      notes: notes.trim() || null,
-      driver_response: driverResponse.trim() || null,
-      issued_by: issuedBy.trim(),
-      follow_up_date: followUpDate || null,
-      training_assigned: trainingAssigned,
-      training_due_date: trainingAssigned ? (trainingDueDate || null) : null,
-      training_platform: trainingAssigned ? (trainingPlatform || null) : null,
-      appeal_status: appealStatus,
-      appeal_notes: appealNotes.trim() || null,
-    });
+    // One request = one transaction: either every infraction from this call is
+    // saved or none is, so a failure can't leave a half-logged coaching call.
+    const callId = crypto.randomUUID();
+    const { error: err } = await supabase.from("driver_incidents").insert(
+      selectedInfractions.map((inf) => ({
+        coaching_call_id: callId,
+        driver_id: driverId,
+        event_date: eventDate,
+        infraction_id: inf.id,
+        coaching_stage: stageFor(inf),
+        notes: notes.trim() || null,
+        driver_response: driverResponse.trim() || null,
+        issued_by: issuedBy.trim(),
+        follow_up_date: followUpDate || null,
+        training_assigned: trainingAssigned,
+        training_due_date: trainingAssigned ? (trainingDueDate || null) : null,
+        training_platform: trainingAssigned ? (trainingPlatform || null) : null,
+        appeal_status: appealStatus,
+        appeal_notes: appealNotes.trim() || null,
+      })),
+    );
     setSubmitting(false);
     if (err) {
       setError(err.message);
@@ -125,34 +159,59 @@ export default function LogIncidentForm({ session, onCancel, onSaved }) {
             <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
           </Field>
 
-          <Field label="Infraction" required style={{ gridColumn: "1 / -1" }}>
-            <Select
-              value={infractionId}
-              onChange={(e) => setInfractionId(e.target.value)}
-              disabled={infractionsLoading}
-              placeholder="Choose an infraction"
-              options={infractions.map((i) => ({ value: i.id, label: `${i.name} — ${i.violation_family} (${i.severity})` }))}
-            />
-            {selectedInfraction && (
-              <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
-                {selectedInfraction.points} point{selectedInfraction.points === 1 ? "" : "s"} · ${selectedInfraction.fine_amount} fine if eligible ·
-                rolls off after {selectedInfraction.rollover_days} days
-              </div>
-            )}
+          <Field label="Infractions" required help="Tick every topic covered on this call" style={{ gridColumn: "1 / -1" }}>
+            <div
+              role="group"
+              aria-label="Infractions"
+              style={{
+                maxHeight: 220, overflowY: "auto", border: "1px solid var(--clg-border-default)", borderRadius: "var(--clg-radius-sm)",
+                background: "var(--clg-surface-page)", padding: "6px 12px",
+              }}
+            >
+              {infractionsLoading && <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", padding: "6px 0" }}>Loading infractions…</div>}
+              {infractions.map((i) => (
+                <label key={i.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 0", fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={infractionIds.includes(i.id)}
+                    onChange={() => toggleInfraction(i.id)}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span>{i.name} — {i.violation_family} ({i.severity})</span>
+                </label>
+              ))}
+            </div>
           </Field>
 
-          <Field label="Coaching stage" required>
-            <Select
-              value={coachingStage}
-              onChange={(e) => { setCoachingStage(e.target.value); setStageIsSuggested(false); }}
-              options={COACHING_STAGES}
-            />
-            {stageIsSuggested && (
-              <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginTop: 4 }}>
-                Suggested from this driver's active {selectedInfraction?.violation_family} infractions — change it if the situation calls for skipping a step.
+          {selectedInfractions.length > 0 && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <div style={{ fontFamily: "var(--clg-font-heading)", fontWeight: 700, fontSize: 13, color: "var(--clg-navy)", marginBottom: 4 }}>
+                Coaching stage per category
               </div>
-            )}
-          </Field>
+              <div style={{ fontSize: 12.5, color: "var(--clg-text-muted)", marginBottom: 8 }}>
+                Infractions in the same category on one call count as a single step. Suggested from this driver's active infractions in that category — change it if the situation calls for skipping a step.
+                {" "}{selectedInfractions.length} record{selectedInfractions.length === 1 ? "" : "s"} will be saved · {totalPoints} point{totalPoints === 1 ? "" : "s"} total.
+              </div>
+              {familyGroups.map((g) => (
+                <div key={g.family} style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 12, alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--clg-border-subtle)" }}>
+                  <div style={{ fontSize: 13 }}>
+                    <div style={{ fontWeight: 600 }}>{g.family}</div>
+                    <div style={{ fontSize: 12, color: "var(--clg-text-muted)" }}>
+                      {g.items.map((inf) => `${inf.name} (${inf.points} pt${inf.points === 1 ? "" : "s"})`).join(" · ")}
+                      {!manualStages[g.family] && suggestedStages[g.family] ? " · stage suggested" : ""}
+                    </div>
+                  </div>
+                  <Select
+                    aria-label={`Coaching stage for ${g.family}`}
+                    value={manualStages[g.family] ?? suggestedStages[g.family] ?? COACHING_STAGES[0]}
+                    onChange={(e) => setManualStages((cur) => ({ ...cur, [g.family]: e.target.value }))}
+                    options={COACHING_STAGES}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           <Field label="Issued by" required>
             <Input value={issuedBy} onChange={(e) => setIssuedBy(e.target.value)} placeholder="Name of the manager/safety lead" />
           </Field>
