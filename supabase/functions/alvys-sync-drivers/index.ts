@@ -7,6 +7,12 @@
 // inactive/terminated drivers get captured (inactive ones still need to
 // resolve by name for historical roster/trip matching).
 //
+// Excluded on purpose (2026-11-24): Alvys carries a placeholder "driver" named
+// "CapLog Brokered" for brokered loads. CLG asked for it to be removed from CLGOS
+// permanently, so it is skipped here (it would otherwise come back on every sync)
+// and its row was deleted from `drivers`. Add further placeholder names to
+// EXCLUDED_DRIVER_NAME if more turn up.
+//
 // Requires ALVYS_CLIENT_ID / ALVYS_CLIENT_SECRET secrets + service role.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -14,6 +20,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const ALVYS_TOKEN_URL = "https://auth.alvys.com/oauth/token";
 const ALVYS_API_BASE = "https://integrations.alvys.com/api/p/v1.0";
 const PAGE_SIZE = 100;
+const EXCLUDED_DRIVER_NAME = /cap\s*log/i;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -92,7 +99,9 @@ Deno.serve(async (req) => {
       fetchAllDrivers(token, false),
     ]);
 
-    const rows = [...active, ...inactive].map(mapDriver);
+    const all = [...active, ...inactive];
+    const kept = all.filter((d) => !EXCLUDED_DRIVER_NAME.test(String(d.Name ?? "")));
+    const rows = kept.map(mapDriver);
     const { error } = await supabase.from("drivers").upsert(rows, { onConflict: "id" });
     if (error) throw error;
 
@@ -100,6 +109,7 @@ Deno.serve(async (req) => {
       activeSynced: active.length,
       inactiveSynced: inactive.length,
       totalSynced: rows.length,
+      excluded: all.length - kept.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

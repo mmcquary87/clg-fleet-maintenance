@@ -197,7 +197,7 @@ const COLUMNS = [
 ];
 
 const EMPTY_FILTERS = {
-  from: "", to: "", driver: "", infraction: "", severity: "", stage: "", fine: "", appeal: "", issuedBy: "",
+  from: "", to: "", driver: "", driverStatus: "", infraction: "", severity: "", stage: "", fine: "", appeal: "", issuedBy: "",
 };
 const FILTER_CTRL = { padding: "6px 8px", fontSize: 12 };
 const FILTER_SELECT = { padding: "6px 24px 6px 8px", fontSize: 12 };
@@ -212,6 +212,7 @@ function applyFilters(incidents, f) {
     (!f.from || i.event_date >= f.from) &&
     (!f.to || i.event_date <= f.to) &&
     (!driver || (i.driver_name ?? "").toLowerCase().includes(driver)) &&
+    (!f.driverStatus || (f.driverStatus === "active" ? i.driver_is_active === true : i.driver_is_active !== true)) &&
     (!f.infraction || i.infraction_name === f.infraction) &&
     (!f.severity || i.severity === f.severity) &&
     (!f.stage || i.coaching_stage === f.stage) &&
@@ -269,7 +270,19 @@ export default function AccountabilityView({ session }) {
           </div>
         ) };
       case "driver_name":
-        return { ...c, filter: <Input type="search" aria-label="Filter by Driver" placeholder="Search…" value={filters.driver} onChange={setFilter("driver")} style={FILTER_CTRL} /> };
+        return { ...c, filter: (
+          <div style={{ display: "grid", gap: 4, minWidth: 130 }}>
+            <Input type="search" aria-label="Filter by Driver" placeholder="Search…" value={filters.driver} onChange={setFilter("driver")} style={FILTER_CTRL} />
+            <Select
+              aria-label="Show active or inactive drivers"
+              value={filters.driverStatus}
+              onChange={setFilter("driverStatus")}
+              placeholder="Active & inactive"
+              options={[{ value: "active", label: "Active drivers" }, { value: "inactive", label: "Inactive drivers" }]}
+              style={FILTER_SELECT}
+            />
+          </div>
+        ) };
       case "infractionCell": return { ...c, filter: selectFilter("infraction", "Infraction", distinct(incidents, "infraction_name")) };
       case "severityCell": return { ...c, filter: selectFilter("severity", "Severity", SEVERITIES) };
       case "coaching_stage": return { ...c, filter: selectFilter("stage", "Stage", COACHING_STAGES) };
