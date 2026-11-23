@@ -36,7 +36,7 @@ as $$
         where di.driver_id = p_driver_id
           and inf.violation_family = p_violation_family
           and di.event_date >= current_date - make_interval(days => inf.rollover_days)
-          and di.coaching_call_id is distinct from p_exclude_call
+          and (p_exclude_call is null or di.coaching_call_id is distinct from p_exclude_call)
       ) + 1,
       6
     )
